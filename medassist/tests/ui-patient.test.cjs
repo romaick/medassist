@@ -231,7 +231,7 @@ test("patient filters combine search, return dates, latest visit and review stat
   assert.equal(await page.locator('#patient-heading').innerText(), 'Бета Тестовая');
 });
 
-test("patient search finds scoped historical encounters and dates; collapsed filters retain visible conditions without saving", {timeout: 20000}, async t => {
+test("patient search finds historical encounters and dates; collapsed filters retain visible conditions without saving", {timeout: 20000}, async t => {
   const {page} = await openApp(t);
   const raw = JSON.parse(await patientFilterFixture(page));
   const old = raw.encounters.find(entry => entry.id === 'visit-b-old');
@@ -242,50 +242,50 @@ test("patient search finds scoped historical encounters and dates; collapsed fil
   const initial = JSON.stringify(raw);
   await page.evaluate(({key, raw}) => localStorage.setItem(key, raw), {key, raw: initial});
   await page.reload(); await click(page, 'patients');
-  const search = page.locator('#patient-search'), scope = page.locator('#patient-search-scope');
+  const search = page.locator('#patient-search');
+  assert.equal(await page.locator('#patient-search-scope').count(), 0);
   const panel = page.locator('#patient-filter-panel'), toggle = page.locator('[data-action="patient-toggle-filters"]');
   assert.equal(await panel.isVisible(), false);
   assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
   assert.equal(await toggle.getAttribute('aria-controls'), 'patient-filter-panel');
   assert.equal(await patientFilter(page, 'sort').isVisible(), false);
   assert.equal(await page.locator('#patient-filter-summary').innerText(), '');
-  for (const [field, query, expected] of [
-    ['all', 'Бета 01.04.2032', ['b']],
-    ['all', 'БЕТА   кашель', ['b']],
-    ['all', 'Бета кашель 14.04.2032', []],
-    ['visitDate', '01.04.2032', ['b']],
-    ['visitDate', '2032-04-01', ['b']],
-    ['visitDate', '1/4/2032', ['b']],
-    ['visitDate', '1 апреля 2032', ['b']],
-    ['visitDate', '1 апреля(04) 2032', ['b']],
-    ['visitDate', '01.04', ['b']],
-    ['returnDate', '15.04.2032', ['a', 'ended']],
-    ['returnDate', '25 апреля 2032', ['b']],
-    ['visitDate', '25 апреля 2032', []],
-    ['visitId', 'visit-b-old', ['b']],
-    ['patientId', 'patient-b', ['b']],
-    ['name', 'Бета', ['b']],
-    ['name', 'DEMO-OLD', []],
-    ['sickNumber', 'DEMO-OLD', ['b']],
-    ['sickNumber', 'HIDDEN-NUMBER', []],
-    ['text', 'учебный бронхит', ['b']],
-    ['text', 'демонстрационный препарат', ['b']],
-    ['text', 'учебная рекомендация', ['b']],
-    ['text', 'приглушенные', ['b']],
-    ['text', 'ручная <вымышленная>', ['b']]
+  for (const [query, expected] of [
+    ['Бета 01.04.2032', ['b']],
+    ['БЕТА   кашель', ['b']],
+    ['Бета кашель 14.04.2032', ['b']],
+    ['01.04.2032', ['b']],
+    ['2032-04-01', ['b']],
+    ['1/4/2032', ['b']],
+    ['1 апреля 2032', ['b']],
+    ['1 апреля(04) 2032', ['b']],
+    ['01.04', ['b']],
+    ['15.04.2032', ['a', 'ended']],
+    ['25 апреля 2032', ['b']],
+    ['visit-b-old', ['b']],
+    ['patient-b', ['b']],
+    ['Бета', ['b']],
+    ['DEMO-OLD', ['b']],
+    ['HIDDEN-NUMBER', []],
+    ['учебный бронхит', ['b']],
+    ['демонстрационный препарат', ['b']],
+    ['учебная рекомендация', ['b']],
+    ['приглушенные', ['b']],
+    ['ручная <вымышленная>', ['b']]
   ]) {
-    await scope.selectOption(field); await search.fill(query);
-    assert.deepEqual((await patientIds(page)).sort(), expected, field + ': ' + query);
+    await search.fill(query);
+    assert.deepEqual((await patientIds(page)).sort(), expected, query);
+    if (query === 'Бета кашель 14.04.2032') assert.match(await page.locator('.patient-search-reason').innerText(), /Совпало слов: 2 из 3/);
   }
   assert.match(await page.locator('#patient-filter-summary').innerText(), /ручная <вымышленная>/);
   assert.equal(await page.locator('.patient-search-matches [data-action="open"]').count(), 1);
   await page.locator('.patient-search-matches [data-id="visit-b-old"]').click();
   assert.equal(await page.locator('[data-field="visitDate"]').inputValue(), '2032-04-01');
   await click(page, 'patients');
-  assert.equal(await scope.inputValue(), 'text');
+  assert.equal(await search.inputValue(), 'ручная <вымышленная>');
   assert.equal(await panel.isVisible(), false);
   await click(page, 'patient-reset-filters');
-  assert.equal(await scope.inputValue(), 'all');
+  assert.equal(await search.inputValue(), '');
   await toggle.focus(); await page.keyboard.press('Enter');
   assert.equal(await panel.isVisible(), true);
   await patientFilter(page, 'return').selectOption('today');
@@ -320,6 +320,89 @@ test("patient search finds scoped historical encounters and dates; collapsed fil
   assert.equal(await page.evaluate(key => localStorage.getItem(key), key), initial, 'search, navigation and collapsing do not write records');
   await page.reload(); await click(page, 'patients');
   assert.equal(await panel.isVisible(), false, 'fresh launch always starts collapsed');
+});
+
+test("one search line ranks exact words, fragments and typos; numbers stay literal and history is not merged", {timeout: 20000}, async t => {
+  const {page} = await openApp(t);
+  const core = require(path.join(appRoot, 'core.js'));
+  const now = '2032-04-15T07:00:00.000Z';
+  await page.clock.setFixedTime(new Date(now));
+  const patients = [], encounters = [];
+  for (const [id, label, complaints] of [
+    ['exact', 'Иванов Тестовый', 'Учебный кашель'],
+    ['prefix', 'Иванова Тестовая', 'Учебный кашель'],
+    ['typo', 'Ивонов Тестовый', 'Учебный кашель'],
+    ['mention', 'Сидоров Тестовый', 'Учебная отметка: Иванов кашель'],
+    ['split', 'Раздельный Тестовый', 'Учебный кашель'],
+    ['other', 'Другой Тестовый', 'Учебная усталость']
+  ]) {
+    const patient = core.createPatient({id: 'patient-' + id, label, now}); patients.push(patient);
+    const entry = core.createEncounter({id: 'visit-' + id, patientId: patient.id, now});
+    entry.visitDate = id === 'exact' ? '2032-04-01' : '2032-04-10';
+    entry.history.complaints = complaints;
+    entry.assessment.returnVisitDate = id === 'exact' ? '2032-04-25' : '2032-04-15';
+    entry.assessment.sickLeaveIssued = 'yes';
+    entry.assessment.sickLeaveNumber = id === 'exact' ? '123456' : id === 'prefix' ? '123457' : '';
+    encounters.push(entry);
+  }
+  const second = core.createEncounter({id: 'visit-split-second', patientId: 'patient-split', now});
+  second.history.complaints = 'Учебная сыпь'; second.visitDate = '2032-04-12'; encounters.push(second);
+  const old = core.createEncounter({id: 'visit-exact-old', patientId: 'patient-exact', now});
+  old.history.complaints = 'Учебный кашелёк'; old.visitDate = '2032-03-01'; encounters.push(old);
+  const initial = core.serializeBundle(encounters, patients);
+  await page.evaluate(({key, raw}) => localStorage.setItem(key, raw), {key, raw: initial});
+  await page.reload(); await click(page, 'patients');
+  const search = page.locator('#patient-search');
+  const reason = id => page.locator('.patient-row[data-patient-id="patient-' + id + '"] .patient-search-reason');
+  const defaultOrder = await patientIds(page);
+  assert.equal(defaultOrder.at(-1), 'exact');
+  assert.equal(await page.locator('#patient-search-scope').count(), 0);
+  await search.fill('Иванов');
+  assert.deepEqual(await patientIds(page), ['exact', 'mention', 'prefix', 'typo']);
+  assert.match(await reason('exact').innerText(), /Совпадение: ФИО/);
+  assert.match(await reason('mention').innerText(), /Жалобы/);
+  assert.match(await reason('typo').innerText(), /похожее написание/);
+  assert.match(await page.locator('#patient-filter-summary').innerText(), /наиболее близкие/);
+  await search.fill('Иванов кашель');
+  assert.deepEqual(await patientIds(page), ['exact', 'mention', 'prefix', 'typo']);
+  assert.equal(await page.locator('.patient-row[data-patient-id="patient-exact"] .patient-search-matches [data-action="open"]').first().getAttribute('data-id'), 'visit-exact');
+  await search.fill('Иванов Иванов кашель');
+  assert.deepEqual(await patientIds(page), ['exact', 'mention', 'prefix', 'typo'], 'repeated words do not change scores');
+  await search.fill('Раздельный кашель сыпь');
+  assert.deepEqual(await patientIds(page), ['split']);
+  assert.match(await reason('split').innerText(), /Совпало слов: 2 из 3/, 'separate encounters cannot become a full match');
+  await search.fill('Иванво');
+  assert.equal((await patientIds(page))[0], 'exact', 'one transposition is accepted');
+  for (const [query, expected] of [['Иваанов', 'exact'], ['Ивонов', 'typo']]) {
+    await search.fill(query); assert.equal((await patientIds(page))[0], expected, query);
+  }
+  await search.fill('Ивнов');
+  assert.ok((await patientIds(page)).includes('exact'));
+  assert.ok((await patientIds(page)).includes('typo'), 'one missing letter can match two different names');
+  assert.match(await reason('exact').innerText(), /похожее написание/);
+  assert.match(await reason('typo').innerText(), /похожее написание/);
+  await search.fill('123456'); assert.deepEqual(await patientIds(page), ['exact']);
+  await search.fill('123458'); assert.deepEqual(await patientIds(page), []);
+  await search.fill('Иванов кашель 123458'); assert.deepEqual(await patientIds(page), [], 'numeric terms may not be dropped');
+  await search.fill('2032-04-02'); assert.deepEqual(await patientIds(page), []);
+  await search.fill('кашель 2032-04-01'); assert.deepEqual(await patientIds(page), ['exact']);
+  await search.fill('!!!'); assert.deepEqual(await patientIds(page), []);
+  await search.fill(''); assert.deepEqual(await patientIds(page), defaultOrder, 'clearing query restores scheduled order');
+  await click(page, 'patient-toggle-filters'); await patientFilter(page, 'sort').selectOption('name');
+  const byName = await patientIds(page);
+  await search.fill('Иванов'); assert.deepEqual(await patientIds(page), ['exact', 'mention', 'prefix', 'typo']);
+  await patientFilter(page, 'return').selectOption('today');
+  assert.deepEqual(await patientIds(page), ['mention', 'prefix', 'typo'], 'filters still constrain ranked results');
+  await patientFilter(page, 'return').selectOption('all');
+  await search.fill(''); assert.deepEqual(await patientIds(page), byName);
+  await search.fill('Иванов кашель'); await click(page, 'patient-toggle-filters');
+  for (const width of [1440, 800, 390]) {
+    await page.setViewportSize({width, height: 1000});
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  }
+  await page.locator('.patient-row[data-patient-id="patient-exact"] .patient-search-matches [data-id="visit-exact"]').click();
+  assert.equal(await page.locator('[data-field="visitDate"]').inputValue(), '2032-04-01');
+  assert.equal(await page.evaluate(key => localStorage.getItem(key), key), initial);
 });
 
 test("two windows: a conflict cancels repeat creation and exposes the warning, then explicit reload permits a confirmed repeat", { timeout: 20000 }, async t => {

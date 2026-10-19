@@ -15,7 +15,7 @@
     encounters: loaded.encounters, patients: loaded.patients, view: 'home', activeId: null, patientId: null, tab: 'basic', patientSearch: '',
     error: loaded.error, saved: !loaded.error, externalChange: false, search: '', migrated: Boolean(loaded.migrated),
     recordFilter: 'all', followupFilter: 'today', followupDay: '', repeatPlanId: null, patientListDay: '',
-    patientCategory: 'all', patientFilters: defaultPatientFilters(), patientFiltersOpen: false, patientSearchScope: 'all'
+    patientCategory: 'all', patientFilters: defaultPatientFilters(), patientFiltersOpen: false
   };
   const icons = {
     home: '<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>',
@@ -113,10 +113,10 @@
     app.innerHTML = '<div class="shell"><aside class="sidebar" aria-label="Главная навигация"><div class="brand"><img src="icon.svg" alt=""><div><strong>МедАссистент</strong><small>ПОЛИКЛИНИЧЕСКИЙ РЕЖИМ</small></div></div><p class="nav-caption">РАБОЧЕЕ ПРОСТРАНСТВО</p><nav class="nav">' +
       navButton('home', 'Обзор', 'home') + navButton('patients', 'Пациенты', 'user') + navButton('new', 'Новый пациент', 'plus') +
       (current ? navButton('visit', 'Текущий приём', 'document') : '') + navButton('followups', 'Повторные приёмы', 'calendar') + navButton('modules', 'Модули', 'grid') + navButton('help', 'Помощь и данные', 'help') + navButton('check-updates', 'Проверить обновления', 'download') +
-      '</nav><div class="side-bottom"><div class="local-indicator"><span class="dot"></span>Работает локально</div><div class="version">Прототип 0.8.1 · Демонстрация</div></div></aside><div class="workspace"><header class="topbar"><div class="topbar-left">Поликлиника <span aria-hidden="true">/</span> <span>' + sectionName + '</span></div><div class="topbar-right"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><span class="avatar" aria-hidden="true">МА</span></div></header><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
+      '</nav><div class="side-bottom"><div class="local-indicator"><span class="dot"></span>Работает локально</div><div class="version">Прототип 0.8.2 · Демонстрация</div></div></aside><div class="workspace"><header class="topbar"><div class="topbar-left">Поликлиника <span aria-hidden="true">/</span> <span>' + sectionName + '</span></div><div class="topbar-right"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><span class="avatar" aria-hidden="true">МА</span></div></header><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
       (state.migrated ? '<div class="migration-notice">Прежние записи доступны со статусом «Черновик». Карточки, данные и ручные тексты сохранены. Исходное сохранение предыдущей версии не изменяется.</div>' : '') +
       ({home: renderHome, patients: renderPatients, followups: renderFollowups, patient: renderPatient, visit: renderVisit, modules: renderModules, help: renderHelp}[state.view])() +
-      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.8.1</span></footer></main></div></div>';
+      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.8.2</span></footer></main></div></div>';
     updateClock();
     updateSaveStatus();
     if (state.view === 'visit') { updateValidation(); updateDraftState(); updateReviewState(); }
@@ -208,7 +208,6 @@
     return entries.map((entry) => '<div class="visit-row" data-record-id="' + escape(entry.id) + '"><div class="visit-identity"><div class="icon-tile">' + icon('user') + '</div><div class="visit-text"><strong>' + escape(patientLabel(entry)) + '</strong><p>' + escape(dateText(entry.visitDate)) + ' · ' + escape(entry.history.complaints.trim() || 'Жалобы не указаны') + '</p><p>' + recordStatus(entry) + '</p></div></div>' + button('open', 'Открыть', null, 'secondary compact', 'data-id="' + escape(entry.id) + '" aria-label="Открыть ' + escape(patientLabel(entry)) + '"') + '</div>').join('');
   }
   const patientCategories = [['all', 'Все пациенты'], ['sick', 'На больничном'], ['return', 'Повторная явка'], ['draft', 'Незавершённые записи']];
-  const patientSearchScopes = [['all', 'Все параметры'], ['name', 'ФИО пациента'], ['patientId', 'Код пациента'], ['visitId', 'Код приёма'], ['visitDate', 'Дата приёма'], ['returnDate', 'Повторная явка'], ['sickNumber', 'Номер больничного'], ['text', 'Текст приёма']];
   function normalizePatientSearch(value, dates = true) {
     const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
     const iso = (day, month, year) => year + '-' + String(month).padStart(2, '0') + '-' + day.padStart(2, '0');
@@ -218,32 +217,67 @@
       .replace(/\b(\d{1,2})[./-](\d{1,2})[./-](\d{4})\b/g, (_, day, month, year) => iso(day, month, year))
       .replace(/\b(\d{1,2}) (января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)(?:\s*\(\d{1,2}\))? (\d{4})\b/g, (_, day, month, year) => iso(day, months.indexOf(month) + 1, year));
   }
-  function patientSearchMatch(row) {
-    const query = normalizePatientSearch(state.patientSearch);
-    if (!query) return {searchHit: true, searchMatches: []};
-    const terms = query.split(' ');
-    const matches = values => { const raw = values.join(' '); const text = normalizePatientSearch(raw) + ' ' + normalizePatientSearch(raw, false); return terms.every(term => text.includes(term)); };
-    const scope = state.patientSearchScope;
-    const identity = scope === 'name' ? [patientName(row.patient)] : scope === 'patientId' ? [row.patient.id, shortId(row.patient)] : scope === 'all' ? [patientName(row.patient), row.patient.id, shortId(row.patient)] : [];
-    if (matches(identity)) return {searchHit: true, searchMatches: []};
-    if (scope === 'name' || scope === 'patientId') return {searchHit: false, searchMatches: []};
-    const searchMatches = row.visits.filter(entry => {
-      const values = [...identity];
-      if (scope === 'all' || scope === 'visitId') values.push(entry.id, shortId(entry));
-      for (const [field, date] of [['visitDate', entry.visitDate], ['returnDate', entry.assessment.returnVisitDate]]) {
-        if (date && (scope === 'all' || scope === field)) values.push(date, dateText(date), headerDateFormat.format(new Date(date + 'T12:00:00')) + ' ' + date.slice(0, 4));
+  const searchWords = text => text.match(/[\p{L}\p{N}]+(?:[./_-][\p{L}\p{N}]+)*/gu) || [];
+  function oneSearchEdit(a, b) {
+    if (Math.abs(a.length - b.length) > 1) return false;
+    let i = 0;
+    while (i < a.length && i < b.length && a[i] === b[i]) i++;
+    if (a.length === b.length) return a.slice(i + 1) === b.slice(i + 1) || (a[i] === b[i + 1] && a[i + 1] === b[i] && a.slice(i + 2) === b.slice(i + 2));
+    return a.length < b.length ? a.slice(i) === b.slice(i + 1) : a.slice(i + 1) === b.slice(i);
+  }
+  function patientSearchField(label, value, weight, approximate = true, identity = false) {
+    const text = normalizePatientSearch(value) + ' ' + normalizePatientSearch(value, false);
+    return {label, value, weight, approximate, identity, text, words: new Set(searchWords(text))};
+  }
+  function scorePatientSearch(fields, terms) {
+    const found = [];
+    for (const term of terms) {
+      let best = null;
+      for (const field of fields) {
+        let quality = field.words.has(term) ? 3 : field.text.includes(term) ? 2 : 0;
+        if (!quality && field.approximate && /^[\p{L}]{5,}$/u.test(term) && [...field.words].some(word => /^[\p{L}]+$/u.test(word) && oneSearchEdit(term, word))) quality = 1;
+        if (quality && (!best || quality > best.quality || (quality === best.quality && field.weight > best.field.weight))) best = {quality, field, term};
       }
-      if ((scope === 'all' || scope === 'sickNumber') && entry.assessment.sickLeaveIssued === 'yes') values.push(entry.assessment.sickLeaveNumber);
-      if (scope === 'all' || scope === 'text') {
-        values.push(...Object.values(entry.history), ...Object.values(entry.exam), entry.assessment.summary, entry.assessment.plan, entry.assessment.followUp, entry.draft.text);
-        for (const field of examCatalog.FIELDS) {
-          const selected = field.options.find(option => option.value === entry.examSelections[field.id]);
-          if (selected) values.push(selected.text);
-        }
+      if (!best && /\d/.test(term)) return null;
+      if (best) found.push(best);
+    }
+    if (!terms.length || found.length < Math.ceil(terms.length * 2 / 3)) return null;
+    const score = found.length * 1000000 + found.reduce((sum, item) => sum + item.quality * 1000 + item.field.weight, 0);
+    const labels = [...new Set(found.map(item => item.field.label))];
+    const partial = found.length < terms.length ? 'Совпало слов: ' + found.length + ' из ' + terms.length + '. ' : '';
+    const approximate = found.some(item => item.quality === 1) ? ' · похожее написание' : '';
+    const context = found.find(item => !item.field.identity && item.field.approximate);
+    let excerpt = '';
+    if (context) {
+      const value = context.field.value.replace(/\s+/g, ' ').trim();
+      const start = Math.max(0, normalizePatientSearch(value, false).indexOf(context.term) - 45);
+      excerpt = context.field.label + ': ' + (start ? '…' : '') + value.slice(start, start + 160) + (value.length > start + 160 ? '…' : '');
+    }
+    return {score, reason: partial + 'Совпадение: ' + labels.join(', ') + approximate, excerpt, recordMatch: found.some(item => !item.field.identity)};
+  }
+  function patientSearchMatch(row, terms) {
+    if (!state.patientSearch.trim()) return {searchHit: true, searchMatches: [], searchScore: 0, searchReason: '', searchExcerpt: ''};
+    const identity = [patientSearchField('ФИО', patientName(row.patient), 6, true, true), patientSearchField('Код пациента', row.patient.id + ' ' + shortId(row.patient), 6, false, true)];
+    const identityMatch = scorePatientSearch(identity, terms);
+    const candidates = row.visits.map(entry => {
+      const fields = [...identity, patientSearchField('Код приёма', entry.id + ' ' + shortId(entry), 5, false)];
+      for (const [label, date] of [['Дата приёма', entry.visitDate], ['Повторная явка', entry.assessment.returnVisitDate]]) {
+        if (date) fields.push(patientSearchField(label, date + ' ' + dateText(date) + ' ' + headerDateFormat.format(new Date(date + 'T12:00:00')) + ' ' + date.slice(0, 4), 4, false));
       }
-      return matches(values);
-    });
-    return {searchHit: searchMatches.length > 0, searchMatches};
+      if (entry.assessment.sickLeaveIssued === 'yes') fields.push(patientSearchField('Номер ЛН', entry.assessment.sickLeaveNumber, 5, false));
+      fields.push(patientSearchField('Жалобы', entry.history.complaints, 4), patientSearchField('Диагноз', entry.assessment.summary, 4));
+      fields.push(patientSearchField('Анамнез', Object.entries(entry.history).filter(([key]) => key !== 'complaints').map(([, value]) => value).join(' '), 2));
+      const exam = Object.values(entry.exam);
+      for (const field of examCatalog.FIELDS) {
+        const selected = field.options.find(option => option.value === entry.examSelections[field.id]);
+        if (selected) exam.push(selected.text);
+      }
+      fields.push(patientSearchField('Осмотр', exam.join(' '), 2), patientSearchField('Рекомендации', entry.assessment.plan + ' ' + entry.assessment.followUp, 2), patientSearchField('Текст записи', entry.draft.text, 1));
+      const match = scorePatientSearch(fields, terms);
+      return match ? {...match, entry} : null;
+    }).filter(Boolean).sort((a, b) => b.score - a.score || b.entry.visitDate.localeCompare(a.entry.visitDate) || a.entry.id.localeCompare(b.entry.id));
+    const best = !candidates.length || (identityMatch && identityMatch.score >= candidates[0].score) ? identityMatch : candidates[0];
+    return {searchHit: Boolean(best), searchScore: best?.score || 0, searchReason: best?.reason || '', searchExcerpt: best?.excerpt || '', searchMatches: candidates.filter(item => item.recordMatch).map(item => item.entry)};
   }
   function defaultPatientFilters(category = 'all') {
     return {sick: 'all', return: 'all', returnFrom: '', returnTo: '', lastFrom: '', lastTo: '', review: 'all', sort: category === 'sick' ? 'sick' : 'return'};
@@ -309,7 +343,8 @@
     if (patientFilterError()) return [];
     const f = state.patientFilters;
     const within = (date, from, to) => Boolean(date) && (!from || date >= from) && (!to || date <= to);
-    const result = rows.map(row => ({...row, ...patientSearchMatch(row)})).filter(row => {
+    const terms = [...new Set(searchWords(normalizePatientSearch(state.patientSearch)))];
+    const result = rows.map(row => ({...row, ...patientSearchMatch(row, terms)})).filter(row => {
       if (!inPatientCategory(row, state.patientCategory)) return false;
       if (!row.searchHit) return false;
       if (state.patientCategory === 'sick' && !row.leaves.some(leave => matchesSickFilter(leave, today))) return false;
@@ -323,6 +358,7 @@
     const sickEnd = row => row.leaves.filter(leave => leave.current && (state.patientCategory !== 'sick' || matchesSickFilter(leave, today))).map(leave => leave.to).sort()[0] || '';
     const missingLast = (a, b, descending = false) => !a ? (b ? 1 : 0) : !b ? -1 : (descending ? b.localeCompare(a) : a.localeCompare(b));
     return result.sort((a, b) => {
+      if (state.patientSearch.trim() && a.searchScore !== b.searchScore) return b.searchScore - a.searchScore;
       let order;
       if (f.sort === 'name') order = patientName(a.patient).localeCompare(patientName(b.patient), 'ru');
       else if (f.sort === 'last') order = missingLast(a.visits[0]?.visitDate, b.visits[0]?.visitDate, true);
@@ -335,14 +371,14 @@
     const f = state.patientFilters;
     const labels = [];
     if (state.patientSearch.trim()) labels.push('Поиск: ' + state.patientSearch.trim());
-    if (state.patientSearchScope !== 'all') labels.push('Искать: ' + patientSearchScopes.find(([code]) => code === state.patientSearchScope)[1]);
     for (const [key, title] of [['sick', 'ЛН'], ['return', 'Явка'], ['review', 'Записи']]) {
       if (key === 'sick' && state.patientCategory !== 'sick') continue;
       if (f[key] !== 'all') labels.push(title + ': ' + patientFilterOptions[key].find(([code]) => code === f[key])[1]);
     }
     if (f.return === 'range' && (f.returnFrom || f.returnTo)) labels.push('Явка ' + (f.returnFrom ? 'с ' + dateText(f.returnFrom) : '') + (f.returnTo ? ' по ' + dateText(f.returnTo) : ''));
     if (f.lastFrom || f.lastTo) labels.push('Последний приём ' + (f.lastFrom ? 'с ' + dateText(f.lastFrom) : '') + (f.lastTo ? ' по ' + dateText(f.lastTo) : ''));
-    if (f.sort !== defaultPatientFilters(state.patientCategory).sort) labels.push('Порядок: ' + patientFilterOptions.sort.find(([code]) => code === f.sort)[1]);
+    if (state.patientSearch.trim()) labels.push('Порядок: сначала наиболее близкие совпадения');
+    else if (f.sort !== defaultPatientFilters(state.patientCategory).sort) labels.push('Порядок: ' + patientFilterOptions.sort.find(([code]) => code === f.sort)[1]);
     return labels.map(label => '<span class="patient-filter-chip">' + escape(label) + '</span>').join('');
   }
   function renderPatients() {
@@ -352,8 +388,8 @@
     return '<div class="page-heading"><div><h1>Пациенты</h1><p>Вымышленные карточки и история приёмов.</p></div>' + button('new', 'Новый пациент и приём', 'plus', 'primary') + '</div>' + demoNotice() +
       '<section class="card"><div class="card-head"><h2>Карточки пациентов</h2><span class="result-count" id="patient-result-count" role="status">Показано: ' + filtered.length + ' из ' + rows.length + '</span></div>' +
       '<div id="patient-categories" class="workflow-filters" role="group" aria-label="Рубрики пациентов">' + patientCategoryButtons(rows) + '</div><p class="workflow-hint">Числа в рубриках — количество пациентов до применения фильтров. Один пациент может входить в несколько рубрик.</p>' +
-      '<div class="patient-search-toolbar"><div class="field"><label for="patient-search-scope">Искать по</label><select id="patient-search-scope">' + patientSearchScopes.map(([code, label]) => '<option value="' + code + '"' + (state.patientSearchScope === code ? ' selected' : '') + '>' + label + '</option>').join('') + '</select></div><div class="field patient-search-input"><label for="patient-search">Поиск пациентов и приёмов</label><input id="patient-search" type="search" maxlength="200" aria-describedby="patient-search-hint" placeholder="ФИО, код, номер больничного, дата или текст" value="' + escape(state.patientSearch) + '"></div>' + button('patient-toggle-filters', state.patientFiltersOpen ? 'Скрыть фильтры' : 'Фильтры', null, 'secondary', 'aria-controls="patient-filter-panel" aria-expanded="' + state.patientFiltersOpen + '"') + '</div>' +
-      '<p class="workflow-hint" id="patient-search-hint">По всей истории, включая состоявшиеся явки. Даты: 19.10.2026, 2026-10-19 или 19 октября 2026. Можно сочетать слова: ФИО и дату, диагноз и номер ЛН.</p>' +
+      '<div class="patient-search-toolbar"><div class="field patient-search-input"><label for="patient-search">Поиск пациентов и приёмов</label><input id="patient-search" type="search" maxlength="200" aria-describedby="patient-search-hint" placeholder="Фамилия, жалоба, диагноз, дата, номер больничного…" value="' + escape(state.patientSearch) + '"></div>' + button('patient-toggle-filters', state.patientFiltersOpen ? 'Скрыть фильтры' : 'Фильтры', null, 'secondary', 'aria-controls="patient-filter-panel" aria-expanded="' + state.patientFiltersOpen + '"') + '</div>' +
+      '<p class="workflow-hint" id="patient-search-hint">Ищет по всей истории. Введите одно или несколько ключевых слов — наиболее близкие совпадения появятся выше. Даты: 19.10.2026 или 19 октября 2026. Выбранные рубрика и фильтры действуют и при поиске.</p>' +
       '<div id="patient-filter-panel" class="patient-filter-panel"' + (state.patientFiltersOpen ? '' : ' hidden') + '><div id="patient-sick-filter"' + (state.patientCategory === 'sick' ? '' : ' hidden') + '>' + patientFilterField('sick', 'Больничный лист') + '<p class="small muted">По датам, введённым в приёмах. Неполный период требует уточнения; программа не подтверждает открытие или закрытие ЛН.</p></div>' +
       '<div class="field-grid three">' + patientFilterField('return', 'Повторная явка') + patientFilterField('review', 'Статус записей') + patientFilterField('sort', 'Сортировка') + '</div>' +
       '<div id="patient-return-range" class="field-grid patient-date-range"' + (state.patientFilters.return === 'range' ? '' : ' hidden') + '>' + patientFilterField('returnFrom', 'Явка: с', 'date') + patientFilterField('returnTo', 'Явка: по', 'date') + '</div>' +
@@ -379,13 +415,13 @@
   }
   function renderPatientList(patients, today) {
     if (!patients.length) return '<div class="empty"><p>' + (patientFilterError() ? 'Исправьте диапазон дат, чтобы увидеть пациентов.' : state.patients.length ? 'По выбранным условиям пациенты не найдены.' : 'Создайте первый приём — для него появится карточка пациента.') + '</p></div>';
-    return patients.map(({patient, visits, dates, next, past, leaves, drafts, searchMatches}) => {
+    return patients.map(({patient, visits, dates, next, past, leaves, drafts, searchMatches, searchReason, searchExcerpt}) => {
       const matchedDates = [...new Set(dates.filter(date => date !== next && date !== past && matchesPatientReturnDate(date, today)))];
       let shownLeaves = leaves.filter(leave => state.patientCategory === 'sick' ? matchesSickFilter(leave, today) : leave.current || leave.unknown);
       if (!shownLeaves.length && leaves.length && state.patientCategory !== 'sick') shownLeaves = [leaves[0]];
       const uniqueLeaves = new Map(shownLeaves.map(leave => [JSON.stringify([leave.number, leave.from, leave.to]), leave]));
       const sickText = [...uniqueLeaves.values()].map(leave => '<p class="patient-sick">ЛН ' + (leave.number.trim() ? '№' + escape(leave.number) : '· номер не указан') + ' · ' + (leave.from ? 'с ' + escape(dateText(leave.from)) : 'начало не указано') + ' · ' + (leave.to ? 'по ' + escape(dateText(leave.to)) : 'окончание не указано') + ' · ' + (leave.unknown ? 'период требует уточнения' : leave.current ? 'действует по указанным датам' : leave.from > today ? 'период ещё не начался' : 'указанный период прошёл') + '</p>').join('');
-      return '<div class="visit-row patient-row" data-patient-id="' + escape(patient.id) + '"><div class="visit-text"><strong>' + escape(patientName(patient)) + '</strong><p>Код: ' + escape(shortId(patient)) + ' · Приёмов: ' + visits.length + '</p><p>' + (visits.length ? 'Последний приём: ' + escape(dateText(visits[0].visitDate)) : 'Приёмов пока нет') + '</p>' +
+      return '<div class="visit-row patient-row" data-patient-id="' + escape(patient.id) + '"><div class="visit-text"><strong>' + escape(patientName(patient)) + '</strong>' + (searchReason ? '<p class="patient-search-reason">' + escape(searchReason) + '</p>' : '') + (searchExcerpt ? '<p class="patient-search-excerpt">' + escape(searchExcerpt) + '</p>' : '') + '<p>Код: ' + escape(shortId(patient)) + ' · Приёмов: ' + visits.length + '</p><p>' + (visits.length ? 'Последний приём: ' + escape(dateText(visits[0].visitDate)) : 'Приёмов пока нет') + '</p>' +
         (next ? '<p class="patient-return">Повторная явка: ' + escape(dateText(next)) + (next === today ? ' · сегодня' : '') + '</p>' : '') +
         (past ? '<p class="patient-overdue">Дата явки прошла: ' + escape(dateText(past)) + ' · исход не отмечен</p>' : '') +
         (matchedDates.length ? '<p class="patient-return">Другие явки по фильтру: ' + matchedDates.map(date => escape(dateText(date))).join(', ') + '</p>' : '') + sickText +
@@ -623,7 +659,7 @@
       app.querySelector('[data-action="patient-category"][data-category="' + state.patientCategory + '"]').focus({preventScroll: true}); return;
     }
     if (action === 'patient-reset-filters') {
-      state.patientSearch = ''; state.patientSearchScope = 'all'; state.patientFilters = defaultPatientFilters(state.patientCategory);
+      state.patientSearch = ''; state.patientFilters = defaultPatientFilters(state.patientCategory);
       render(); document.getElementById('patient-search').focus({preventScroll: true}); return;
     }
     if (action === 'record-filter') {
@@ -765,9 +801,6 @@
     const control = event.target;
     if (control.id === 'patient-search') {
       state.patientSearch = control.value; refreshPatients(); return;
-    }
-    if (control.id === 'patient-search-scope') {
-      state.patientSearchScope = control.value; refreshPatients(); return;
     }
     if (control.dataset.patientFilter) {
       state.patientFilters[control.dataset.patientFilter] = control.value; refreshPatients(); return;

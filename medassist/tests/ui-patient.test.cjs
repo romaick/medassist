@@ -125,6 +125,7 @@ const patientFilter = (page, key) => page.locator('#patient-filter-' + key);
 test("patient categories count unique patients; sick leave filters use inclusive dates, incomplete periods and refresh at midnight without saving", {timeout: 20000}, async t => {
   const {page} = await openApp(t);
   const initial = await patientFilterFixture(page);
+  await click(page, 'patient-toggle-filters');
   for (const [category, count] of [['all', 9], ['sick', 5], ['return', 5], ['draft', 4]]) {
     assert.match(await patientCategory(page, category).innerText(), new RegExp('· ' + count + '$'));
   }
@@ -166,6 +167,7 @@ test("patient categories count unique patients; sick leave filters use inclusive
 test("patient filters combine search, return dates, latest visit and review status; reset and sorting preserve records", {timeout: 20000}, async t => {
   const {page} = await openApp(t);
   const initial = await patientFilterFixture(page);
+  await click(page, 'patient-toggle-filters');
   await patientCategory(page, 'draft').click();
   assert.deepEqual((await patientIds(page)).sort(), ['b', 'c', 'no', 'u']);
   await patientCategory(page, 'return').click();
@@ -227,6 +229,97 @@ test("patient filters combine search, return dates, latest visit and review stat
   assert.equal(await page.evaluate(key => localStorage.getItem(key), key), initial);
   await page.locator('.patient-row [data-action="patient"]').click();
   assert.equal(await page.locator('#patient-heading').innerText(), 'Бета Тестовая');
+});
+
+test("patient search finds scoped historical encounters and dates; collapsed filters retain visible conditions without saving", {timeout: 20000}, async t => {
+  const {page} = await openApp(t);
+  const raw = JSON.parse(await patientFilterFixture(page));
+  const old = raw.encounters.find(entry => entry.id === 'visit-b-old');
+  old.history.complaints = 'Вымышленный кашель'; old.assessment.summary = 'Учебный бронхит';
+  old.history.medications = 'Демонстрационный препарат'; old.assessment.plan = 'Учебная рекомендация';
+  old.examSelections.heartSounds = 'muffled'; old.draft.text = 'Ручная <вымышленная> заметка';
+  raw.encounters.find(entry => entry.id === 'visit-b').history.complaints = 'Учебная головная боль';
+  const initial = JSON.stringify(raw);
+  await page.evaluate(({key, raw}) => localStorage.setItem(key, raw), {key, raw: initial});
+  await page.reload(); await click(page, 'patients');
+  const search = page.locator('#patient-search'), scope = page.locator('#patient-search-scope');
+  const panel = page.locator('#patient-filter-panel'), toggle = page.locator('[data-action="patient-toggle-filters"]');
+  assert.equal(await panel.isVisible(), false);
+  assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(await toggle.getAttribute('aria-controls'), 'patient-filter-panel');
+  assert.equal(await patientFilter(page, 'sort').isVisible(), false);
+  assert.equal(await page.locator('#patient-filter-summary').innerText(), '');
+  for (const [field, query, expected] of [
+    ['all', 'Бета 01.04.2032', ['b']],
+    ['all', 'БЕТА   кашель', ['b']],
+    ['all', 'Бета кашель 14.04.2032', []],
+    ['visitDate', '01.04.2032', ['b']],
+    ['visitDate', '2032-04-01', ['b']],
+    ['visitDate', '1/4/2032', ['b']],
+    ['visitDate', '1 апреля 2032', ['b']],
+    ['visitDate', '1 апреля(04) 2032', ['b']],
+    ['visitDate', '01.04', ['b']],
+    ['returnDate', '15.04.2032', ['a', 'ended']],
+    ['returnDate', '25 апреля 2032', ['b']],
+    ['visitDate', '25 апреля 2032', []],
+    ['visitId', 'visit-b-old', ['b']],
+    ['patientId', 'patient-b', ['b']],
+    ['name', 'Бета', ['b']],
+    ['name', 'DEMO-OLD', []],
+    ['sickNumber', 'DEMO-OLD', ['b']],
+    ['sickNumber', 'HIDDEN-NUMBER', []],
+    ['text', 'учебный бронхит', ['b']],
+    ['text', 'демонстрационный препарат', ['b']],
+    ['text', 'учебная рекомендация', ['b']],
+    ['text', 'приглушенные', ['b']],
+    ['text', 'ручная <вымышленная>', ['b']]
+  ]) {
+    await scope.selectOption(field); await search.fill(query);
+    assert.deepEqual((await patientIds(page)).sort(), expected, field + ': ' + query);
+  }
+  assert.match(await page.locator('#patient-filter-summary').innerText(), /ручная <вымышленная>/);
+  assert.equal(await page.locator('.patient-search-matches [data-action="open"]').count(), 1);
+  await page.locator('.patient-search-matches [data-id="visit-b-old"]').click();
+  assert.equal(await page.locator('[data-field="visitDate"]').inputValue(), '2032-04-01');
+  await click(page, 'patients');
+  assert.equal(await scope.inputValue(), 'text');
+  assert.equal(await panel.isVisible(), false);
+  await click(page, 'patient-reset-filters');
+  assert.equal(await scope.inputValue(), 'all');
+  await toggle.focus(); await page.keyboard.press('Enter');
+  assert.equal(await panel.isVisible(), true);
+  await patientFilter(page, 'return').selectOption('today');
+  await patientFilter(page, 'review').selectOption('reviewed');
+  await patientFilter(page, 'sort').selectOption('name');
+  await toggle.click();
+  assert.equal(await panel.isVisible(), false);
+  assert.deepEqual(await patientIds(page), ['a']);
+  assert.match(await page.locator('#patient-filter-summary').innerText(), /Явка: Сегодня/);
+  assert.match(await page.locator('#patient-filter-summary').innerText(), /Все записи проверены врачом/);
+  assert.match(await page.locator('#patient-filter-summary').innerText(), /По ФИО/);
+  await patientCategory(page, 'sick').click();
+  assert.equal(await panel.isVisible(), false, 'rubric change does not expose filters');
+  assert.deepEqual(await patientIds(page), ['a']);
+  await toggle.click();
+  assert.equal(await patientFilter(page, 'return').inputValue(), 'today');
+  await patientFilter(page, 'lastFrom').fill('2032-04-20');
+  await patientFilter(page, 'lastTo').fill('2032-04-10');
+  await toggle.click();
+  assert.equal(await page.locator('#patient-filter-error').isVisible(), true);
+  assert.match(await page.locator('#patient-filter-error').innerText(), /Последний приём/);
+  await click(page, 'patient-reset-filters');
+  assert.equal(await panel.isVisible(), false);
+  assert.deepEqual(await patientIds(page), ['a', 'c', 'd', 'b', 'u']);
+  for (const width of [1440, 800, 390]) {
+    await page.setViewportSize({width, height: 1000});
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await toggle.click();
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await toggle.click();
+  }
+  assert.equal(await page.evaluate(key => localStorage.getItem(key), key), initial, 'search, navigation and collapsing do not write records');
+  await page.reload(); await click(page, 'patients');
+  assert.equal(await panel.isVisible(), false, 'fresh launch always starts collapsed');
 });
 
 test("two windows: a conflict cancels repeat creation and exposes the warning, then explicit reload permits a confirmed repeat", { timeout: 20000 }, async t => {

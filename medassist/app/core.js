@@ -11,6 +11,7 @@
   const MAX_TEXT_LENGTH = 10000;
   const MAX_DRAFT_LENGTH = 100000;
   const MAX_FINGERPRINT_LENGTH = 350000;
+  const DECIMAL_PATTERN = /^[+-]?(?:\d+(?:[.,]\d+)?|[.,]\d+)$/;
   const LEGACY_GROUPS = {
     history: ["complaints", "onset", "course", "conditions", "medications", "allergies", "context"],
     exam: ["general", "cardiovascular", "respiratory", "abdomen", "neurological", "other"],
@@ -51,6 +52,17 @@
 
   function localDate(date) {
     return [String(date.getFullYear()).padStart(4, "0"), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
+  }
+
+  function calculateBmi(weightKg, heightCm) {
+    if ([weightKg, heightCm].some(value => typeof value !== "string" || !DECIMAL_PATTERN.test(value.trim()))) return "";
+    const weight = Number(weightKg.trim().replace(",", "."));
+    const height = Number(heightCm.trim().replace(",", "."));
+    if (!Number.isFinite(weight) || !Number.isFinite(height) || weight <= 0 || height <= 0) return "";
+    const bmi = weight / (height / 100) ** 2;
+    if (!Number.isFinite(bmi)) return "";
+    const rounded = bmi.toFixed(1);
+    return Number(rounded) > 0 && !rounded.includes("e") ? rounded.replace(".", ",") : "";
   }
 
   function newId() {
@@ -137,7 +149,7 @@
     function numeric(value, field) {
       if (typeof value !== "string" || value.trim() === "") return;
       const input = value.trim();
-      if (!/^[+-]?(?:\d+(?:[.,]\d+)?|[.,]\d+)$/.test(input) || !Number.isFinite(Number(input.replace(",", ".")))) {
+      if (!DECIMAL_PATTERN.test(input) || !Number.isFinite(Number(input.replace(",", ".")))) {
         problem(field, "Введите конечное число; десятичный разделитель — точка или запятая.");
       } else if (Number(input.replace(",", ".")) < 0) {
         problem(field, "Значение не может быть отрицательным.");
@@ -240,6 +252,7 @@
         + (period.length ? " Период: " + period.join(" ") + "." : "")];
     }
     const date = encounter.visitDate ? formatDate(encounter.visitDate) : "не указана";
+    const bmi = calculateBmi(encounter.vitals.weight, encounter.vitals.height);
     const draft = [
       "МЕДАССИСТЕНТ · ДЕМОНСТРАЦИОННЫЙ ЧЕРНОВИК",
       "Только вымышленные данные. Неофициальный шаблон; не является нормативной формой Республики Беларусь.",
@@ -276,13 +289,14 @@
       line("SpO₂", encounter.vitals.spo2, " %"),
       line("Масса тела", encounter.vitals.weight, " кг"),
       line("Рост", encounter.vitals.height, " см"),
+      ...(bmi ? ["Индекс массы тела: " + bmi + " кг/м²."] : []),
       "",
       "ЗАКЛЮЧЕНИЕ",
       "Диагноз: " + text(encounter.assessment.summary),
       ...optional("Рекомендации", encounter.assessment.plan),
-      ...optional("Повторный приём", encounter.assessment.returnVisitDate ? formatDate(encounter.assessment.returnVisitDate) : ""),
       ...optional("Наблюдение (из предыдущей версии)", encounter.assessment.followUp),
-      ...sickLeave()
+      ...sickLeave(),
+      ...optional("Повторный приём", encounter.assessment.returnVisitDate ? formatDate(encounter.assessment.returnVisitDate) : "")
     ].join("\n");
     if (draft.length > MAX_DRAFT_LENGTH) throw new Error("Черновик превышает 100000 символов. Сократите текст в полях приёма и повторите генерацию.");
     return draft;
@@ -346,5 +360,5 @@
     return validateBundle(parsed);
   }
 
-  return Object.freeze({ createEncounter, createDemoEncounter, generateDraft, fingerprint, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
+  return Object.freeze({ createEncounter, createDemoEncounter, calculateBmi, generateDraft, fingerprint, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
 });

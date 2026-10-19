@@ -197,6 +197,32 @@ test("sick leave is generated only when issued, with optional dates and validate
   assert.ok(core.validateEncounter(data).some(error => error.field === "assessment.sickLeaveIssued"));
 });
 
+test("repeat visit is the last generated line after recommendations, legacy observation and sick leave", () => {
+  const data = encounter();
+  Object.assign(data.assessment, {
+    summary: "Вымышленный диагноз",
+    plan: "Вымышленные рекомендации",
+    followUp: "Наблюдение прежней версии",
+    returnVisitDate: "2026-11-05",
+    sickLeaveIssued: "yes",
+    sickLeaveNumber: "ДЕМО-12345",
+    sickLeaveFrom: "2026-10-19",
+    sickLeaveTo: "2026-10-22"
+  });
+  const lines = core.generateDraft(data).split("\n");
+  assert.deepEqual(lines.slice(-5), [
+    "Диагноз: Вымышленный диагноз",
+    "Рекомендации: Вымышленные рекомендации",
+    "Наблюдение (из предыдущей версии): Наблюдение прежней версии",
+    "Листок нетрудоспособности: выдан. № ДЕМО-12345. Период: с 19.10.2026 по 22.10.2026.",
+    "Повторный приём: 05.11.2026"
+  ]);
+  data.assessment.returnVisitDate = "";
+  const withoutDate = core.generateDraft(data);
+  assert.doesNotMatch(withoutDate, /Повторный приём:/);
+  assert.equal(withoutDate.split("\n").at(-1), lines.at(-2));
+});
+
 test("sick leave number is entered manually, precedes dates and is omitted with inactive sick leave", () => {
   const data = encounter();
   data.assessment.sickLeaveNumber = "  ДЕМО-АБ/12345  ";
@@ -357,6 +383,67 @@ test("numeric validation checks representation and finite nonnegative values wit
   for (const value of ["", "0", "36,6", "36.6", "999999", " 72 "]) {
     const data = encounter(); data.vitals.temperature = value;
     assert.deepEqual(core.validateEncounter(data), [], value);
+  }
+});
+
+test("BMI uses kilograms and centimetres with one decimal and accepts the existing numeric grammar", () => {
+  for (const [weight, height, expected] of [
+    ["72.5", "175", "23,7"],
+    ["100", "200", "25,0"],
+    [" 72,5 ", " 175,0 ", "23,7"],
+    ["+100", "+200", "25,0"],
+    [".5", "10", "50,0"],
+    [",5", "10", "50,0"]
+  ]) assert.equal(core.calculateBmi(weight, height), expected, weight + "/" + height);
+});
+
+test("BMI is unavailable for incomplete, invalid, nonpositive or unrepresentable results", () => {
+  for (const value of ["", " \t ", "0", "-0", "-1", "NaN", "Infinity", "12abc", "12,3,4", "1e2", "0x10", "1.", "9".repeat(400), null, undefined, 72, {}]) {
+    assert.equal(core.calculateBmi(value, "175"), "", "weight: " + value);
+    assert.equal(core.calculateBmi("72.5", value), "", "height: " + value);
+  }
+  const tiny = "0." + "0".repeat(199) + "1";
+  assert.equal(core.calculateBmi("72.5", tiny), "", "squared height underflows");
+  assert.equal(core.calculateBmi("72.5", "9".repeat(200)), "", "squared height overflows");
+  assert.equal(core.calculateBmi("0.001", "200"), "", "positive value rounding to zero is not shown as 0.0");
+  assert.equal(core.calculateBmi("9".repeat(22), "100"), "", "exponential result is not presented as one-decimal BMI");
+});
+
+test("generated BMI follows height only when calculable and never changes the encounter or manual draft", () => {
+  const data = encounter();
+  data.draft.text = "Ручной черновик врача";
+  for (const [weight, height] of [["", ""], ["72.5", ""], ["", "175"], ["0", "175"], ["72.5", "0"], ["0.001", "200"]]) {
+    data.vitals.weight = weight;
+    data.vitals.height = height;
+    assert.doesNotMatch(core.generateDraft(data), /Индекс массы тела:/);
+  }
+  data.vitals.weight = "72,5";
+  data.vitals.height = "175";
+  const before = JSON.stringify(data);
+  assert.match(core.generateDraft(data), /Рост: 175 см\.\nИндекс массы тела: 23,7 кг\/м²\.\n\nЗАКЛЮЧЕНИЕ/);
+  assert.equal(JSON.stringify(data), before);
+  data.vitals.weight = "100";
+  data.vitals.height = "200";
+  assert.match(core.generateDraft(data), /Индекс массы тела: 25,0 кг\/м²\./);
+  assert.equal(data.draft.text, "Ручной черновик врача");
+});
+
+test("BMI is derived after old-schema import without adding fields to stored or exported data", () => {
+  const data = encounter();
+  data.vitals.weight = "72.5";
+  data.vitals.height = "175";
+  data.draft.text = "Черновик прежней версии без ИМТ";
+  for (const original of [legacyBundle(data), bundle([data])]) {
+    const restored = core.parseBundle(JSON.stringify(original)).encounters[0];
+    assert.deepEqual(restored.vitals, data.vitals);
+    assert.deepEqual(Object.keys(restored.vitals), Object.keys(data.vitals));
+    assert.equal(restored.draft.text, data.draft.text);
+    assert.equal(core.calculateBmi(restored.vitals.weight, restored.vitals.height), "23,7");
+    assert.match(core.generateDraft(restored), /Индекс массы тела: 23,7 кг\/м²\./);
+    const exported = bundle([restored]);
+    assert.equal(exported.schemaVersion, 2);
+    assert.deepEqual(exported.encounters[0], restored);
+    assert.deepEqual(exported.encounters[0].vitals, data.vitals);
   }
 });
 

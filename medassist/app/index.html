@@ -23,6 +23,22 @@
     <div class="dialog-actions"><button id="dialog-cancel" class="button secondary" type="button">Отмена</button><button id="dialog-accept" class="button primary" type="button">Продолжить</button></div>
   </dialog>
   <input type="file" id="import-file" accept="application/json,.json" hidden>
+  <dialog id="sick-leave-dialog" aria-labelledby="sick-leave-title" aria-describedby="sick-leave-description">
+    <h2 id="sick-leave-title"></h2>
+    <p id="sick-leave-patient"></p>
+    <p id="sick-leave-description"></p>
+    <form id="sick-leave-form" novalidate>
+      <div class="field"><label for="sick-leave-number">Номер листка нетрудоспособности</label><input id="sick-leave-number" type="text" maxlength="120" autocomplete="off" placeholder="Впишите номер вручную; можно уточнить позднее"></div>
+      <div id="sick-leave-period-fields" class="field-grid">
+        <div class="field"><label for="sick-leave-from">Период с</label><input id="sick-leave-from" type="date" required></div>
+        <div class="field"><label for="sick-leave-to">Период по, включительно</label><input id="sick-leave-to" type="date" required></div>
+      </div>
+      <div id="sick-leave-close-field" class="field" hidden><label for="sick-leave-close-date">Дата закрытия — последний день</label><input id="sick-leave-close-date" type="date"></div>
+      <p id="sick-leave-preview" class="hint" aria-live="polite"></p>
+      <p id="sick-leave-error" class="field-error" role="alert" hidden></p>
+      <div class="dialog-actions"><button id="sick-leave-cancel" class="button secondary" type="button">Отмена</button><button id="sick-leave-save" class="button primary" type="submit">Сохранить</button></div>
+    </form>
+  </dialog>
   <dialog id="repeat-dialog" aria-labelledby="repeat-title" aria-describedby="repeat-description">
     <h2 id="repeat-title">Повторный приём</h2>
     <p id="repeat-patient"></p>

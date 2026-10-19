@@ -10,6 +10,9 @@
   const MAX_ENCOUNTERS = 500;
   const MAX_PATIENTS = 500;
   const MAX_PATIENT_LABEL_LENGTH = 120;
+  const MAX_SICK_LEAVES = 100;
+  const MAX_SICK_LEAVE_EVENTS = 100;
+  const MAX_SICK_LEAVE_NUMBER_LENGTH = 120;
   const MAX_TEXT_LENGTH = 10000;
   const MAX_DRAFT_LENGTH = 100000;
   const MAX_FINGERPRINT_LENGTH = 350000;
@@ -78,6 +81,209 @@
     return (Date.parse(to + "T00:00:00.000Z") - Date.parse(from + "T00:00:00.000Z")) / 86400000 + 1;
   }
 
+  function mergeSickLeavePeriods(periods) {
+    if (!Array.isArray(periods)) throw new Error("Периоды больничного должны быть массивом.");
+    const sorted = Array.from(periods, period => {
+      if (!isObject(period) || Object.keys(period).some(field => !["from", "to"].includes(field)) || ["from", "to"].some(field => !Object.prototype.hasOwnProperty.call(period, field)) || calculateSickLeaveDays(period.from, period.to) === null) {
+        throw new Error("Укажите корректные даты начала и окончания каждого периода больничного.");
+      }
+      return { from: period.from, to: period.to };
+    }).sort((first, second) => first.from.localeCompare(second.from) || first.to.localeCompare(second.to));
+    const mergedPeriods = [];
+    let merged = null;
+    for (const period of sorted) {
+      if (merged && Date.parse(period.from + "T00:00:00.000Z") - Date.parse(merged.to + "T00:00:00.000Z") <= 86400000) {
+        if (period.to > merged.to) merged.to = period.to;
+      } else {
+        if (merged) mergedPeriods.push(merged);
+        merged = period;
+      }
+    }
+    if (merged) mergedPeriods.push(merged);
+    return mergedPeriods;
+  }
+
+  function calculateSickLeaveTotalDays(periods) {
+    return mergeSickLeavePeriods(periods).reduce((total, period) => total + calculateSickLeaveDays(period.from, period.to), 0);
+  }
+
+  function sickLeavePeriods(leave) {
+    const last = leave.events[leave.events.length - 1];
+    const closedOn = last.type === "close" ? last.to : "";
+    return mergeSickLeavePeriods(leave.events.filter(event => event.type !== "close" && (!closedOn || event.from <= closedOn)).map(event => ({
+      from: event.from,
+      to: closedOn && event.to > closedOn ? closedOn : event.to
+    })));
+  }
+
+  function validateSickLeaves(leaves) {
+    const errors = [];
+    const add = (field, message) => errors.push({ field: "sickLeaves" + field, message });
+    if (!Array.isArray(leaves)) return [{ field: "sickLeaves", message: "Журнал больничных должен быть массивом." }];
+    if (leaves.length > MAX_SICK_LEAVES) add("", "Допускается не более 100 больничных в одной карточке.");
+    const leaveIds = new Set();
+    const eventIds = new Set();
+    const sources = new Set();
+    for (let index = 0; index < leaves.length; index += 1) {
+      const leave = leaves[index];
+      const path = "[" + index + "]";
+      if (!isObject(leave)) { add(path, "Ожидается запись больничного."); continue; }
+      const fields = ["id", "number", "sourceEncounterId", "events"];
+      if (Object.keys(leave).some(field => !fields.includes(field)) || fields.some(field => !Object.prototype.hasOwnProperty.call(leave, field))) add(path, "Неверная структура записи больничного.");
+      if (typeof leave.id !== "string" || !ID_PATTERN.test(leave.id) || leaveIds.has(leave.id)) add(path + ".id", "Некорректный или повторяющийся идентификатор больничного.");
+      leaveIds.add(leave.id);
+      if (typeof leave.number !== "string" || leave.number.length > MAX_SICK_LEAVE_NUMBER_LENGTH) add(path + ".number", "Номер больничного должен быть строкой не длиннее 120 символов.");
+      if (typeof leave.sourceEncounterId !== "string" || (leave.sourceEncounterId !== "" && (!ID_PATTERN.test(leave.sourceEncounterId) || sources.has(leave.sourceEncounterId)))) add(path + ".sourceEncounterId", "Некорректная или повторная ссылка на исходный приём.");
+      if (leave.sourceEncounterId) sources.add(leave.sourceEncounterId);
+      if (!Array.isArray(leave.events)) { add(path + ".events", "Действия с больничным должны быть массивом."); continue; }
+      if (!leave.events.length || leave.events.length > MAX_SICK_LEAVE_EVENTS) add(path + ".events", "В больничном должно быть от 1 до 100 действий.");
+      let firstFrom = "";
+      let latestTo = "";
+      let closed = false;
+      const periods = [];
+      for (let eventIndex = 0; eventIndex < leave.events.length; eventIndex += 1) {
+        const event = leave.events[eventIndex];
+        const eventPath = path + ".events[" + eventIndex + "]";
+        if (!isObject(event)) { add(eventPath, "Ожидается действие с больничным."); continue; }
+        const eventFields = ["id", "type", "from", "to", "recordedAt"];
+        if (Object.keys(event).some(field => !eventFields.includes(field)) || eventFields.some(field => !Object.prototype.hasOwnProperty.call(event, field))) add(eventPath, "Неверная структура действия с больничным.");
+        if (typeof event.id !== "string" || !ID_PATTERN.test(event.id) || eventIds.has(event.id)) add(eventPath + ".id", "Некорректный или повторяющийся идентификатор действия.");
+        eventIds.add(event.id);
+        if (typeof event.recordedAt !== "string" || !validTimestamp(event.recordedAt)) add(eventPath + ".recordedAt", "Некорректная дата и время действия; ожидается формат ISO UTC.");
+        if (closed) add(eventPath, "После закрытия больничного нельзя добавлять действия.");
+        if (eventIndex === 0 ? event.type !== "issue" : !["extend", "close"].includes(event.type)) add(eventPath + ".type", "Первым действием должна быть выдача, затем продление или закрытие.");
+        if (event.type === "close") {
+          if (event.from !== "" || typeof event.to !== "string" || !validDate(event.to) || !periods.some(period => period.from <= event.to && event.to <= period.to)) add(eventPath, "Дата закрытия должна входить в один из указанных периодов больничного.");
+          closed = true;
+        } else if (["issue", "extend"].includes(event.type)) {
+          if (calculateSickLeaveDays(event.from, event.to) === null) { add(eventPath, "Укажите корректные даты начала и окончания периода больничного."); continue; }
+          if (event.type === "issue") firstFrom = event.from;
+          else if (!firstFrom || event.from < firstFrom || event.to <= latestTo) add(eventPath, "Продление должно начинаться не раньше выдачи и увеличивать конечную дату больничного.");
+          periods.push({ from: event.from, to: event.to });
+          if (event.to > latestTo) latestTo = event.to;
+        }
+      }
+    }
+    return errors;
+  }
+
+  function normalizePatient(patient) {
+    return {
+      ...Object.fromEntries(PATIENT_FIELDS.map(field => [field, patient[field]])),
+      ...(Object.prototype.hasOwnProperty.call(patient, "sickLeaves") ? {
+        sickLeaves: patient.sickLeaves.map(leave => ({ ...leave, events: leave.events.map(event => ({ ...event })) }))
+      } : {})
+    };
+  }
+
+  function validateJournalEncounters(encounters) {
+    if (!Array.isArray(encounters) || encounters.length > MAX_ENCOUNTERS) throw new Error("Ожидается список не более 500 приёмов.");
+    const ids = new Set();
+    for (const encounter of encounters) {
+      if (!isObject(encounter) || ["id", "patientId"].some(field => typeof encounter[field] !== "string" || !ID_PATTERN.test(encounter[field])) || ids.has(encounter.id)) throw new Error("Некорректный или повторный идентификатор приёма.");
+      ids.add(encounter.id);
+      const assessment = encounter.assessment;
+      if (!isObject(assessment) || !["", "no", "yes"].includes(assessment.sickLeaveIssued) || ["sickLeaveNumber", "sickLeaveFrom", "sickLeaveTo"].some(field => typeof assessment[field] !== "string" || assessment[field].length > MAX_TEXT_LENGTH)) throw new Error("Некорректные сведения о больничном в приёме.");
+    }
+  }
+
+  function getSickLeaveJournal(patient, encounters = []) {
+    assertPatient(patient);
+    validateJournalEncounters(encounters);
+    const leaves = (patient.sickLeaves || []).map(leave => {
+      const last = leave.events[leave.events.length - 1];
+      const periods = sickLeavePeriods(leave);
+      return {
+        ...leave,
+        events: leave.events.map(event => ({ ...event })),
+        status: last.type === "close" ? "closed" : "open",
+        closedOn: last.type === "close" ? last.to : "",
+        periods,
+        days: calculateSickLeaveTotalDays(periods)
+      };
+    });
+    const sourceIds = new Set(leaves.map(leave => leave.sourceEncounterId).filter(Boolean));
+    const legacy = encounters.filter(encounter => encounter.patientId === patient.id && encounter.assessment.sickLeaveIssued === "yes" && !sourceIds.has(encounter.id)).map(encounter => {
+      const { sickLeaveNumber: number, sickLeaveFrom: from, sickLeaveTo: to } = encounter.assessment;
+      return { encounterId: encounter.id, number, from, to, days: calculateSickLeaveDays(from, to) };
+    });
+    return {
+      leaves,
+      legacy,
+      totalDays: calculateSickLeaveTotalDays([...leaves.flatMap(leave => leave.periods), ...legacy.filter(leave => leave.days !== null).map(leave => ({ from: leave.from, to: leave.to }))]),
+      incompleteCount: legacy.filter(leave => leave.days === null).length
+    };
+  }
+
+  function sickLeaveActionTime(options, allowed) {
+    if (!isObject(options) || Object.keys(options).some(field => !allowed.includes(field))) throw new Error("Некорректные параметры действия с больничным.");
+    const now = options.now === undefined ? new Date() : new Date(options.now);
+    if (!Number.isFinite(now.getTime()) || now.getUTCFullYear() < 1 || now.getUTCFullYear() > 9999) throw new Error("Некорректное время действия с больничным.");
+    return now.toISOString();
+  }
+
+  function issueSickLeave(patient, options, encounters = []) {
+    assertPatient(patient);
+    const recordedAt = sickLeaveActionTime(options, ["number", "from", "to", "sourceEncounterId", "id", "eventId", "now"]);
+    validateJournalEncounters(encounters);
+    const sourceEncounterId = options.sourceEncounterId === undefined ? "" : options.sourceEncounterId;
+    if (sourceEncounterId) {
+      const source = encounters.find(encounter => encounter.id === sourceEncounterId);
+      if (!source || source.patientId !== patient.id || source.assessment.sickLeaveIssued !== "yes") throw new Error("Исходный приём с выданным больничным должен относиться к этому пациенту.");
+      if (source.assessment.sickLeaveNumber !== options.number || source.assessment.sickLeaveFrom !== options.from || source.assessment.sickLeaveTo !== options.to) throw new Error("Данные выдачи должны совпадать с больничным в исходном приёме.");
+    }
+    const result = normalizePatient(patient);
+    result.sickLeaves = [...(result.sickLeaves || []), {
+      id: options.id === undefined ? newId("leave") : options.id,
+      number: options.number,
+      sourceEncounterId,
+      events: [{ id: options.eventId === undefined ? newId("leave-event") : options.eventId, type: "issue", from: options.from, to: options.to, recordedAt }]
+    }];
+    result.updatedAt = recordedAt;
+    assertPatient(result);
+    return result;
+  }
+
+  function appendSickLeaveAction(patient, leaveId, options, type) {
+    assertPatient(patient);
+    const recordedAt = sickLeaveActionTime(options, type === "close" ? ["date", "eventId", "now"] : ["from", "to", "eventId", "now"]);
+    const result = normalizePatient(patient);
+    const leave = result.sickLeaves?.find(entry => entry.id === leaveId);
+    if (!leave) throw new Error("Больничный не найден в карточке пациента.");
+    leave.events.push({
+      id: options.eventId === undefined ? newId("leave-event") : options.eventId,
+      type,
+      from: type === "close" ? "" : options.from,
+      to: type === "close" ? options.date : options.to,
+      recordedAt
+    });
+    result.updatedAt = recordedAt;
+    assertPatient(result);
+    return result;
+  }
+
+  function extendSickLeave(patient, leaveId, options) {
+    return appendSickLeaveAction(patient, leaveId, options, "extend");
+  }
+
+  function closeSickLeave(patient, leaveId, options) {
+    return appendSickLeaveAction(patient, leaveId, options, "close");
+  }
+
+  function undoSickLeaveAction(patient, leaveId, options = {}) {
+    assertPatient(patient);
+    const recordedAt = sickLeaveActionTime(options, ["now"]);
+    const result = normalizePatient(patient);
+    const leave = result.sickLeaves?.find(entry => entry.id === leaveId);
+    if (!leave) throw new Error("Больничный не найден в карточке пациента.");
+    leave.events.pop();
+    result.sickLeaves = result.sickLeaves.filter(entry => entry.events.length);
+    if (!result.sickLeaves.length) delete result.sickLeaves;
+    result.updatedAt = recordedAt;
+    assertPatient(result);
+    return result;
+  }
+
   function newId(prefix = "visit") {
     if (typeof globalThis.crypto?.randomUUID === "function") return prefix + "-" + globalThis.crypto.randomUUID();
     return prefix + "-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 12);
@@ -95,13 +301,14 @@
       else if (typeof patient[field] !== "string") errors.push({ field, message: "Значение должно быть строкой." });
     }
     for (const field of Object.keys(patient)) {
-      if (!PATIENT_FIELDS.includes(field)) errors.push({ field, message: "Неизвестное поле карточки пациента." });
+      if (!PATIENT_FIELDS.includes(field) && field !== "sickLeaves") errors.push({ field, message: "Неизвестное поле карточки пациента." });
     }
     if (typeof patient.id === "string" && !ID_PATTERN.test(patient.id)) errors.push({ field: "id", message: "Некорректный идентификатор карточки пациента." });
     if (typeof patient.label === "string" && patient.label.length > MAX_PATIENT_LABEL_LENGTH) errors.push({ field: "label", message: "Условное имя не должно превышать 120 символов." });
     for (const field of ["createdAt", "updatedAt"]) {
       if (typeof patient[field] === "string" && !validTimestamp(patient[field])) errors.push({ field, message: "Некорректная дата и время; ожидается формат ISO UTC." });
     }
+    if (Object.prototype.hasOwnProperty.call(patient, "sickLeaves")) errors.push(...validateSickLeaves(patient.sickLeaves));
     return errors;
   }
 
@@ -475,9 +682,10 @@
       if (value.patients.length > MAX_PATIENTS) throw new Error("В одном файле допускается не более 500 демонстрационных карточек пациентов.");
       patients = value.patients.map((patient, index) => {
         assertPatient(patient, "Карточка пациента №" + (index + 1));
+        if (version < 4 && Object.prototype.hasOwnProperty.call(patient, "sickLeaves")) throw new Error("Журнал больничных не поддерживается в резервной копии версии " + version + ".");
         if (patientIds.has(patient.id)) throw new Error("В резервной копии повторяется идентификатор карточки пациента №" + (index + 1) + ".");
         patientIds.add(patient.id);
-        return Object.fromEntries(PATIENT_FIELDS.map(field => [field, patient[field]]));
+        return normalizePatient(patient);
       });
     }
     if (!Array.isArray(value.encounters)) throw new Error("Список приёмов в резервной копии должен быть массивом.");
@@ -492,6 +700,13 @@
     });
     if (version >= 4) {
       const byId = new Map(encounters.map(encounter => [encounter.id, encounter]));
+      for (const patient of patients) {
+        for (const leave of patient.sickLeaves || []) {
+          if (!leave.sourceEncounterId) continue;
+          const source = byId.get(leave.sourceEncounterId);
+          if (!source || source.patientId !== patient.id) throw new Error("Исходный приём больничного отсутствует или относится к другому пациенту.");
+        }
+      }
       const linkedIds = new Set();
       for (const encounter of encounters) {
         const targetId = encounter.workflow.returnVisitEncounterId;
@@ -541,5 +756,5 @@
     return validateBundle(parsed);
   }
 
-  return Object.freeze({ createPatient, createEncounter, createRepeatEncounter, createDemoEncounter, setReviewStatus, setReturnVisitStatus, linkReturnVisit, getReturnVisits, calculateBmi, calculateSickLeaveDays, generateDraft, fingerprint, validatePatient, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_PATIENTS, MAX_PATIENT_LABEL_LENGTH, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
+  return Object.freeze({ createPatient, createEncounter, createRepeatEncounter, createDemoEncounter, setReviewStatus, setReturnVisitStatus, linkReturnVisit, getReturnVisits, calculateBmi, calculateSickLeaveDays, calculateSickLeaveTotalDays, getSickLeaveJournal, issueSickLeave, extendSickLeave, closeSickLeave, undoSickLeaveAction, generateDraft, fingerprint, validatePatient, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_PATIENTS, MAX_PATIENT_LABEL_LENGTH, MAX_SICK_LEAVES, MAX_SICK_LEAVE_EVENTS, MAX_SICK_LEAVE_NUMBER_LENGTH, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
 });

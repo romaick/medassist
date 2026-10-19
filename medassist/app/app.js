@@ -55,6 +55,7 @@
   const escape = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[char]));
   const icon = (name) => '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">' + (icons[name] || icons.document) + '</svg>';
   const active = () => state.encounters.find((entry) => entry.id === state.activeId);
+  const filledCount = (object) => Object.values(object).filter((value) => value.trim()).length;
   const dateText = (value) => value ? new Date(value + 'T12:00:00').toLocaleDateString('ru-RU') : 'Дата не указана';
   const localDate = () => new Date().toLocaleDateString('sv-SE');
   const shortId = (entry) => entry.id.replace(/^visit-/, '').slice(0, 8).toUpperCase();
@@ -91,10 +92,10 @@
     app.innerHTML = '<div class="shell"><aside class="sidebar" aria-label="Главная навигация"><div class="brand"><img src="icon.svg" alt=""><div><strong>МедАссистент</strong><small>ПОЛИКЛИНИЧЕСКИЙ РЕЖИМ</small></div></div><p class="nav-caption">РАБОЧЕЕ ПРОСТРАНСТВО</p><nav class="nav">' +
       navButton('home', 'Обзор', 'home') + navButton('new', 'Новый приём', 'plus') +
       (current ? navButton('visit', 'Текущий приём', 'document') : '') + navButton('modules', 'Модули', 'grid') + navButton('help', 'Помощь и данные', 'help') + navButton('check-updates', 'Проверить обновления', 'download') +
-      '</nav><div class="side-bottom"><div class="local-indicator"><span class="dot"></span>Работает локально</div><div class="version">Прототип 0.5 · Демонстрация</div></div></aside><div class="workspace"><header class="topbar"><div class="topbar-left">Поликлиника <span aria-hidden="true">/</span> <span>' + sectionName + '</span></div><div class="topbar-right"><span class="date muted">' + new Date().toLocaleDateString('ru-RU', {day: 'numeric', month: 'long'}) + '</span><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><span class="avatar" aria-hidden="true">МА</span></div></header><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
+      '</nav><div class="side-bottom"><div class="local-indicator"><span class="dot"></span>Работает локально</div><div class="version">Прототип 0.5.1 · Демонстрация</div></div></aside><div class="workspace"><header class="topbar"><div class="topbar-left">Поликлиника <span aria-hidden="true">/</span> <span>' + sectionName + '</span></div><div class="topbar-right"><span class="date muted">' + new Date().toLocaleDateString('ru-RU', {day: 'numeric', month: 'long'}) + '</span><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><span class="avatar" aria-hidden="true">МА</span></div></header><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
       (state.migrated ? '<div class="migration-notice">Записи предыдущей версии загружены. Старый текст осмотра, наблюдения и ручные правки сохранены. Проверьте их перед повторной генерацией.</div>' : '') +
       ({home: renderHome, visit: renderVisit, modules: renderModules, help: renderHelp}[state.view])() +
-      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.5</span></footer></main></div></div>';
+      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.5.1</span></footer></main></div></div>';
     updateSaveStatus();
     if (state.view === 'visit') { updateValidation(); updateDraftState(); }
   }
@@ -118,14 +119,13 @@
     return entries.map((entry) => '<div class="visit-row"><div class="visit-identity"><div class="icon-tile">' + icon('user') + '</div><div class="visit-text"><strong>' + escape(patientLabel(entry)) + '</strong><p>' + escape(dateText(entry.visitDate)) + ' · ' + escape(entry.reason || 'Повод обращения не указан') + '</p><p>' + (entry.draft.text.trim() ? 'Черновик сохранён' : 'Форма приёма') + '</p></div></div>' + button('open', 'Открыть', null, 'secondary compact', 'data-id="' + escape(entry.id) + '" aria-label="Открыть ' + escape(patientLabel(entry)) + '"') + '</div>').join('');
   }
   function renderVisit() {
-    return '<div class="page-heading visit-heading"><div><h1>' + escape(patientLabel(active())) + '</h1><p>Демонстрационный приём · ' + escape(dateText(active().visitDate)) + '</p></div><div id="save-status" class="save-indicator" role="status"></div></div>' + demoNotice() +
+    return '<div class="page-heading visit-heading"><div><h1>' + escape(patientLabel(active())) + '</h1><p id="visit-date-summary">Демонстрационный приём · ' + escape(dateText(active().visitDate)) + '</p></div><div id="save-status" class="save-indicator" role="status"></div></div>' + demoNotice() +
       '<nav class="tab-bar" aria-label="Разделы приёма">' + tabs.map(([key, label], i) => '<button type="button" class="tab' + (state.tab === key ? ' active' : '') + '" data-action="tab" data-tab="' + key + '"' + (state.tab === key ? ' aria-current="step"' : '') + '><span class="step-number">' + (i + 1) + '</span>' + label + '</button>').join('') + '</nav>' +
       ({basic: renderBasic, history: renderHistory, exam: renderExam, draft: renderDraft}[state.tab])();
   }
   function aside(title, text) {
     const entry = active();
-    const count = (obj) => Object.values(obj).filter((value) => value.trim()).length;
-    return '<aside class="side-card">' + icon('edit') + '<h3>' + title + '</h3><p>' + text + '</p><div class="summary-rows"><div class="summary-row"><span>Анамнез</span><span>' + count(entry.history) + ' из 7 полей</span></div><div class="summary-row"><span>Признаки осмотра</span><span id="exam-total">' + count(entry.examSelections) + ' из ' + examCatalog.FIELDS.length + '</span></div><div class="summary-row"><span>Показатели</span><span>' + count(entry.vitals) + ' из 8 полей</span></div></div></aside>';
+    return '<aside class="side-card">' + icon('edit') + '<h3>' + title + '</h3><p>' + text + '</p><div class="summary-rows"><div class="summary-row"><span>Анамнез</span><span data-summary="history">' + filledCount(entry.history) + ' из 7 полей</span></div><div class="summary-row"><span>Признаки осмотра</span><span id="exam-total">' + filledCount(entry.examSelections) + ' из ' + examCatalog.FIELDS.length + '</span></div><div class="summary-row"><span>Показатели</span><span data-summary="vitals">' + filledCount(entry.vitals) + ' из 8 полей</span></div></div></aside>';
   }
   function nextFooter(previous, next, label) {
     return '<div class="form-footer">' + (previous ? button('tab', 'Назад', null, 'secondary', 'data-tab="' + previous + '"') : '<span class="muted small">Все поля необязательны</span>') + button('tab', label, 'arrow', 'primary', 'data-tab="' + next + '"') + '</div>';
@@ -300,7 +300,7 @@
       }
       if (entry.draft.text.trim() && !await confirmAction('Заменить текст черновика?', 'Будет создан новый текст из текущих полей приёма. Все ручные правки в этом черновике будут заменены. Чтобы сохранить их отдельно, сначала скачайте .txt.', 'Заменить черновик')) return;
       entry.draft = {text: core.generateDraft(entry), generatedAt: new Date().toISOString(), sourceFingerprint: core.fingerprint(entry)};
-      entry.updatedAt = new Date().toISOString(); persist(); render(); toast('Черновик сформирован. Проверьте и отредактируйте текст.'); return;
+      entry.updatedAt = new Date().toISOString(); persist(); render(); document.getElementById('draft-text').focus(); toast('Черновик сформирован. Проверьте и отредактируйте текст.'); return;
     }
     if (action === 'download-text' || action === 'copy') {
       const entry = active();
@@ -369,6 +369,11 @@
     if (!control.dataset.field || !active()) return;
     set(active(), control.dataset.field, control.value);
     active().updatedAt = new Date().toISOString();
+    if (control.dataset.field === 'visitDate') document.getElementById('visit-date-summary').textContent = 'Демонстрационный приём · ' + dateText(active().visitDate);
+    app.querySelectorAll('[data-summary]').forEach((element) => {
+      const fields = active()[element.dataset.summary];
+      element.textContent = filledCount(fields) + ' из ' + Object.keys(fields).length + ' полей';
+    });
     if (control.dataset.field === 'vitals.weight' || control.dataset.field === 'vitals.height') updateBmi();
     if (control.dataset.field === 'assessment.sickLeaveIssued') {
       document.getElementById('sickleave-period').hidden = control.value !== 'yes';
@@ -379,7 +384,7 @@
         element.textContent = items.filter((item) => active().examSelections[item.id]).length + ' из ' + items.length;
       });
       const total = document.getElementById('exam-total');
-      if (total) total.textContent = Object.values(active().examSelections).filter(Boolean).length + ' из ' + examCatalog.FIELDS.length;
+      if (total) total.textContent = filledCount(active().examSelections) + ' из ' + examCatalog.FIELDS.length;
     }
     updateValidation(); persist(); updateDraftState();
   }

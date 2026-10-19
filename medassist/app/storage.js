@@ -24,7 +24,6 @@
     }
 
     function load() {
-      if (blocked) return { encounters: [], error: blocked };
       try {
         const storage = target();
         let raw = storage.getItem(KEY);
@@ -35,6 +34,7 @@
         }
         const encounters = raw === null ? [] : core.parseBundle(raw).encounters;
         checked = true;
+        blocked = null;
         return migrated ? { encounters, error: null, migrated: true } : { encounters, error: null };
       } catch (error) {
         checked = true;

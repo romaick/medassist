@@ -1,0 +1,8 @@
+.verification/
+TASKS.md
+sources/
+node_modules/
+**/update-work/
+MedAssist-backup-*.json
+MedAssist-demo-*.txt
+*.lnk

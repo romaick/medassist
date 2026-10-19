@@ -1,0 +1,506 @@
+"use strict";
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
+const core = require("../app/core.js");
+const examCatalog = require("../app/exam-options.js");
+const { createRepository, KEY, LEGACY_KEY } = require("../app/storage.js");
+const NOW = "2026-10-19T09:30:00.000Z";
+
+function encounter(id = "test-visit-1") { return core.createEncounter({ now: NOW, id }); }
+function bundle(encounters) { return JSON.parse(core.serializeBundle(encounters)); }
+function memoryStorage(initial = null, legacy = null) {
+  const values = new Map([[KEY, initial], [LEGACY_KEY, legacy]]);
+  let writes = 0;
+  const reads = [];
+  return {
+    getItem(key) { assert.ok(values.has(key)); reads.push(key); return values.get(key); },
+    setItem(key, value) { assert.equal(key, KEY); values.set(key, value); writes += 1; },
+    get raw() { return values.get(KEY); },
+    get legacyRaw() { return values.get(LEGACY_KEY); },
+    get reads() { return reads; },
+    get writes() { return writes; }
+  };
+}
+
+function legacyBundle(data = encounter()) {
+  const value = bundle([data]);
+  value.schemaVersion = 1;
+  delete value.encounters[0].examSelections;
+  for (const field of ["returnVisitDate", "sickLeaveIssued", "sickLeaveNumber", "sickLeaveFrom", "sickLeaveTo"]) delete value.encounters[0].assessment[field];
+  return value;
+}
+
+test("new encounters have independent, valid empty fields and a local visit date", () => {
+  const first = encounter();
+  const second = encounter("test-visit-2");
+  assert.deepEqual(core.validateEncounter(first), []);
+  const date = new Date(NOW);
+  assert.equal(first.visitDate, [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-"));
+  first.history.complaints = "Changed";
+  assert.equal(second.history.complaints, "");
+  assert.equal(first.draft.text, "");
+  assert.equal(core.SCHEMA_VERSION, 2);
+  assert.deepEqual(Object.keys(first.examSelections), examCatalog.FIELDS.map(field => field.id));
+  assert.ok(Object.values(first.examSelections).every(value => value === ""));
+  assert.equal(core.createDemoEncounter({ now: NOW }).assessment.followUp, "");
+  assert.equal(core.createDemoEncounter({ now: NOW }).assessment.sickLeaveIssued, "");
+});
+
+test("blank fields remain explicitly unfilled without inferred clinical findings", () => {
+  const draft = core.generateDraft(encounter());
+  assert.match(draft, /Только вымышленные данные/);
+  assert.match(draft, /Неофициальный шаблон/);
+  assert.match(draft, /Аллергии и реакции: не заполнено/);
+  assert.match(draft, /Общий осмотр: не заполнено/);
+  assert.match(draft, /Диагноз: не заполнено/);
+  assert.doesNotMatch(draft, /Рекомендации|Повторный приём:|Дополнительный анамнез:|Другие данные осмотра:|Наблюдение|Листок нетрудоспособности/i);
+  assert.doesNotMatch(draft, /без особенностей|аллерги[ийя] нет|в норме|удовлетворительное/i);
+});
+
+test("the explicit normal preset covers the catalog with valid findings and keeps encounters independent", () => {
+  assert.ok(Object.isFrozen(examCatalog.NORMAL_SELECTIONS));
+  assert.deepEqual(Object.keys(examCatalog.NORMAL_SELECTIONS), examCatalog.FIELDS.map(field => field.id));
+  for (const field of examCatalog.FIELDS) {
+    assert.ok(field.options.some(option => option.value === examCatalog.NORMAL_SELECTIONS[field.id]), field.id);
+  }
+  const data = encounter();
+  Object.assign(data.examSelections, examCatalog.NORMAL_SELECTIONS);
+  assert.deepEqual(core.validateEncounter(data), []);
+  const draft = core.generateDraft(data);
+  assert.match(draft, /Общее состояние удовлетворительное/);
+  assert.match(draft, /Тоны сердца ритмичные/);
+  assert.match(draft, /Тоны сердца ясные/);
+  assert.match(draft, /Дыхание везикулярное/);
+  assert.match(draft, /Живот при пальпации безболезненный/);
+  assert.match(draft, /Сознание ясное/);
+  const fingerprint = core.fingerprint(data);
+  data.examSelections.heartRhythm = "irregular";
+  assert.match(core.generateDraft(data), /Тоны сердца аритмичные/);
+  assert.doesNotMatch(core.generateDraft(data), /Тоны сердца ритмичные/);
+  assert.notEqual(core.fingerprint(data), fingerprint);
+  assert.equal(examCatalog.NORMAL_SELECTIONS.heartRhythm, "regular");
+  assert.ok(Object.values(encounter("another-visit").examSelections).every(value => value === ""));
+});
+
+test("optional free text appears only when filled and permanent medications have their new label", () => {
+  const data = encounter();
+  data.history.context = " \n\t ";
+  data.exam.other = "\n ";
+  data.assessment.plan = "\t ";
+  assert.doesNotMatch(core.generateDraft(data), /Дополнительный анамнез:|Другие данные осмотра:|Рекомендации:/);
+  data.history.context = "Дополнительные вымышленные сведения";
+  data.exam.other = "Дополнительный вымышленный результат осмотра";
+  data.assessment.plan = "Вручную внесённые рекомендации";
+  data.history.medications = "Вымышленный препарат";
+  const draft = core.generateDraft(data);
+  assert.ok(draft.includes("Дополнительный анамнез: " + data.history.context));
+  assert.ok(draft.includes("Другие данные осмотра: " + data.exam.other));
+  assert.ok(draft.includes("Рекомендации: " + data.assessment.plan));
+  assert.ok(draft.includes("Принимаемые препараты на постоянной основе: " + data.history.medications));
+});
+
+test("each catalog option generates its exact phrase only after selection and preserves written notes", () => {
+  for (const field of examCatalog.FIELDS) {
+    for (const option of field.options.filter(option => option.value !== "")) {
+      const data = encounter();
+      data.examSelections[field.id] = option.value;
+      data.exam[field.section] = "Дополнение врача к разделу " + field.section;
+      assert.deepEqual(core.validateEncounter(data), [], field.id + ": " + option.value);
+      const before = JSON.stringify(data);
+      const draft = core.generateDraft(data);
+      assert.ok(draft.includes(option.text), field.id + ": " + option.value);
+      assert.ok(draft.includes(data.exam[field.section]));
+      assert.equal(JSON.stringify(data), before);
+      data.examSelections[field.id] = "";
+      assert.ok(!core.generateDraft(data).includes(option.text), field.id + ": cleared " + option.value);
+    }
+  }
+});
+
+test("catalog selections reject unknown values, fields and non-string values", () => {
+  const field = examCatalog.FIELDS[0];
+  for (const value of ["unsupported-value", false, null, {}, 1]) {
+    const data = encounter();
+    data.examSelections[field.id] = value;
+    assert.ok(core.validateEncounter(data).some(error => error.field === "examSelections." + field.id));
+    assert.throws(() => core.generateDraft(data));
+  }
+  const extra = encounter(); extra.examSelections.unexpected = "value";
+  assert.ok(core.validateEncounter(extra).some(error => error.field === "examSelections.unexpected"));
+  const missing = encounter(); delete missing.examSelections[field.id];
+  assert.ok(core.validateEncounter(missing).some(error => error.field === "examSelections." + field.id));
+});
+
+test("heart rhythm and heart sound clarity remain independent selections in the generated note", () => {
+  const data = encounter();
+  const rhythm = examCatalog.FIELDS.find(field => field.id === "heartRhythm");
+  const sounds = examCatalog.FIELDS.find(field => field.id === "heartSounds");
+  assert.ok(rhythm);
+  assert.ok(sounds);
+  data.examSelections.heartRhythm = "irregular";
+  data.examSelections.heartSounds = "muffled";
+  const draft = core.generateDraft(data);
+  assert.ok(draft.includes(rhythm.options.find(option => option.value === "irregular").text));
+  assert.ok(draft.includes(sounds.options.find(option => option.value === "muffled").text));
+  data.examSelections.heartSounds = "clear";
+  const changed = core.generateDraft(data);
+  assert.ok(changed.includes(rhythm.options.find(option => option.value === "irregular").text));
+  assert.ok(changed.includes(sounds.options.find(option => option.value === "clear").text));
+  assert.ok(!changed.includes(sounds.options.find(option => option.value === "muffled").text));
+});
+
+test("repeat visit uses a formatted calendar date and preserves legacy observation separately", () => {
+  const data = encounter();
+  data.assessment.returnVisitDate = "2026-11-05";
+  data.assessment.followUp = "Обратиться при изменении жалоб — запись старой версии";
+  const draft = core.generateDraft(data);
+  assert.match(draft, /Повторный приём: 05\.11\.2026/);
+  assert.ok(draft.includes("Наблюдение (из предыдущей версии): " + data.assessment.followUp));
+  data.assessment.returnVisitDate = "";
+  assert.doesNotMatch(core.generateDraft(data), /Повторный приём:/);
+  for (const field of ["returnVisitDate", "sickLeaveFrom", "sickLeaveTo"]) {
+    for (const value of ["2026-02-29", "2026-04-31", "2026-1-01", "0000-01-01", "завтра", 1]) {
+      const invalid = encounter(); invalid.assessment[field] = value;
+      assert.ok(core.validateEncounter(invalid).some(error => error.field === "assessment." + field), field + ": " + value);
+    }
+    const leap = encounter(); leap.assessment[field] = "2028-02-29";
+    assert.deepEqual(core.validateEncounter(leap), []);
+  }
+});
+
+test("sick leave is generated only when issued, with optional dates and validated date order", () => {
+  const data = encounter();
+  data.assessment.sickLeaveFrom = "2026-10-19";
+  data.assessment.sickLeaveTo = "2026-10-22";
+  for (const status of ["", "no"]) {
+    data.assessment.sickLeaveIssued = status;
+    assert.doesNotMatch(core.generateDraft(data), /Листок нетрудоспособности|19\.10\.2026 по 22\.10\.2026/);
+    assert.deepEqual(core.parseBundle(core.serializeBundle([data])).encounters[0].assessment, data.assessment);
+  }
+  data.assessment.sickLeaveIssued = "yes";
+  assert.match(core.generateDraft(data), /Листок нетрудоспособности: выдан\. Период: с 19\.10\.2026 по 22\.10\.2026\./);
+  data.assessment.sickLeaveTo = "";
+  assert.match(core.generateDraft(data), /Листок нетрудоспособности: выдан\. Период: с 19\.10\.2026\./);
+  data.assessment.sickLeaveFrom = "";
+  assert.match(core.generateDraft(data), /Листок нетрудоспособности: выдан\.$/);
+  data.assessment.sickLeaveTo = "2026-10-22";
+  assert.match(core.generateDraft(data), /Листок нетрудоспособности: выдан\. Период: по 22\.10\.2026\./);
+  data.assessment.sickLeaveFrom = "2026-10-23";
+  assert.ok(core.validateEncounter(data).some(error => error.field === "assessment.sickLeaveTo"));
+  data.assessment.sickLeaveIssued = "no";
+  assert.deepEqual(core.validateEncounter(data), []);
+  assert.doesNotMatch(core.generateDraft(data), /Листок нетрудоспособности/);
+  data.assessment.sickLeaveIssued = "unknown";
+  assert.ok(core.validateEncounter(data).some(error => error.field === "assessment.sickLeaveIssued"));
+});
+
+test("sick leave number is entered manually, precedes dates and is omitted with inactive sick leave", () => {
+  const data = encounter();
+  data.assessment.sickLeaveNumber = "  ДЕМО-АБ/12345  ";
+  data.assessment.sickLeaveFrom = "2026-10-19";
+  data.assessment.sickLeaveTo = "2026-10-22";
+  for (const status of ["", "no"]) {
+    data.assessment.sickLeaveIssued = status;
+    const draft = core.generateDraft(data);
+    assert.doesNotMatch(draft, /ДЕМО-АБ\/12345|Листок нетрудоспособности|Период:/);
+    assert.equal(core.parseBundle(core.serializeBundle([data])).encounters[0].assessment.sickLeaveNumber, data.assessment.sickLeaveNumber);
+  }
+  data.assessment.sickLeaveIssued = "yes";
+  assert.match(core.generateDraft(data), /Листок нетрудоспособности: выдан\. № ДЕМО-АБ\/12345\. Период: с 19\.10\.2026 по 22\.10\.2026\./);
+  data.assessment.sickLeaveFrom = "";
+  data.assessment.sickLeaveTo = "";
+  assert.match(core.generateDraft(data), /Листок нетрудоспособности: выдан\. № ДЕМО-АБ\/12345\.$/);
+  data.assessment.sickLeaveNumber = " \t ";
+  assert.match(core.generateDraft(data), /Листок нетрудоспособности: выдан\.$/);
+  data.assessment.sickLeaveNumber = 12345;
+  assert.ok(core.validateEncounter(data).some(error => error.field === "assessment.sickLeaveNumber"));
+  data.assessment.sickLeaveNumber = "x".repeat(10001);
+  assert.ok(core.validateEncounter(data).some(error => error.field === "assessment.sickLeaveNumber"));
+});
+
+test("draft generation uses entered text, accepts a Russian decimal and never mutates the encounter", () => {
+  const data = encounter();
+  data.history.complaints = "Текст, введённый врачом <script>alert(1)</script>";
+  data.vitals.temperature = "36,6";
+  data.assessment.summary = "Ручное заключение";
+  const before = JSON.stringify(data);
+  const draft = core.generateDraft(data);
+  assert.match(draft, /Температура: 36,6 °C/);
+  assert.ok(draft.includes(data.history.complaints));
+  assert.match(draft, /Ручное заключение/);
+  assert.equal(JSON.stringify(data), before);
+});
+
+test("fingerprint detects source edits and ignores metadata, key ordering and manual draft edits", () => {
+  const original = encounter();
+  const copy = JSON.parse(JSON.stringify(original));
+  copy.id = "another-id";
+  copy.updatedAt = "2026-10-20T00:00:00.000Z";
+  copy.draft.text = "Ручной текст";
+  copy.history = Object.fromEntries(Object.entries(copy.history).reverse());
+  assert.equal(core.fingerprint(copy), core.fingerprint(original));
+  copy.history.allergies = "Вымышленное уточнение";
+  assert.notEqual(core.fingerprint(copy), core.fingerprint(original));
+});
+
+test("fingerprint tracks selected exam findings, repeat date and sick leave details", () => {
+  const data = encounter();
+  const initial = core.fingerprint(data);
+  data.examSelections.heartRhythm = "regular";
+  assert.notEqual(core.fingerprint(data), initial);
+  const selected = core.fingerprint(data);
+  data.examSelections = Object.fromEntries(Object.entries(data.examSelections).reverse());
+  assert.equal(core.fingerprint(data), selected);
+  for (const [field, value] of [["returnVisitDate", "2026-11-01"], ["sickLeaveIssued", "yes"], ["sickLeaveNumber", "DEMO-1"], ["sickLeaveFrom", "2026-10-19"], ["sickLeaveTo", "2026-10-20"]]) {
+    const before = core.fingerprint(data);
+    data.assessment[field] = value;
+    assert.notEqual(core.fingerprint(data), before, field);
+  }
+});
+
+test("JSON round trip preserves manual draft independently of edited source fields", () => {
+  const data = core.createDemoEncounter({ now: NOW, id: "demo-test" });
+  data.examSelections.heartRhythm = "irregular";
+  data.examSelections.heartSounds = "muffled";
+  data.assessment.returnVisitDate = "2026-11-05";
+  data.assessment.sickLeaveIssued = "yes";
+  data.assessment.sickLeaveNumber = "DEMO-12345";
+  data.assessment.sickLeaveFrom = "2026-10-19";
+  data.assessment.sickLeaveTo = "2026-10-22";
+  data.draft.text = "Черновик после ручной правки\nВторая строка <b>текст</b>";
+  data.draft.generatedAt = NOW;
+  data.draft.sourceFingerprint = core.fingerprint(data);
+  data.history.complaints = "Обновлённое поле без перезаписи черновика";
+  const restored = core.parseBundle("\uFEFF" + core.serializeBundle([data])).encounters[0];
+  assert.deepEqual(restored, data);
+  assert.notEqual(restored.draft.sourceFingerprint, core.fingerprint(restored));
+  assert.equal(restored.draft.text, data.draft.text);
+});
+
+test("version 1 import preserves every original field and manual draft while adding empty version 2 fields", () => {
+  const original = encounter();
+  for (const group of ["history", "exam", "assessment"]) {
+    for (const field of Object.keys(original[group])) {
+      if (!["returnVisitDate", "sickLeaveIssued", "sickLeaveNumber", "sickLeaveFrom", "sickLeaveTo"].includes(field)) original[group][field] = "  Вымышленное поле " + group + "." + field + "\nСохранить без изменения  ";
+    }
+  }
+  original.draft = { text: "  Черновик врача\nПроизвольные ручные правки <текст>  ", generatedAt: NOW, sourceFingerprint: "legacy-source-fingerprint" };
+  const oldBundle = legacyBundle(original);
+  const oldBefore = JSON.stringify(oldBundle);
+  const restoredBundle = core.parseBundle(oldBefore);
+  const restored = restoredBundle.encounters[0];
+  assert.equal(restoredBundle.schemaVersion, 2);
+  assert.equal(restoredBundle.exportedAt, oldBundle.exportedAt);
+  for (const [key, value] of Object.entries(oldBundle.encounters[0])) {
+    if (key === "assessment") {
+      for (const [field, text] of Object.entries(value)) assert.equal(restored.assessment[field], text);
+    } else assert.deepEqual(restored[key], value, key);
+  }
+  assert.ok(Object.values(restored.examSelections).every(value => value === ""));
+  for (const field of ["returnVisitDate", "sickLeaveIssued", "sickLeaveNumber", "sickLeaveFrom", "sickLeaveTo"]) assert.equal(restored.assessment[field], "");
+  assert.deepEqual(restored.draft, original.draft);
+  assert.notEqual(core.fingerprint(restored), restored.draft.sourceFingerprint);
+  assert.equal(JSON.stringify(oldBundle), oldBefore);
+  assert.deepEqual(core.parseBundle(core.serializeBundle([restored])).encounters[0], restored);
+  assert.ok(core.validateEncounter(oldBundle.encounters[0]).length);
+  assert.throws(() => core.validateBundle(oldBundle), /версия/);
+});
+
+test("version 1 import rejects invalid legacy data before migration instead of discarding it", () => {
+  const unknown = legacyBundle(); unknown.encounters[0].exam.unexpected = "Не терять молча";
+  assert.throws(() => core.parseBundle(JSON.stringify(unknown)), /Неизвестное поле/);
+  const invalid = legacyBundle(); invalid.encounters[0].assessment.followUp = { unexpected: true };
+  assert.throws(() => core.parseBundle(JSON.stringify(invalid)), /строкой/);
+  const missing = legacyBundle(); delete missing.encounters[0].draft.text;
+  assert.throws(() => core.parseBundle(JSON.stringify(missing)), /отсутствует/);
+  const duplicate = legacyBundle(); duplicate.encounters.push(duplicate.encounters[0]);
+  assert.throws(() => core.parseBundle(JSON.stringify(duplicate)), /повторяется/);
+});
+
+test("validation rejects invalid types, unknown fields and unsafe IDs", () => {
+  for (const [field, value] of [["age", 30], ["sex", "other"], ["id", "<x>"], ["id", "a".repeat(81)]]) {
+    const data = encounter(); data[field] = value;
+    assert.ok(core.validateEncounter(data).some(error => error.field === field));
+  }
+  const extra = encounter(); extra.patientName = "Unexpected field";
+  assert.ok(core.validateEncounter(extra).some(error => error.field === "patientName"));
+  const missing = encounter(); delete missing.history.allergies;
+  assert.ok(core.validateEncounter(missing).some(error => error.field === "history.allergies"));
+  const array = encounter(); array.exam = [];
+  assert.ok(core.validateEncounter(array).some(error => error.field === "exam"));
+  assert.ok(core.validateEncounter(null).length);
+});
+
+test("date validation rejects nonexistent days and invalid timestamps while accepting leap days", () => {
+  const data = encounter();
+  for (const value of ["2026-02-29", "2026-04-31", "2026-13-01", "0000-01-01", "2026-1-01"]) {
+    data.visitDate = value;
+    assert.ok(core.validateEncounter(data).some(error => error.field === "visitDate"), value);
+  }
+  data.visitDate = "2024-02-29";
+  assert.deepEqual(core.validateEncounter(data), []);
+  data.createdAt = "2026-02-30T00:00:00.000Z";
+  assert.ok(core.validateEncounter(data).some(error => error.field === "createdAt"));
+  data.createdAt = NOW;
+  data.draft.generatedAt = "2026-10-19T24:00:00.000Z";
+  assert.ok(core.validateEncounter(data).some(error => error.field === "draft.generatedAt"));
+});
+
+test("numeric validation checks representation and finite nonnegative values without clinical thresholds", () => {
+  for (const value of ["Infinity", "NaN", "12abc", "12,3,4", "-1", "9".repeat(400)]) {
+    const data = encounter(); data.vitals.pulse = value;
+    assert.ok(core.validateEncounter(data).some(error => error.field === "vitals.pulse"), value);
+  }
+  for (const value of ["", "0", "36,6", "36.6", "999999", " 72 "]) {
+    const data = encounter(); data.vitals.temperature = value;
+    assert.deepEqual(core.validateEncounter(data), [], value);
+  }
+});
+
+test("import rejects unsupported format, version, duplicates, malformed JSON and oversized fields", () => {
+  assert.throws(() => core.parseBundle("{bad"), /JSON/);
+  assert.throws(() => core.validateBundle([]), /объектом/);
+  const valid = bundle([encounter()]);
+  assert.throws(() => core.validateBundle({ ...valid, format: "other" }), /не является/);
+  assert.throws(() => core.validateBundle({ ...valid, schemaVersion: 3 }), /версия/);
+  assert.throws(() => core.validateBundle({ ...valid, encounters: [encounter(), encounter()] }), /повторяется/);
+  assert.throws(() => core.validateBundle({ ...valid, encounters: "wrong" }), /массивом/);
+  assert.throws(() => core.validateBundle({ ...valid, exportedAt: "yesterday" }), /дата/);
+  assert.throws(() => core.validateBundle({ ...valid, unexpected: true }), /структура/);
+  const oversized = encounter(); oversized.history.complaints = "x".repeat(10001);
+  assert.throws(() => core.serializeBundle([oversized]), /10000/);
+  oversized.history.complaints = ""; oversized.draft.text = "x".repeat(100001);
+  assert.throws(() => core.serializeBundle([oversized]), /100000/);
+  assert.throws(() => core.serializeBundle(Array.from({ length: 501 }, (_, i) => encounter("visit-" + i))), /500/);
+});
+
+test("bundle normalization returns detached values and rejects unknown prototype-like keys", () => {
+  const valid = bundle([encounter()]);
+  const normalized = core.validateBundle(valid);
+  normalized.encounters[0].history.complaints = "Independent";
+  assert.equal(valid.encounters[0].history.complaints, "");
+  const poisoned = JSON.parse(JSON.stringify(valid).replace('"history":{', '"history":{"__proto__":{},'));
+  assert.throws(() => core.validateBundle(poisoned), /Неизвестное поле/);
+});
+
+test("an oversized generated note is refused without altering source data", () => {
+  const data = encounter();
+  for (const group of [data.history, data.exam]) for (const field of Object.keys(group)) group[field] = "x".repeat(10000);
+  assert.deepEqual(core.validateEncounter(data), []);
+  assert.throws(() => core.generateDraft(data), /100000/);
+  assert.equal(data.draft.text, "");
+});
+
+test("repository persists valid data and restores manual edits after reload", () => {
+  const storage = memoryStorage();
+  const first = createRepository(storage);
+  assert.deepEqual(first.load(), { encounters: [], error: null });
+  const data = encounter(); data.draft.text = "Сохранённая ручная правка";
+  assert.deepEqual(first.save([data]), { ok: true, error: null });
+  assert.deepEqual(createRepository(storage).load(), { encounters: [data], error: null });
+});
+
+test("legacy storage is migrated in memory and kept untouched by read, save and reset", () => {
+  const data = encounter();
+  data.draft.text = "Ручной черновик прежней версии";
+  data.exam.cardiovascular = "Свободный текст прежней версии";
+  data.assessment.followUp = "Уточнить дату позже";
+  const legacy = JSON.stringify(legacyBundle(data));
+  const storage = memoryStorage(null, legacy);
+  const repository = createRepository(storage);
+  const result = repository.load();
+  assert.equal(result.error, null);
+  assert.equal(result.migrated, true);
+  assert.equal(result.encounters[0].draft.text, data.draft.text);
+  assert.equal(result.encounters[0].assessment.followUp, data.assessment.followUp);
+  assert.equal(storage.writes, 0);
+  assert.equal(storage.raw, null);
+  assert.equal(storage.legacyRaw, legacy);
+  assert.equal(repository.save(result.encounters).ok, true);
+  assert.equal(JSON.parse(storage.raw).schemaVersion, 2);
+  assert.equal(storage.legacyRaw, legacy);
+  assert.equal(createRepository(storage).load().migrated, undefined);
+  assert.equal(repository.reset([]).ok, true);
+  assert.deepEqual(repository.load(), { encounters: [], error: null });
+  assert.equal(storage.legacyRaw, legacy);
+});
+
+test("version 2 storage takes priority and corrupt version 2 never falls back to the legacy copy", () => {
+  const legacy = JSON.stringify(legacyBundle());
+  const storage = memoryStorage(core.serializeBundle([]), legacy);
+  assert.deepEqual(createRepository(storage).load(), { encounters: [], error: null });
+  assert.deepEqual(storage.reads, [KEY]);
+  const corrupt = memoryStorage("{broken", legacy);
+  const repository = createRepository(corrupt);
+  assert.match(repository.load().error, /Автоматическая запись остановлена/);
+  assert.equal(repository.save([]).ok, false);
+  assert.deepEqual(corrupt.reads, [KEY]);
+  assert.equal(corrupt.raw, "{broken");
+  assert.equal(corrupt.legacyRaw, legacy);
+  assert.equal(corrupt.writes, 0);
+});
+
+test("corrupt legacy storage blocks ordinary saves and reset affects only the version 2 key", () => {
+  const storage = memoryStorage(null, "{broken legacy");
+  const repository = createRepository(storage);
+  assert.equal(repository.save([encounter()]).ok, false);
+  assert.equal(storage.writes, 0);
+  assert.equal(storage.raw, null);
+  assert.equal(storage.legacyRaw, "{broken legacy");
+  assert.equal(repository.reset([]).ok, true);
+  assert.equal(storage.legacyRaw, "{broken legacy");
+  assert.deepEqual(repository.load(), { encounters: [], error: null });
+});
+
+test("corrupt data is never overwritten by ordinary save, even if load was not called", () => {
+  const storage = memoryStorage("{broken");
+  const repository = createRepository(storage);
+  assert.equal(repository.save([encounter()]).ok, false);
+  assert.match(repository.load().error, /Автоматическая запись остановлена/);
+  assert.equal(storage.raw, "{broken");
+  assert.equal(storage.writes, 0);
+  assert.equal(repository.reset([encounter()]).ok, true);
+  assert.equal(repository.load().error, null);
+  assert.equal(repository.load().encounters.length, 1);
+  assert.equal(repository.save([]).ok, true);
+});
+
+test("invalid saves and resets leave previously stored data intact", () => {
+  const initial = core.serializeBundle([encounter()]);
+  const storage = memoryStorage(initial);
+  const repository = createRepository(storage);
+  const invalid = encounter(); invalid.age = "not a number";
+  assert.equal(repository.save([invalid]).ok, false);
+  assert.equal(repository.reset([invalid]).ok, false);
+  assert.equal(storage.raw, initial);
+  assert.equal(storage.writes, 0);
+});
+
+test("denied storage access and quota failure are reported rather than claimed as saved", () => {
+  const unavailable = createRepository(() => { throw new Error("Access denied"); });
+  assert.match(unavailable.load().error, /Access denied/);
+  assert.equal(unavailable.save([encounter()]).ok, false);
+  assert.equal(unavailable.reset([]).ok, false);
+  const quota = createRepository({ getItem() { return null; }, setItem() { throw new Error("Quota exceeded"); } });
+  assert.equal(quota.load().error, null);
+  assert.deepEqual(quota.save([encounter()]), { ok: false, error: "Не удалось сохранить данные в браузере. Quota exceeded" });
+});
+
+test("classic browser scripts export their APIs without accessing localStorage during startup", () => {
+  const browser = vm.createContext({ accesses: 0 });
+  vm.runInContext('Object.defineProperty(globalThis, "localStorage", { get() { accesses += 1; throw new Error("Browser storage disabled"); } });', browser);
+  for (const file of ["exam-options.js", "core.js", "storage.js"]) {
+    vm.runInContext(fs.readFileSync(path.join(__dirname, "../app", file), "utf8"), browser, { filename: file });
+  }
+  assert.equal(typeof browser.MedAssistCore.generateDraft, "function");
+  assert.equal(typeof browser.MedAssistStorage.reset, "function");
+  assert.equal(browser.accesses, 0);
+  assert.match(browser.MedAssistStorage.load().error, /Browser storage disabled/);
+  const accessesAfterLoad = browser.accesses;
+  assert.ok(accessesAfterLoad > 0);
+  assert.equal(browser.MedAssistStorage.save([]).ok, false);
+  assert.equal(browser.accesses, accessesAfterLoad);
+});

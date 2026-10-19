@@ -55,9 +55,9 @@ test("patient list keeps the last visit, prioritizes the nearest pending return 
   assert.deepEqual((await order()).slice(0, 4), ['patient-today', 'patient-soon', 'patient-later', 'patient-past']);
   assert.equal(await page.locator('.patient-row').count(), 7);
   assert.match(await row('today').locator('.patient-return').innerText(), /15\.04\.2032 · сегодня/);
-  assert.match(await row('soon').innerText(), /Последний приём: 10\.04\.2032/);
+  assert.match(await row('soon').locator('.patient-last').innerText(), /10\.04\.2032/);
   assert.match(await row('soon').locator('.patient-return').innerText(), /18\.04\.2032/);
-  assert.match(await row('soon').locator('.patient-overdue').innerText(), /12\.04\.2032.*исход не отмечен/);
+  assert.match(await row('soon').locator('.patient-overdue').innerText(), /12\.04\.2032[\s\S]*исход не отмечен/);
   for (const id of ['none', 'completed', 'empty']) assert.equal(await row(id).locator('.patient-return,.patient-overdue').count(), 0);
   assert.match(await row('empty').innerText(), /Приёмов пока нет/);
   await page.locator('#patient-search').fill('Ближайшая');
@@ -408,10 +408,9 @@ test("one search line ranks exact words, fragments and typos; numbers stay liter
 test("two windows: a conflict cancels repeat creation and exposes the warning, then explicit reload permits a confirmed repeat", { timeout: 20000 }, async t => {
   const { context, page } = await openApp(t);
   await click(page, "new");
-  const initial = await saved(page);
-  const source = initial.encounters[0];
   await tab(page, "history");
   await page.locator('[data-field="history.medications"]').fill("ДЕМО: исходная запись о препарате");
+  const source = (await saved(page)).encounters[0];
   await click(page, "patient"); await click(page, "repeat");
   await page.locator('#repeat-fields input[value="medications"]').check();
 
@@ -484,4 +483,53 @@ test("patient full name is shared by card and visits without renaming a differen
     await page.setViewportSize({ width, height: 1000 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, "long patient name fits the encounter at width " + width);
   }
+});
+
+test("compact patient list shows four complete desktop rows and keeps secondary search matches collapsed", { timeout: 20000 }, async t => {
+  const { page } = await openApp(t);
+  const core = require(path.join(appRoot, 'core.js'));
+  const now = '2032-04-15T07:00:00.000Z';
+  await page.clock.setFixedTime(new Date(now));
+  const patients = [], encounters = [];
+  for (let i = 0; i < 24; i++) {
+    const patient = core.createPatient({ id: 'demo-compact-' + i, label: 'Тестова Пациентка ' + String(i + 1).padStart(2, '0'), now });
+    const entry = core.createEncounter({ id: 'demo-compact-visit-' + i, patientId: patient.id, now });
+    entry.history.complaints = 'ДЕМО: учебный кашель';
+    entry.assessment.returnVisitDate = '2032-04-' + String(15 + i % 15).padStart(2, '0');
+    patients.push(patient); encounters.push(entry);
+  }
+  for (let i = 0; i < 2; i++) {
+    const entry = core.createEncounter({ id: 'demo-compact-old-' + i, patientId: patients[0].id, now });
+    entry.visitDate = '2032-03-0' + (i + 1);
+    entry.history.complaints = 'ДЕМО: учебный кашель'; encounters.push(entry);
+  }
+  const initial = core.serializeBundle(encounters, patients);
+  await page.evaluate(({ key, raw }) => localStorage.setItem(key, raw), { key, raw: initial });
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await page.reload(); await click(page, 'patients');
+  const completeRows = await page.locator('.patient-row').evaluateAll(rows => rows.filter(row => {
+    const box = row.getBoundingClientRect(); return box.top >= 0 && box.bottom <= innerHeight;
+  }).length);
+  assert.ok(completeRows >= 4, 'at least four whole patient rows fit at 1366×768; observed ' + completeRows);
+  assert.equal(await page.locator('#patient-filter-panel').isVisible(), false);
+  await page.locator('#patient-search').fill('Тестова кашель');
+  const first = page.locator('.patient-row[data-patient-id="demo-compact-0"]');
+  assert.equal(await first.locator('.patient-search-matches [data-action="open"]').count(), 3);
+  assert.equal(await first.locator('.patient-search-matches [data-action="open"]').first().isVisible(), true);
+  const details = first.locator('.patient-search-matches details');
+  assert.equal(await details.count(), 1);
+  assert.equal(await details.getAttribute('open'), null, 'secondary encounter matches are collapsed initially');
+  assert.equal(await details.locator('[data-action="open"]').first().isVisible(), false);
+  await details.locator('summary').focus(); await page.keyboard.press('Enter');
+  assert.equal(await details.locator('[data-action="open"]').first().isVisible(), true);
+  const historical = details.locator('[data-action="open"]').first();
+  const historicalId = await historical.getAttribute('data-id');
+  await historical.click();
+  assert.equal(await page.locator('[data-field="visitDate"]').inputValue(), encounters.find(entry => entry.id === historicalId).visitDate);
+  await click(page, 'patients');
+  for (const width of [800, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'compact results fit width ' + width);
+  }
+  assert.equal(await page.evaluate(key => localStorage.getItem(key), key), initial, 'compact rendering and disclosure preserve data exactly');
 });

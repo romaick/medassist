@@ -308,3 +308,250 @@ for (const operation of ["review", "attendance"]) {
     await assertVisibleWarning(page);
   });
 }
+
+test("starting a visit chooses a patient; abandoned new forms and whitespace never create stored cards", { timeout: 20000 }, async t => {
+  const { page } = await openApp(t);
+  assert.equal(await raw(page), null);
+  await click(page, 'start-visit');
+  assert.equal(await page.locator('#patient-search').isVisible(), true);
+  assert.equal(await page.locator('#patient-search').evaluate(node => node === document.activeElement), true);
+  assert.equal(await raw(page), null);
+  await click(page, 'new');
+  await page.getByLabel('ФИО пациента', { exact: true }).fill('   ');
+  await page.locator('[data-field="visitDate"]').fill(today);
+  for (const name of ['history', 'exam', 'draft', 'basic']) {
+    await tab(page, name);
+    if (name === 'history') await page.locator('[data-field="history.complaints"]').fill(' \n ');
+    if (name === 'exam') await page.locator('[data-field="exam.other"]').fill('   ');
+    if (name === 'draft') await page.locator('#draft-text').fill(' \n ');
+    assert.equal(await raw(page), null, 'empty tab ' + name + ' must not create records');
+  }
+  await click(page, 'home');
+  assert.equal(await raw(page), null);
+  await click(page, 'new'); await page.reload();
+  assert.equal(await raw(page), null, 'reopening the program drops a new untouched form');
+  await seed(page); const initial = await raw(page);
+  await click(page, 'new'); await tab(page, 'history'); await click(page, 'patients');
+  assert.equal(await raw(page), initial, 'abandoning a new form also preserves an existing bundle byte for byte');
+  assert.equal(await page.locator('.patient-row').count(), 2);
+  await page.reload(); assert.equal(await raw(page), initial);
+});
+
+test("the first meaningful name, clinical input, examination, date or manual text saves one new patient and encounter", { timeout: 30000 }, async t => {
+  const { page } = await openApp(t);
+  const cases = [
+    { tab: 'basic', value: 'Тестова Анна Новая' },
+    { tab: 'history', selector: '[data-field="history.complaints"]', value: 'ДЕМО: учебная жалоба' },
+    { tab: 'basic', selector: '[data-field="visitDate"]', value: '2032-04-14' },
+    { tab: 'draft', selector: '#draft-text', value: 'ДЕМО: ручная учебная запись' },
+    { tab: 'exam', action: 'normal-exam' }
+  ];
+  for (const [index, change] of cases.entries()) {
+    const before = await raw(page);
+    await click(page, 'new'); await tab(page, change.tab);
+    assert.equal(await raw(page), before);
+    if (change.action) await click(page, change.action);
+    else if (index === 0) await page.getByLabel('ФИО пациента', { exact: true }).fill(change.value);
+    else await page.locator(change.selector).fill(change.value);
+    const data = await saved(page);
+    assert.equal(data.patients.length, index + 1);
+    assert.equal(data.encounters.length, index + 1);
+    const entry = data.encounters.at(-1);
+    assert.equal(entry.patientId, data.patients.at(-1).id);
+    if (change.action) assert.ok(Object.values(entry.examSelections).some(Boolean));
+    else if (index === 0) assert.equal(data.patients.at(-1).label, change.value);
+    else if (change.tab === 'history') assert.equal(entry.history.complaints, change.value);
+    else if (change.tab === 'draft') assert.equal(entry.draft.text, change.value);
+    else assert.equal(entry.visitDate, change.value);
+    assert.match(await page.locator('#save-status').innerText(), /Сохранено/);
+    await tab(page, 'history');
+    await page.locator('[data-field="history.complaints"]').fill('ДЕМО: дополнение ' + index);
+    assert.equal((await saved(page)).encounters.length, index + 1, 'continued typing does not create a second encounter');
+    await page.reload();
+    assert.equal((await saved(page)).encounters.length, index + 1, 'first meaningful input survives restart');
+  }
+});
+
+test("failed first save retains the new form and a later successful input saves it exactly once", { timeout: 20000 }, async t => {
+  const { page } = await openApp(t);
+  await click(page, 'new');
+  await page.evaluate(key => {
+    const original = Storage.prototype.setItem;
+    window.restoreDemoStorage = () => { Storage.prototype.setItem = original; };
+    Storage.prototype.setItem = function (name, value) {
+      if (name === key) throw new DOMException('ДЕМО: хранилище заполнено', 'QuotaExceededError');
+      return original.call(this, name, value);
+    };
+  }, key);
+  await page.getByLabel('ФИО пациента', { exact: true }).fill('Тестова Анна Несохранённая');
+  assert.equal(await raw(page), null);
+  assert.match(await page.locator('#save-status').innerText(), /не сохранены/);
+  assert.equal(await page.locator('#storage-banner').isVisible(), true);
+  assert.equal(await page.getByLabel('ФИО пациента', { exact: true }).inputValue(), 'Тестова Анна Несохранённая');
+  await page.evaluate(() => window.restoreDemoStorage());
+  await tab(page, 'history');
+  await page.locator('[data-field="history.complaints"]').fill('ДЕМО: сведения сохранены после восстановления');
+  const result = await saved(page);
+  assert.equal(result.patients.length, 1);
+  assert.equal(result.encounters.length, 1);
+  assert.equal(result.patients[0].label, 'Тестова Анна Несохранённая');
+  assert.equal(result.encounters[0].history.complaints, 'ДЕМО: сведения сохранены после восстановления');
+  assert.match(await page.locator('#save-status').innerText(), /Сохранено/);
+  await page.reload(); assert.deepEqual(await saved(page), result);
+});
+
+test("review after a failed first save commits the pending patient, entered text and confirmed review together", { timeout: 20000 }, async t => {
+  const { page } = await openApp(t);
+  await click(page, 'new'); await tab(page, 'draft');
+  await page.evaluate(key => {
+    const original = Storage.prototype.setItem;
+    window.restoreDemoStorage = () => { Storage.prototype.setItem = original; };
+    Storage.prototype.setItem = function (name, value) {
+      if (name === key) throw new DOMException('ДЕМО: первое сохранение недоступно', 'QuotaExceededError');
+      return original.call(this, name, value);
+    };
+  }, key);
+  const text = 'ДЕМО: запись проверена после восстановления хранилища';
+  await page.locator('#draft-text').fill(text);
+  assert.equal(await raw(page), null);
+  await markReviewed(page);
+  assert.equal(await raw(page), null, 'review while storage is still unavailable must not save a partial bundle');
+  assert.match(await page.locator('#visit-record-status').innerText(), /Черновик/);
+  assert.match(await page.locator('#toast').innerText(), /[Нн]е удалось сохранить/);
+  assert.equal(await page.locator('#draft-text').inputValue(), text);
+  await page.evaluate(() => window.restoreDemoStorage());
+  await markReviewed(page);
+  const result = await saved(page);
+  assert.equal(result.patients.length, 1, 'review must save the pending patient');
+  assert.equal(result.encounters.length, 1, 'review must save the pending encounter');
+  assert.equal(result.encounters[0].patientId, result.patients[0].id);
+  assert.equal(result.encounters[0].draft.text, text);
+  await assertReview(page, result.encounters[0].id, 'reviewed');
+  assert.match(await page.locator('#visit-record-status').innerText(), /Проверено врачом/);
+  await page.reload(); await openVisit(page, result.encounters[0].id); await tab(page, 'draft');
+  await assertReview(page, result.encounters[0].id, 'reviewed');
+  assert.equal(await page.locator('#draft-text').inputValue(), text);
+});
+
+async function downloadedBackup(page) {
+  const downloadReady = page.waitForEvent('download');
+  await click(page, 'backup');
+  const stream = await (await downloadReady).createReadStream();
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  return JSON.parse(Buffer.concat(chunks).toString('utf8').replace(/^\uFEFF/, ''));
+}
+
+test("backup omits abandoned blank forms but includes meaningful pending data after a failed save", { timeout: 20000 }, async t => {
+  const { page } = await openApp(t);
+  await click(page, 'new'); await click(page, 'help');
+  const blank = await downloadedBackup(page);
+  assert.deepEqual(blank.patients, []);
+  assert.deepEqual(blank.encounters, []);
+  assert.equal(await raw(page), null, 'making a blank backup does not create stored cards');
+  await click(page, 'new');
+  await page.evaluate(key => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (name, value) {
+      if (name === key) throw new DOMException('ДЕМО: сохранение недоступно', 'QuotaExceededError');
+      return original.call(this, name, value);
+    };
+  }, key);
+  await page.getByLabel('ФИО пациента', { exact: true }).fill('Тестова Анна Для Копии');
+  await tab(page, 'draft');
+  const text = 'ДЕМО: несохранённый текст для резервной копии';
+  await page.locator('#draft-text').fill(text);
+  assert.equal(await raw(page), null);
+  const backup = await downloadedBackup(page);
+  assert.equal(backup.patients.length, 1);
+  assert.equal(backup.encounters.length, 1);
+  assert.equal(backup.patients[0].label, 'Тестова Анна Для Копии');
+  assert.equal(backup.encounters[0].patientId, backup.patients[0].id);
+  assert.equal(backup.encounters[0].draft.text, text);
+  assert.equal(backup.encounters[0].workflow.reviewStatus, 'draft');
+  assert.equal(await raw(page), null, 'download remains available without pretending that browser storage succeeded');
+});
+
+test("two windows: a pending new form cannot overwrite a later edit or create a stray card", { timeout: 20000 }, async t => {
+  const { page, newPage } = await openApp(t);
+  await seed(page); await click(page, 'new');
+  const second = await newPage();
+  await openVisit(second, 'demo-today'); await tab(second, 'history');
+  await second.locator('[data-field="history.complaints"]').fill('ДЕМО: более новая запись во втором окне');
+  await page.waitForFunction(() => document.getElementById('storage-banner').textContent.includes('другом окне'));
+  const latest = await raw(page);
+  await page.getByLabel('ФИО пациента', { exact: true }).fill('Тестова Анна Из Первого Окна');
+  assert.equal(await raw(page), latest);
+  assert.match(await page.locator('#save-status').innerText(), /не сохранены/);
+  assert.equal(await page.locator('#storage-banner').isVisible(), true);
+  assert.match(await page.locator('#storage-banner').innerText(), /другом окне/);
+  await tab(page, 'history');
+  await page.locator('[data-field="history.complaints"]').fill('ДЕМО: ввод в несохранённой новой карточке');
+  assert.equal(await raw(page), latest, 'repeated input still cannot overwrite the newer bundle');
+  assert.equal((await saved(page)).patients.length, 2);
+  assert.equal((await saved(page)).encounters.length, 5);
+  await click(page, 'reload'); await accept(page);
+  assert.equal(await raw(page), latest, 'explicit reload discards the pending form without creating records');
+  await click(page, 'patients'); assert.equal(await page.locator('.patient-row').count(), 2);
+});
+
+async function visibleInViewport(locator) {
+  return locator.evaluate(node => {
+    const box = node.getBoundingClientRect();
+    return box.width > 0 && box.height > 0 && box.top >= 0 && box.bottom <= innerHeight && box.left >= 0 && box.right <= innerWidth;
+  });
+}
+
+test("patient context and encounter actions remain visible while scrolling, update live and leave keyboard targets uncovered", { timeout: 30000 }, async t => {
+  const { page } = await openApp(t);
+  const data = fixture();
+  Object.assign(data.encounters[0].assessment, { sickLeaveIssued: 'yes', sickLeaveNumber: 'ДЕМО-884', sickLeaveFrom: today, sickLeaveTo: '2032-04-18' });
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await seed(page, data); await openVisit(page, 'demo-today');
+  await page.getByLabel('ФИО пациента', { exact: true }).fill('Тестова Анна <Учебная>');
+  await page.locator('[data-field="visitDate"]').fill('2032-04-14');
+  assert.equal(await page.locator('#visit-patient-heading').innerText(), 'Тестова Анна <Учебная>');
+  assert.match(await page.locator('#visit-date-summary').innerText(), /14\.04\.2032/);
+  assert.match(await page.locator('#visit-record-status').innerText(), /Черновик/);
+  assert.match(await page.locator('#save-status').innerText(), /Сохранено/);
+  for (const name of ['basic', 'history', 'exam', 'draft']) {
+    await tab(page, name);
+    for (const end of ['top', 'bottom']) {
+      await page.evaluate(end => window.scrollTo(0, end === 'top' ? 0 : document.documentElement.scrollHeight), end);
+      assert.equal(await visibleInViewport(page.locator('#visit-patient-heading')), true, name + ' patient heading visible at ' + end);
+      assert.equal(await visibleInViewport(page.locator('#visit-date-summary')), true, name + ' visit date visible at ' + end);
+      assert.equal(await visibleInViewport(page.locator('#visit-record-status')), true, name + ' record status visible at ' + end);
+      assert.equal(await visibleInViewport(page.locator('#save-status')), true, name + ' save status visible at ' + end);
+      assert.equal(await visibleInViewport(page.locator('.visit-action-bar')), true, name + ' actions visible at ' + end);
+      if (name === 'draft') for (const action of ['generate', 'copy', 'download-text', 'review-record']) {
+        const control = page.locator('[data-action="' + action + '"]');
+        assert.equal(await control.count(), 1, 'one ' + action + ' button');
+        assert.equal(await visibleInViewport(control), true, action + ' visible at ' + end);
+      }
+    }
+  }
+  await markReviewed(page);
+  assert.match(await page.locator('#visit-record-status').innerText(), /Проверено врачом/);
+  assert.equal(await page.locator('#record-review-actions [data-action="reopen-record"]').count(), 1);
+  await page.locator('[data-field="assessment.plan"]').fill('ДЕМО: уточнённая рекомендация');
+  assert.match(await page.locator('#visit-record-status').innerText(), /Черновик/);
+  for (const width of [1366, 800, 390]) {
+    await page.setViewportSize({ width, height: width === 1366 ? 768 : 844 });
+    await tab(page, 'draft');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'fixed controls fit width ' + width);
+    for (const field of ['assessment.sickLeaveNumber', 'assessment.returnVisitDate']) {
+      const input = page.locator('[data-field="' + field + '"]');
+      await input.focus(); await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
+      const target = await input.evaluate(node => {
+        const box = node.getBoundingClientRect();
+        const context = document.querySelector('.visit-context').getBoundingClientRect();
+        const actions = document.querySelector('.visit-action-bar').getBoundingClientRect();
+        return { focused: node === document.activeElement, top: box.top, bottom: box.bottom, contextBottom: context.bottom, actionTop: actions.top,
+          hit: document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2) === node };
+      });
+      assert.equal(target.focused, true);
+      assert.ok(target.top >= target.contextBottom && target.bottom <= target.actionTop, 'keyboard target remains between fixed panels at width ' + width + ': ' + JSON.stringify(target));
+      assert.equal(target.hit, true, 'keyboard target is not covered');
+    }
+  }
+});

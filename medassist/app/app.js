@@ -14,7 +14,7 @@
   const state = {
     encounters: loaded.encounters, patients: loaded.patients, view: 'home', activeId: null, patientId: null, tab: 'basic', patientSearch: '',
     error: loaded.error, saved: !loaded.error, externalChange: false, search: '', migrated: Boolean(loaded.migrated),
-    recordFilter: 'all', followupFilter: 'today', followupDay: '', repeatPlanId: null, patientListDay: '',
+    recordFilter: 'draft', followupFilter: 'today', followupDay: '', repeatPlanId: null, patientListDay: '', homeDay: '',
     patientCategory: 'all', patientFilters: defaultPatientFilters(), patientFiltersOpen: false, pendingNew: null
   };
   const icons = {
@@ -73,6 +73,7 @@
     time.dateTime = time.textContent;
     if (state.view === 'followups' && state.followupDay !== date.dateTime) refreshFollowups();
     if (state.view === 'patients' && state.patientListDay !== date.dateTime) refreshPatients();
+    if (state.view === 'home' && state.homeDay !== date.dateTime) refreshHomeDay();
   }
   const shortId = (entry) => entry.id.replace(/^(visit|patient)-/, '').slice(0, 8).toUpperCase();
   const patientName = (patient) => patient.label.trim() || 'Демо-пациент · ' + shortId(patient);
@@ -114,10 +115,10 @@
     app.innerHTML = '<div class="shell"><aside class="sidebar" aria-label="Главная навигация"><div class="brand"><img src="icon.svg" alt=""><div><strong>МедАссистент</strong><small>ПОЛИКЛИНИЧЕСКИЙ РЕЖИМ</small></div></div><p class="nav-caption">РАБОЧЕЕ ПРОСТРАНСТВО</p><nav class="nav">' +
       navButton('home', 'Обзор', 'home') + navButton('patients', 'Пациенты', 'user') + navButton('new', 'Новый пациент', 'plus') +
       (current ? navButton('visit', 'Текущий приём', 'document') : '') + navButton('followups', 'Повторные приёмы', 'calendar') + navButton('modules', 'Модули', 'grid') + navButton('help', 'Помощь и данные', 'help') + navButton('check-updates', 'Проверить обновления', 'download') +
-      '</nav><div class="side-bottom"><div class="local-indicator"><span class="dot"></span>Работает локально</div><div class="version">Прототип 0.9.0 · Демонстрация</div></div></aside><div class="workspace"><header class="topbar"><div class="topbar-left">Поликлиника <span aria-hidden="true">/</span> <span>' + sectionName + '</span></div><div class="topbar-right"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><span class="avatar" aria-hidden="true">МА</span></div></header><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
+      '</nav><div class="side-bottom"><div class="local-indicator"><span class="dot"></span>Работает локально</div><div class="version">Прототип 0.9.1 · Демонстрация</div></div></aside><div class="workspace"><header class="topbar"><div class="topbar-left">Поликлиника <span aria-hidden="true">/</span> <span>' + sectionName + '</span></div><div class="topbar-right"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><span class="avatar" aria-hidden="true">МА</span></div></header><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
       (state.migrated ? '<div class="migration-notice">Прежние записи доступны со статусом «Черновик». Карточки, данные и ручные тексты сохранены. Исходное сохранение предыдущей версии не изменяется.</div>' : '') +
       ({home: renderHome, patients: renderPatients, followups: renderFollowups, patient: renderPatient, visit: renderVisit, modules: renderModules, help: renderHelp}[state.view])() +
-      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.9.0</span></footer></main></div></div>';
+      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.9.1</span></footer></main></div></div>';
     updateClock();
     updateSaveStatus();
     if (state.view === 'visit') { updateValidation(); updateDraftState(); updateReviewState(); }
@@ -147,16 +148,16 @@
     return '<div class="page-heading"><div><h1>Повторные приёмы</h1><p>Даты, назначенные в разделе «Запись» предыдущих приёмов.</p></div></div>' + demoNotice() +
       '<section class="card"><div class="card-head"><h2>План повторных приёмов</h2></div><div id="followup-filters" class="workflow-filters" aria-label="Период повторных приёмов">' + followupFilters() + '</div><p class="workflow-hint">«Ближайшие» — все будущие даты. Прошедшая дата не означает неявку. Отметку «Состоялся» ставьте только после подтверждения факта приёма.</p><div id="followup-list" class="list">' + renderFollowupList() + '</div></section>';
   }
-  function renderFollowupList() {
-    const items = core.getReturnVisits(state.encounters, localDate()).filter(item => item.bucket === state.followupFilter);
-    if (!items.length) return '<div class="empty"><h3>В этом списке пока нет приёмов</h3><p>Дата повторного приёма задаётся в конце раздела «Запись».</p></div>';
+  function renderFollowupList(bucket = state.followupFilter, compact = false) {
+    const items = core.getReturnVisits(state.encounters, localDate()).filter(item => item.bucket === bucket);
+    if (!items.length) return '<div class="empty"><h3>' + (compact ? 'На сегодня явок нет' : 'В этом списке пока нет приёмов') + '</h3><p>' + (compact ? 'Все назначенные даты доступны в разделе «Повторные приёмы».' : 'Дата повторного приёма задаётся в конце раздела «Запись».') + '</p></div>';
     return items.map(item => {
       const source = state.encounters.find(entry => entry.id === item.encounterId);
       const completed = item.bucket === 'completed';
       return '<div class="visit-row followup-row" data-followup-id="' + escape(source.id) + '"><div class="visit-text"><strong>' + escape(patientLabel(source)) + '</strong><p class="followup-date">' + escape(dateText(item.date)) + ' · ' + (completed ? 'Состоялся' : item.linkedEncounterId ? 'Запись приёма начата' : 'Запланирован') + '</p><p>Назначено в записи от ' + escape(dateText(source.visitDate)) + ' · ' + escape(shortId(source)) + '</p></div><div class="actions followup-actions">' +
         button('patient', 'Карточка', null, 'secondary compact', 'data-patient-id="' + escape(source.patientId) + '"') +
         (item.linkedEncounterId || !completed ? button('start-followup', item.linkedEncounterId ? 'Открыть начатый приём' : 'Начать повторный приём', null, 'primary compact', 'data-id="' + escape(source.id) + '"') : '') +
-        button(completed ? 'followup-reopen' : 'followup-complete', completed ? 'Вернуть в план' : 'Отметить: состоялся', null, 'secondary compact', 'data-id="' + escape(source.id) + '"') + '</div></div>';
+        (compact ? '' : button(completed ? 'followup-reopen' : 'followup-complete', completed ? 'Вернуть в план' : 'Отметить: состоялся', null, 'secondary compact', 'data-id="' + escape(source.id) + '"')) + '</div></div>';
     }).join('');
   }
   function refreshFollowups() {
@@ -195,20 +196,38 @@
     if (!result.ok) toast(result.error, true);
     return result.ok;
   }
+  function homeCurrentEncounter() {
+    const current = active();
+    if (current?.workflow.reviewStatus === 'draft' && (!state.pendingNew || pendingHasContent())) return current;
+    return [...state.encounters].filter(entry => entry.workflow.reviewStatus === 'draft').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id))[0];
+  }
+  function refreshHomeDay() {
+    const today = localDate();
+    state.homeDay = today;
+    document.getElementById('home-followup-list').innerHTML = renderFollowupList('today', true);
+    document.getElementById('home-followup-count').textContent = String(core.getReturnVisits(state.encounters, today).filter(item => item.bucket === 'today').length);
+    document.getElementById('home-review-today-count').textContent = String(state.encounters.filter(entry => entry.workflow.reviewStatus === 'draft' && entry.visitDate === today).length);
+    document.getElementById('visit-list').innerHTML = renderList();
+  }
   function renderHome() {
-    const drafts = state.encounters.filter((entry) => entry.workflow.reviewStatus === 'draft').length;
-    return '<div class="page-heading"><div><h1>Хорошего рабочего дня.</h1><p>Для повторного приёма откройте карточку в разделе «Пациенты».</p></div>' + button('new', 'Новый пациент и приём', 'plus', 'primary') + '</div>' + demoNotice() +
-      '<section class="welcome"><div><p class="eyebrow">Спокойный порядок в записях</p><h2>От приёма к понятному черновику</h2><p>Заполните анамнез и осмотр. МедАссистент соберёт введённые сведения в текст, который вы сможете проверить и отредактировать.</p><div class="actions">' + button('start-visit', 'Начать приём', 'arrow', 'primary') + button('example', 'Открыть пример', null, 'ghost') + '</div></div><div class="welcome-illustration" aria-hidden="true"><div class="sheet-art">' + icon('document') + '<span class="art-line"></span><span class="art-line"></span><span class="art-line short"></span><span class="art-line"></span></div><div class="art-check">' + icon('check') + '</div></div></section>' +
-      '<div class="stats"><div class="stat"><div class="icon-tile">' + icon('calendar') + '</div><div><div class="stat-label">Приёмов в рабочем списке</div><div class="stat-value">' + state.encounters.length + '</div></div></div><div class="stat"><div class="icon-tile">' + icon('document') + '</div><div><div class="stat-label">Незавершённые записи</div><div class="stat-value">' + drafts + '</div></div></div><div class="stat"><div class="icon-tile">' + icon('shield') + '</div><div><div class="stat-label">Проверено врачом</div><div class="stat-value">' + (state.encounters.length - drafts) + '</div></div></div></div>' +
-      '<div class="dashboard-grid"><section class="card"><div class="card-head"><h2>Рабочий список</h2><span class="result-count">' + state.encounters.length + ' записей</span></div>' + (state.encounters.length ? '<div id="record-filters" class="workflow-filters" aria-label="Статус записи">' + recordFilters() + '</div><div class="search-wrap"><input class="search-field" id="visit-search" aria-label="Найти приём" placeholder="Поиск по имени, коду, дате или жалобам" value="' + escape(state.search) + '"></div><div id="visit-list" class="list">' + renderList() + '</div>' : '<div class="empty"><div class="icon-tile">' + icon('document') + '</div><h3>Здесь появятся ваши приёмы</h3><p>Начните с пустой формы или откройте заполненный вымышленный пример.</p>' + button('example', 'Открыть пример', 'document') + '</div>') + '</section><section class="card"><div class="card-head"><h2>Первый приём за 3 шага</h2></div><div class="guide-steps">' +
-      [['01', 'Заполните сведения', 'Жалобы, анамнез и данные осмотра. Все поля можно оставить пустыми.'], ['02', 'Соберите запись', 'В черновик попадут только введённые вами сведения.'], ['03', 'Проверьте и сохраните', 'Отредактируйте текст и скачайте его в файл.']].map(([number, title, body]) => '<div class="guide-step"><span class="step-number">' + number + '</span><div><h3>' + title + '</h3><p>' + body + '</p></div></div>').join('') + '</div></section></div>' +
-      '<div class="module-strip"><div class="icon-tile">' + icon('grid') + '</div><div><h3>Основа для дальнейших модулей</h3><p>Калькуляторы, анализы и диспансерное наблюдение.</p></div>' + button('modules', 'Что дальше', 'arrow', 'ghost') + '</div>';
+    state.homeDay = localDate();
+    const current = homeCurrentEncounter();
+    const todayFollowups = core.getReturnVisits(state.encounters, state.homeDay).filter(item => item.bucket === 'today').length;
+    const todayDrafts = state.encounters.filter(entry => entry.workflow.reviewStatus === 'draft' && entry.visitDate === state.homeDay).length;
+    const listHeading = state.recordFilter === 'draft' ? 'Записи для проверки' : state.recordFilter === 'reviewed' ? 'Проверенные записи' : 'Все записи';
+    return '<div class="home-page"><div class="page-heading"><div><h1>Сегодня</h1><p class="home-demo-note">Деморежим · только вымышленные данные</p></div>' + button('start-visit', 'Начать приём', 'plus', 'primary') + '</div>' +
+      '<section id="home-current" class="card home-current" aria-labelledby="home-current-heading"><div class="home-current-content"><h2 id="home-current-heading">Текущий незавершённый приём</h2>' +
+      (current ? '<div class="home-current-patient"><strong>' + escape(patientLabel(current)) + '</strong>' + recordStatus(current) + '</div><p class="home-current-meta">' + escape(dateText(current.visitDate)) + (current.id !== state.activeId ? ' · Последний изменённый черновик' : '') + '</p><p class="home-current-complaint">' + escape(current.history.complaints.trim() || 'Жалобы пока не указаны') + '</p>' : '<p class="home-current-empty">Незавершённого приёма нет. Выберите пациента, чтобы начать новый.</p>') + '</div>' +
+      (current ? button('resume-visit', 'Продолжить приём', 'arrow', 'primary', 'data-id="' + escape(current.id) + '"') : !state.encounters.length ? button('example', 'Открыть вымышленный пример', 'document', 'secondary compact') : '') + '</section>' +
+      '<div class="home-dashboard"><section class="card home-followups" aria-labelledby="home-followup-heading"><div class="card-head"><h2 id="home-followup-heading">Явки сегодня <span id="home-followup-count" class="home-count">' + todayFollowups + '</span></h2>' + button('home-followups', 'План явок', 'arrow', 'ghost') + '</div><div id="home-followup-list" class="list">' + renderFollowupList('today', true) + '</div></section>' +
+      '<section class="card home-records" aria-labelledby="home-record-heading"><div class="card-head"><h2 id="home-record-heading">' + listHeading + '</h2><p class="home-today-summary">Черновиков сегодня: <strong id="home-review-today-count">' + todayDrafts + '</strong></p></div><div id="record-filters" class="workflow-filters" aria-label="Статус записи">' + recordFilters() + '</div><div class="search-wrap"><label class="home-search-label" for="visit-search">Найти запись</label><input class="search-field" id="visit-search" type="search" placeholder="ФИО, код, дата или жалобы" value="' + escape(state.search) + '"></div><div id="visit-list" class="list">' + renderList() + '</div></section></div></div>';
   }
   function renderList() {
     const query = state.search.toLocaleLowerCase('ru').trim();
-    const entries = [...state.encounters].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).filter((entry) => [patientLabel(entry), entry.visitDate, dateText(entry.visitDate), entry.history.complaints].join(' ').toLocaleLowerCase('ru').includes(query)).filter(entry => state.recordFilter === 'all' || entry.workflow.reviewStatus === state.recordFilter);
-    if (!entries.length) return '<p class="muted small">По вашему запросу приёмов нет.</p>';
-    return entries.map((entry) => '<div class="visit-row" data-record-id="' + escape(entry.id) + '"><div class="visit-identity"><div class="icon-tile">' + icon('user') + '</div><div class="visit-text"><strong>' + escape(patientLabel(entry)) + '</strong><p>' + escape(dateText(entry.visitDate)) + ' · ' + escape(entry.history.complaints.trim() || 'Жалобы не указаны') + '</p><p>' + recordStatus(entry) + '</p></div></div>' + button('open', 'Открыть', null, 'secondary compact', 'data-id="' + escape(entry.id) + '" aria-label="Открыть ' + escape(patientLabel(entry)) + '"') + '</div>').join('');
+    const today = localDate();
+    const entries = [...state.encounters].sort((a, b) => Number(b.visitDate === today) - Number(a.visitDate === today) || b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id)).filter((entry) => [patientLabel(entry), shortId(entry), entry.visitDate, dateText(entry.visitDate), entry.history.complaints].join(' ').toLocaleLowerCase('ru').includes(query)).filter(entry => state.recordFilter === 'all' || entry.workflow.reviewStatus === state.recordFilter);
+    if (!entries.length) return '<div class="home-list-empty"><p>' + (query ? 'По вашему запросу записей нет.' : state.recordFilter === 'draft' ? 'Записей для проверки нет.' : state.recordFilter === 'reviewed' ? 'Проверенных записей пока нет.' : 'Записей пока нет.') + '</p></div>';
+    return entries.map((entry) => '<div class="visit-row" data-record-id="' + escape(entry.id) + '"><div class="visit-identity"><div class="visit-text"><strong>' + escape(patientLabel(entry)) + '</strong><p class="home-record-date">' + escape(dateText(entry.visitDate)) + (entry.visitDate === today ? ' · Сегодня' : '') + ' · ' + escape(shortId(entry)) + '</p><p class="home-record-complaint">' + escape(entry.history.complaints.trim() || 'Жалобы не указаны') + '</p>' + recordStatus(entry) + '</div></div>' + button('open', state.recordFilter === 'draft' ? 'Проверить запись' : 'Открыть', null, 'secondary compact', 'data-id="' + escape(entry.id) + '"' + (state.recordFilter === 'draft' ? ' data-tab="draft"' : '') + ' aria-label="' + (state.recordFilter === 'draft' ? 'Проверить запись: ' : 'Открыть ') + escape(patientLabel(entry)) + '"') + '</div>').join('');
   }
   const patientCategories = [['all', 'Все пациенты'], ['sick', 'На больничном'], ['return', 'Повторная явка'], ['draft', 'Незавершённые записи']];
   function normalizePatientSearch(value, dates = true) {
@@ -686,6 +705,13 @@
   }
   async function handleAction(action, target) {
     if (['new', 'example', 'open', 'repeat', 'start-followup'].includes(action) && !canReplaceActive()) return;
+    if (action === 'resume-visit') {
+      const entry = homeCurrentEncounter();
+      if (!entry || entry.id !== target.dataset.id) return;
+      const tab = entry.id === state.activeId ? state.tab : 'basic';
+      state.activeId = entry.id; navigate('visit', tab); return;
+    }
+    if (action === 'home-followups') { state.followupFilter = 'today'; navigate('followups'); return; }
     if (action === 'start-visit') { navigate('patients'); document.getElementById('patient-search').focus({preventScroll: true}); return; }
     if (action === 'check-updates') {
       if (!updateUrl) { document.getElementById('update-help').showModal(); return; }
@@ -714,6 +740,7 @@
     if (action === 'record-filter') {
       state.recordFilter = target.dataset.filter;
       document.getElementById('record-filters').innerHTML = recordFilters();
+      document.getElementById('home-record-heading').textContent = {draft: 'Записи для проверки', all: 'Все записи', reviewed: 'Проверенные записи'}[state.recordFilter];
       document.getElementById('visit-list').innerHTML = renderList(); return;
     }
     if (action === 'followup-filter') { state.followupFilter = target.dataset.filter; refreshFollowups(); return; }
@@ -770,7 +797,7 @@
       if (action === 'example') persist();
       navigate('visit', 'basic'); return;
     }
-    if (action === 'open') { discardEmptyForm(); state.activeId = target.dataset.id; navigate('visit', 'basic'); return; }
+    if (action === 'open') { discardEmptyForm(); state.activeId = target.dataset.id; navigate('visit', target.dataset.tab === 'draft' ? 'draft' : 'basic'); return; }
     if (action === 'generate') {
       const entry = active();
       const errors = updateValidation();

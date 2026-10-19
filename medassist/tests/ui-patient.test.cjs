@@ -458,7 +458,7 @@ test("patient full name is shared by card and visits without renaming a differen
   await click(page, "new"); await fullName().fill("Тестов Борис Демонстрационный");
   const second = (await saved(page)).encounters[1];
 
-  await click(page, "home"); await openVisit(page, first.id);
+  await click(page, "home"); await openVisit(page, first.id); await tab(page, "basic");
   assert.equal(await fullName().inputValue(), "Тестова Анна Демонстрационная");
   const renamed = "Тестова Анна <Демонстрационная>";
   await fullName().fill(renamed);
@@ -474,10 +474,10 @@ test("patient full name is shared by card and visits without renaming a differen
   await click(page, "repeat"); await page.locator("#repeat-create").click();
   assert.equal(await fullName().inputValue(), finalName, "repeated encounter shares patient identity");
   const repeated = (await saved(page)).encounters.at(-1);
-  await page.reload(); await openVisit(page, repeated.id); assert.equal(await fullName().inputValue(), finalName);
-  await click(page, "home"); await openVisit(page, first.id); assert.equal(await fullName().inputValue(), finalName);
+  await page.reload(); await openVisit(page, repeated.id); await tab(page, "basic"); assert.equal(await fullName().inputValue(), finalName);
+  await click(page, "home"); await openVisit(page, first.id); await tab(page, "basic"); assert.equal(await fullName().inputValue(), finalName);
   await tab(page, "draft"); assert.equal(await page.locator("#draft-text").inputValue(), original.draft.text);
-  await click(page, "home"); await openVisit(page, second.id); assert.equal(await fullName().inputValue(), "Тестов Борис Демонстрационный");
+  await click(page, "home"); await openVisit(page, second.id); await tab(page, "basic"); assert.equal(await fullName().inputValue(), "Тестов Борис Демонстрационный");
   await fullName().fill("Ф".repeat(120));
   for (const width of [1440, 800, 390]) {
     await page.setViewportSize({ width, height: 1000 });

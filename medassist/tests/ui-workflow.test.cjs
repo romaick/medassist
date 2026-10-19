@@ -186,7 +186,7 @@ test("review is explicitly confirmed, filterable and persistent; editing text, f
   await click(page, "review-record"); await cancel(page);
   assert.equal(await raw(page), unchanged);
   await markReviewed(page); await assertReview(page, "demo-today", "reviewed");
-  await page.reload(); await openVisit(page, "demo-today"); await tab(page, "draft");
+  await page.reload(); await filter(page, "record", "reviewed"); await openVisit(page, "demo-today"); await tab(page, "draft");
   await assertReview(page, "demo-today", "reviewed");
   await click(page, "home"); await filter(page, "record", "reviewed");
   assert.deepEqual(await listedIds(page, "#visit-list [data-record-id]", "data-record-id"), ["demo-today"]);
@@ -206,7 +206,7 @@ test("review is explicitly confirmed, filterable and persistent; editing text, f
   await markReviewed(page);
   await click(page, "home"); await openVisit(page, "demo-future"); await tab(page, "draft"); await markReviewed(page);
   await click(page, "home"); await openVisit(page, "demo-other"); await tab(page, "draft"); await markReviewed(page);
-  await click(page, "home"); await openVisit(page, "demo-today");
+  await click(page, "home"); await openVisit(page, "demo-today"); await tab(page, "basic");
   await page.getByLabel("ФИО пациента", { exact: true }).fill("Тестова Анна Уточнённая");
   const renamed = await saved(page);
   assert.equal(renamed.encounters.find(entry => entry.id === "demo-today").workflow.reviewStatus, "draft");
@@ -232,7 +232,7 @@ test("normal examination and replacing generated text each return a reviewed rec
 
 test("invalid clinical fields prevent review even when the draft text is nonempty", { timeout: 20000 }, async t => {
   const { page } = await openApp(t);
-  await seed(page); await openVisit(page, "demo-today");
+  await seed(page); await openVisit(page, "demo-today"); await tab(page, "basic");
   await page.locator('[data-field="age"]').fill("ДЕМО: не число");
   await tab(page, "draft");
   const before = await raw(page);
@@ -244,7 +244,7 @@ test("invalid clinical fields prevent review even when the draft text is nonempt
 
 test("scheduled dates remain accessible after an invalid clinical edit, with the save warning and original storage preserved", { timeout: 20000 }, async t => {
   const { page } = await openApp(t);
-  await seed(page); await openVisit(page, "demo-today");
+  await seed(page); await openVisit(page, "demo-today"); await tab(page, "basic");
   const before = await raw(page);
   await page.locator('[data-field="age"]').fill("ДЕМО: не число");
   assert.equal(await raw(page), before);
@@ -428,7 +428,7 @@ test("review after a failed first save commits the pending patient, entered text
   assert.equal(result.encounters[0].draft.text, text);
   await assertReview(page, result.encounters[0].id, 'reviewed');
   assert.match(await page.locator('#visit-record-status').innerText(), /Проверено врачом/);
-  await page.reload(); await openVisit(page, result.encounters[0].id); await tab(page, 'draft');
+  await page.reload(); await filter(page, 'record', 'reviewed'); await openVisit(page, result.encounters[0].id); await tab(page, 'draft');
   await assertReview(page, result.encounters[0].id, 'reviewed');
   assert.equal(await page.locator('#draft-text').inputValue(), text);
 });
@@ -502,12 +502,220 @@ async function visibleInViewport(locator) {
   });
 }
 
+function overviewFixture() {
+  const patients = [
+    core.createPatient({ id: 'today-patient-a', now, label: 'Тестова Анна <Учебная>' }),
+    core.createPatient({ id: 'today-patient-b', now, label: 'Тестов Борис Учебный' })
+  ];
+  const entry = (id, visitDate, updatedAt, returnDate = '', reviewed = false, completed = false) => {
+    let result = core.createEncounter({ id, patientId: patients[id === 'reviewed-today' ? 1 : 0].id, now });
+    result.visitDate = visitDate;
+    result.updatedAt = updatedAt;
+    result.assessment.returnVisitDate = returnDate;
+    result.history.medications = 'ДЕМО: постоянный препарат из исходного приёма';
+    result.history.allergies = 'ДЕМО: сведения об аллергии для подтверждения';
+    result.history.conditions = 'ДЕМО: заболевание из исходного приёма';
+    result.draft.text = 'ДЕМО: вымышленная запись ' + id;
+    if (reviewed) result = core.setReviewStatus(result, 'reviewed', { now });
+    if (completed) result = core.setReturnVisitStatus(result, 'completed');
+    return result;
+  };
+  return { patients, encounters: [
+    entry('draft-older', '2032-04-10', '2032-04-15T09:00:00.000Z', today),
+    entry('draft-today-a', today, '2032-04-15T06:00:00.000Z'),
+    entry('draft-today-b', today, '2032-04-15T08:00:00.000Z'),
+    entry('reviewed-today', today, '2032-04-15T10:00:00.000Z', '', true),
+    entry('completed-today', '2032-04-12', '2032-04-12T07:00:00.000Z', today, true, true),
+    entry('due-tomorrow', '2032-04-13', '2032-04-13T07:00:00.000Z', '2032-04-16', true)
+  ] };
+}
+
+const homeIds = page => listedIds(page, '#visit-list [data-record-id]', 'data-record-id');
+const homeFollowups = page => listedIds(page, '#home-followup-list [data-followup-id]', 'data-followup-id');
+const resumeCurrent = page => page.locator('#home-current [data-action="resume-visit"]');
+const homeRepeat = page => page.locator('#home-followup-list [data-action="start-followup"]');
+
+test('today overview handles empty and fully reviewed data without creating records', { timeout: 20000 }, async t => {
+  const { page } = await openApp(t);
+  assert.equal(await page.locator('h1').innerText(), 'Сегодня');
+  assert.equal(await resumeCurrent(page).count(), 0);
+  assert.deepEqual(await homeIds(page), []);
+  assert.deepEqual(await homeFollowups(page), []);
+  assert.equal(await raw(page), null);
+  await click(page, 'new'); await click(page, 'home');
+  assert.equal(await resumeCurrent(page).count(), 0, 'an untouched pending form is not an unfinished patient');
+  assert.equal(await raw(page), null);
+  const data = overviewFixture();
+  data.encounters = data.encounters.map(entry => core.setReviewStatus(entry, 'reviewed', { now }));
+  await seed(page, data);
+  const before = await raw(page);
+  assert.equal(await resumeCurrent(page).count(), 0);
+  assert.deepEqual(await homeIds(page), []);
+  assert.equal(await page.locator('[data-action="record-filter"][data-filter="draft"]').getAttribute('aria-pressed'), 'true');
+  assert.equal((await page.locator('#home-review-today-count').innerText()).trim(), '0');
+  await filter(page, 'record', 'all'); assert.equal((await homeIds(page)).length, 6);
+  await filter(page, 'record', 'reviewed'); assert.equal((await homeIds(page)).length, 6);
+  assert.equal(await raw(page), before, 'viewing finished records does not change review status');
+});
+
+test('today overview orders drafts, excludes completed appointments and resumes the chosen visit without writes', { timeout: 20000 }, async t => {
+  const { page } = await openApp(t);
+  await seed(page, overviewFixture());
+  const before = await raw(page);
+  assert.match(await page.locator('#home-record-heading').innerText(), /Записи для проверки/);
+  assert.deepEqual(await homeIds(page), ['draft-today-b', 'draft-today-a', 'draft-older']);
+  assert.deepEqual(await homeFollowups(page), ['draft-older']);
+  assert.equal((await page.locator('#home-followup-count').innerText()).trim(), '1');
+  assert.equal((await page.locator('#home-review-today-count').innerText()).trim(), '2');
+  assert.equal(await resumeCurrent(page).getAttribute('data-id'), 'draft-older', 'latest updated draft is recoverable even if its visit date is older');
+  assert.match(await page.locator('#home-current').innerText(), /Тестова Анна <Учебная>/);
+  assert.equal(await page.locator('#home-current script').count(), 0);
+  await resumeCurrent(page).click();
+  assert.equal(await page.locator('[data-field="visitDate"]').inputValue(), '2032-04-10');
+  await tab(page, 'history'); await click(page, 'home');
+  await resumeCurrent(page).click();
+  assert.equal(await page.locator('[data-field="history.complaints"]').isVisible(), true, 'resume preserves the in-memory encounter tab');
+  await click(page, 'home'); await openVisit(page, 'draft-today-a');
+  assert.equal(await page.locator('#draft-text').isVisible(), true, 'the review queue opens the record text directly');
+  await click(page, 'home');
+  assert.equal(await resumeCurrent(page).getAttribute('data-id'), 'draft-today-a', 'the active draft takes precedence over latest update time');
+  await page.reload();
+  assert.equal(await resumeCurrent(page).getAttribute('data-id'), 'draft-older', 'restart recovers latest saved draft without a separate active-id save');
+  assert.equal(await raw(page), before, 'overview, resume, queue opening and restart are read-only');
+});
+
+test('today review queue removes only confirmed reviews and includes records again after an edit', { timeout: 20000 }, async t => {
+  const { page } = await openApp(t);
+  await seed(page, overviewFixture());
+  await openVisit(page, 'draft-today-b');
+  assert.equal(await page.locator('#draft-text').isVisible(), true);
+  const before = await raw(page);
+  await click(page, 'review-record'); await cancel(page);
+  assert.equal(await raw(page), before);
+  await markReviewed(page); await click(page, 'home');
+  assert.deepEqual(await homeIds(page), ['draft-today-a', 'draft-older']);
+  assert.equal((await page.locator('#home-review-today-count').innerText()).trim(), '1');
+  await filter(page, 'record', 'reviewed'); await openVisit(page, 'draft-today-b');
+  await tab(page, 'draft'); await page.locator('#draft-text').fill('ДЕМО: уточнение после проверки');
+  await click(page, 'home'); await filter(page, 'record', 'draft');
+  assert.ok((await homeIds(page)).includes('draft-today-b'));
+  assert.equal((await page.locator('#home-review-today-count').innerText()).trim(), '2');
+  assert.equal((await saved(page)).encounters.find(entry => entry.id === 'reviewed-today').workflow.reviewStatus, 'reviewed');
+});
+
+test('today appointments keep explicit carry confirmation, cancel safely and reuse a linked repeat without marking attendance', { timeout: 20000 }, async t => {
+  const { page } = await openApp(t);
+  await seed(page, overviewFixture());
+  assert.equal(await page.locator('#home-followup-list [data-action="followup-complete"]').count(), 0, 'home does not imply attendance');
+  const before = await raw(page);
+  await homeRepeat(page).click();
+  assert.equal(await page.locator('#repeat-source').inputValue(), 'draft-older');
+  assert.equal(await page.locator('#repeat-source').isDisabled(), true);
+  assert.equal(await page.locator('#repeat-fields input:checked').count(), 0);
+  await page.locator('#repeat-cancel').click();
+  assert.equal(await raw(page), before);
+  await homeRepeat(page).click();
+  await page.locator('#repeat-fields input[value="medications"]').check();
+  await page.locator('#repeat-create').click();
+  let data = await saved(page);
+  const source = data.encounters.find(entry => entry.id === 'draft-older');
+  const repeated = data.encounters.find(entry => entry.id === source.workflow.returnVisitEncounterId);
+  assert.equal(data.encounters.length, 7);
+  assert.equal(repeated.history.medications, source.history.medications);
+  assert.equal(repeated.history.allergies, '');
+  assert.equal(repeated.history.conditions, '');
+  assert.equal(source.workflow.returnVisitStatus, 'planned');
+  await click(page, 'home');
+  assert.deepEqual(await homeFollowups(page), ['draft-older']);
+  assert.match(await homeRepeat(page).innerText(), /Открыть начатый приём/);
+  await homeRepeat(page).click();
+  assert.equal(await page.locator('#repeat-dialog').isVisible(), false);
+  await page.reload(); await homeRepeat(page).click();
+  data = await saved(page);
+  assert.equal(data.encounters.length, 7, 'the home shortcut preserves one linked encounter across restart');
+  assert.equal(data.encounters.find(entry => entry.id === 'draft-older').workflow.returnVisitStatus, 'planned');
+  await click(page, 'home'); await click(page, 'home-followups');
+  assert.deepEqual(await listedIds(page, '#followup-list [data-followup-id]', 'data-followup-id'), ['draft-older']);
+});
+
+test('today overview refreshes at Minsk midnight without losing a focused query, filters or saved data', { timeout: 20000 }, async t => {
+  const { page } = await openApp(t);
+  await seed(page, overviewFixture());
+  await filter(page, 'record', 'all');
+  const query = page.locator('#visit-search');
+  await query.fill('Тестова');
+  await query.evaluate(node => node.setSelectionRange(2, 5));
+  const before = await raw(page);
+  await page.clock.setFixedTime(new Date('2032-04-15T21:01:00.000Z'));
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  assert.deepEqual(await homeFollowups(page), ['due-tomorrow']);
+  assert.equal((await page.locator('#home-followup-count').innerText()).trim(), '1');
+  assert.equal((await page.locator('#home-review-today-count').innerText()).trim(), '0');
+  assert.equal(await query.inputValue(), 'Тестова');
+  assert.deepEqual(await query.evaluate(node => ({ focused: node === document.activeElement, start: node.selectionStart, end: node.selectionEnd })), { focused: true, start: 2, end: 5 });
+  assert.equal(await page.locator('[data-action="record-filter"][data-filter="all"]').getAttribute('aria-pressed'), 'true');
+  assert.deepEqual(await homeIds(page), ['draft-older', 'draft-today-b', 'draft-today-a', 'due-tomorrow', 'completed-today']);
+  assert.equal(await raw(page), before, 'calendar rollover does not infer attendance or review');
+});
+
+test('today overview retains a meaningful pending visit after failed save and warns about stale actions in two windows', { timeout: 20000 }, async t => {
+  const { page, newPage } = await openApp(t);
+  await seed(page, overviewFixture());
+  const before = await raw(page);
+  await click(page, 'new');
+  await page.evaluate(key => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (name, value) {
+      if (name === key) throw new DOMException('ДЕМО: сохранение недоступно', 'QuotaExceededError');
+      return original.call(this, name, value);
+    };
+  }, key);
+  await page.getByLabel('ФИО пациента', { exact: true }).fill('Тестова Анна Несохранённая');
+  await tab(page, 'history');
+  await page.locator('[data-field="history.complaints"]').fill('ДЕМО: несохранённая жалоба');
+  await click(page, 'home');
+  assert.match(await page.locator('#home-current').innerText(), /Тестова Анна Несохранённая/);
+  assert.equal(await page.locator('#storage-banner').isVisible(), true);
+  assert.equal(await raw(page), before);
+  await resumeCurrent(page).click();
+  assert.equal(await page.locator('[data-field="history.complaints"]').inputValue(), 'ДЕМО: несохранённая жалоба');
+  await click(page, 'home');
+  const second = await newPage();
+  await openVisit(second, 'draft-today-a');
+  await second.locator('#draft-text').fill('ДЕМО: более новая запись во втором окне');
+  await page.waitForFunction(() => document.getElementById('storage-banner').textContent.includes('другом окне'));
+  const latest = await raw(page);
+  await homeRepeat(page).click();
+  assert.equal(await page.locator('#repeat-dialog').isVisible(), false);
+  assert.equal(await raw(page), latest);
+  assert.equal((await saved(page)).encounters.length, 6);
+  assert.equal((await saved(page)).patients.length, 2);
+  assert.equal(await page.locator('#toast').isVisible(), true);
+  assert.match(await page.locator('#toast').innerText(), /другом окне|не сохранён/);
+});
+
+test('today overview fits desktop, tablet and narrow screens with usable working sections', { timeout: 20000 }, async t => {
+  const { page } = await openApp(t);
+  await seed(page, overviewFixture());
+  const before = await raw(page);
+  for (const width of [1366, 800, 390]) {
+    await page.setViewportSize({ width, height: width === 1366 ? 768 : 844 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'today layout fits width ' + width);
+    assert.equal(await resumeCurrent(page).isVisible(), true);
+    assert.equal(await homeRepeat(page).isVisible(), true);
+    assert.equal(await page.locator('#visit-search').isVisible(), true);
+    assert.equal(await page.locator('#record-filters').isVisible(), true);
+    if (width === 1366) assert.equal(await visibleInViewport(resumeCurrent(page)), true, 'resume action is available before scrolling on a laptop');
+  }
+  assert.equal(await raw(page), before);
+});
+
 test("patient context and encounter actions remain visible while scrolling, update live and leave keyboard targets uncovered", { timeout: 30000 }, async t => {
   const { page } = await openApp(t);
   const data = fixture();
   Object.assign(data.encounters[0].assessment, { sickLeaveIssued: 'yes', sickLeaveNumber: 'ДЕМО-884', sickLeaveFrom: today, sickLeaveTo: '2032-04-18' });
   await page.setViewportSize({ width: 1366, height: 768 });
-  await seed(page, data); await openVisit(page, 'demo-today');
+  await seed(page, data); await openVisit(page, 'demo-today'); await tab(page, 'basic');
   await page.getByLabel('ФИО пациента', { exact: true }).fill('Тестова Анна <Учебная>');
   await page.locator('[data-field="visitDate"]').fill('2032-04-14');
   assert.equal(await page.locator('#visit-patient-heading').innerText(), 'Тестова Анна <Учебная>');

@@ -34,6 +34,58 @@ async function openApp(t) {
   return { context, page };
 }
 
+test("patient list keeps the last visit, prioritizes the nearest pending return date and refreshes after completion or midnight", { timeout: 20000 }, async t => {
+  const { page } = await openApp(t);
+  const core = require(path.join(appRoot, 'core.js'));
+  const now = '2032-04-15T07:00:00.000Z';
+  await page.clock.setFixedTime(new Date(now));
+  const labels = {today: 'Тестов Сегодня', soon: 'Тестова Ближайшая', later: 'Тестов Поздний', past: 'Тестова Прошедшая', none: 'Тестов Без назначения', completed: 'Тестова Завершённая', empty: 'Тестов Без приёмов'};
+  const patients = Object.entries(labels).map(([id, label]) => core.createPatient({id: 'patient-' + id, label, now}));
+  function entry(id, patient, date, visitDate = '2032-04-01', completed = false) {
+    const record = core.createEncounter({id: 'visit-' + id, patientId: 'patient-' + patient, now});
+    record.visitDate = visitDate; record.assessment.returnVisitDate = date;
+    return completed ? core.setReturnVisitStatus(record, 'completed') : record;
+  }
+  const encounters = [entry('today', 'today', '2032-04-15'), entry('later', 'later', '2032-04-25'), entry('soon', 'soon', '2032-04-18'), entry('soon-later', 'soon', '2032-04-25', '2032-04-10'), entry('soon-past', 'soon', '2032-04-12', '2032-04-02'), entry('soon-completed', 'soon', '2032-04-16', '2032-04-03', true), entry('past', 'past', '2032-04-14'), entry('none', 'none', ''), entry('completed', 'completed', '2032-04-16', '2032-04-01', true)];
+  const initial = core.serializeBundle(encounters, patients);
+  await page.evaluate(({key, raw}) => localStorage.setItem(key, raw), {key, raw: initial});
+  await page.reload(); await click(page, 'patients');
+  const row = id => page.locator('.patient-row[data-patient-id="patient-' + id + '"]');
+  const order = () => page.locator('.patient-row').evaluateAll(rows => rows.map(row => row.dataset.patientId));
+  assert.deepEqual((await order()).slice(0, 4), ['patient-today', 'patient-soon', 'patient-later', 'patient-past']);
+  assert.equal(await page.locator('.patient-row').count(), 7);
+  assert.match(await row('today').locator('.patient-return').innerText(), /15\.04\.2032 · сегодня/);
+  assert.match(await row('soon').innerText(), /Последний приём: 10\.04\.2032/);
+  assert.match(await row('soon').locator('.patient-return').innerText(), /18\.04\.2032/);
+  assert.match(await row('soon').locator('.patient-overdue').innerText(), /12\.04\.2032.*исход не отмечен/);
+  for (const id of ['none', 'completed', 'empty']) assert.equal(await row(id).locator('.patient-return,.patient-overdue').count(), 0);
+  assert.match(await row('empty').innerText(), /Приёмов пока нет/);
+  await page.locator('#patient-search').fill('Ближайшая');
+  assert.deepEqual(await order(), ['patient-soon']);
+  await page.locator('#patient-search').fill('');
+  for (const width of [1440, 800, 390]) {
+    await page.setViewportSize({width, height: 1000});
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  }
+  assert.equal(await page.evaluate(key => localStorage.getItem(key), key), initial, 'rendering, sorting and search do not write records');
+  await click(page, 'followups');
+  await page.locator('[data-action="followup-filter"][data-filter="upcoming"]').click();
+  await page.locator('[data-followup-id="visit-soon"] [data-action="followup-complete"]').click();
+  await page.locator('#dialog-accept').click();
+  await click(page, 'patients');
+  assert.match(await row('soon').locator('.patient-return').innerText(), /25\.04\.2032/);
+  assert.deepEqual((await order()).slice(0, 4), ['patient-today', 'patient-later', 'patient-soon', 'patient-past']);
+  const afterCompletion = await page.evaluate(key => localStorage.getItem(key), key);
+  await page.clock.setFixedTime(new Date('2032-04-15T21:01:00.000Z'));
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  assert.deepEqual((await order()).slice(0, 4), ['patient-later', 'patient-soon', 'patient-past', 'patient-today']);
+  assert.equal(await row('today').locator('.patient-return').count(), 0);
+  assert.match(await row('today').locator('.patient-overdue').innerText(), /15\.04\.2032/);
+  assert.equal(await page.evaluate(key => localStorage.getItem(key), key), afterCompletion, 'clock refresh never marks attendance or saves');
+  await row('soon').locator('[data-action="patient"]').click();
+  assert.equal(await page.locator('#patient-heading').innerText(), labels.soon);
+});
+
 test("two windows: a conflict cancels repeat creation and exposes the warning, then explicit reload permits a confirmed repeat", { timeout: 20000 }, async t => {
   const { context, page } = await openApp(t);
   await click(page, "new");

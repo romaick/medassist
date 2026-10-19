@@ -7,6 +7,7 @@ const { chromium } = require(process.env.MEDASSIST_PLAYWRIGHT || "playwright");
 
 const appRoot = path.resolve(process.env.MEDASSIST_APP_ROOT || path.join(__dirname, "../app"));
 const core = require(path.join(appRoot, "core.js"));
+const examCatalog = require(path.join(appRoot, "exam-options.js"));
 const url = pathToFileURL(path.join(appRoot, "index.html")).href;
 const key = "medassist.demo.v4";
 const now = "2032-04-15T07:00:00.000Z";
@@ -228,6 +229,134 @@ test("normal examination and replacing generated text each return a reviewed rec
   await assertReview(page, "demo-today", "reviewed");
   await click(page, "generate"); await accept(page);
   await assertReview(page, "demo-today", "draft");
+});
+
+test("compact exam starts closed, exposes measurements first and supports keyboard and all-section controls without saving", { timeout: 20000 }, async t => {
+  const { page } = await openApp(t);
+  await seed(page); await openVisit(page, "demo-today"); await tab(page, "exam");
+  const before = await raw(page);
+  assert.equal(await page.locator('.exam-group').count(), 5);
+  assert.equal(await page.locator('.exam-group[open]').count(), 0);
+  assert.equal(await page.locator('.exam-selected-preview').allTextContents().then(texts => texts.every(text => text === 'Признаки не выбраны')), true);
+  assert.equal(await page.locator('.exam-workspace .side-card').count(), 0);
+  const firstSummary = page.locator('[data-exam-section="general"] > summary');
+  await firstSummary.focus(); await page.keyboard.press('Enter');
+  assert.equal(await page.locator('[data-field="examSelections.generalCondition"]').isVisible(), true);
+  await firstSummary.focus(); await page.keyboard.press('Space');
+  assert.equal(await page.locator('.exam-group[open]').count(), 0);
+  await click(page, 'expand-exam');
+  assert.equal(await page.locator('.exam-group[open]').count(), 5);
+  await click(page, 'collapse-exam');
+  assert.equal(await page.locator('.exam-group[open]').count(), 0);
+  assert.equal(await raw(page), before, 'view controls do not write records');
+  for (const width of [1366, 800, 390]) {
+    await page.setViewportSize({ width, height: 768 });
+    const layout = await page.evaluate(() => ({
+      fits: document.documentElement.scrollWidth <= innerWidth,
+      measuresBottom: document.querySelector('.exam-measurements').getBoundingClientRect().bottom,
+      firstGroupTop: document.querySelector('.exam-group').getBoundingClientRect().top
+    }));
+    assert.equal(layout.fits, true, 'compact examination fits width ' + width);
+    assert.ok(layout.measuresBottom < layout.firstGroupTop, 'measurements precede descriptions');
+  }
+});
+
+test("compact exam summaries show only selected facts and visible notes; edits keep focus and BMI", { timeout: 20000 }, async t => {
+  const { page } = await openApp(t);
+  const data = fixture();
+  const entry = data.encounters[0];
+  entry.examSelections.heartRhythm = 'irregular';
+  entry.exam.cardiovascular = 'ДЕМО: уточнение <проверить> ' + 'подробность '.repeat(30);
+  await seed(page, data); await openVisit(page, entry.id); await tab(page, 'exam');
+  const group = page.locator('[data-exam-section="cardiovascular"]');
+  const preview = group.locator('.exam-preview');
+  assert.equal(await group.getAttribute('open'), null);
+  assert.match(await preview.innerText(), /Тоны сердца аритмичные/);
+  assert.doesNotMatch(await preview.innerText(), /Тоны сердца ясные|Шумы сердца не выслушиваются/);
+  assert.match(await preview.innerText(), /Уточнение: ДЕМО: уточнение <проверить>/);
+  assert.match(await preview.innerText(), /Открыть полный текст и поля/);
+  assert.equal(await preview.locator('проверить').count(), 0, 'saved text is escaped');
+  await group.locator(':scope > summary').click({ position: { x: 12, y: 15 } });
+  assert.equal(await group.locator('.exam-note[open]').count(), 1);
+  const rhythm = page.locator('[data-field="examSelections.heartRhythm"]');
+  await rhythm.focus(); await rhythm.selectOption('regular');
+  assert.equal(await rhythm.evaluate(node => document.activeElement === node), true);
+  assert.match(await preview.innerText(), /Тоны сердца ритмичные/);
+  assert.doesNotMatch(await preview.innerText(), /аритмичные/);
+  await rhythm.selectOption('');
+  assert.match(await preview.innerText(), /Признаки не выбраны/);
+  const note = page.locator('[data-field="exam.cardiovascular"]');
+  assert.equal(await note.inputValue(), entry.exam.cardiovascular);
+  await note.fill('ДЕМО: короткое уточнение.');
+  assert.equal(await note.evaluate(node => document.activeElement === node), true);
+  assert.match(await preview.innerText(), /ДЕМО: короткое уточнение\./);
+  await page.locator('[data-field="vitals.weight"]').fill('72');
+  await page.locator('[data-field="vitals.height"]').fill('180');
+  assert.equal(await page.locator('#bmi-value').innerText(), '22,2');
+  assert.equal(await page.locator('[data-field="vitals.height"]').evaluate(node => document.activeElement === node), true);
+  const stored = (await saved(page)).encounters.find(value => value.id === entry.id);
+  assert.equal(stored.exam.cardiovascular, 'ДЕМО: короткое уточнение.');
+  assert.deepEqual(stored.draft, entry.draft, 'editing the summary does not rewrite manual text');
+});
+
+test("compact exam normal buttons preserve collapsed groups, expanded notes, measurements and confirmation", { timeout: 20000 }, async t => {
+  const { page } = await openApp(t);
+  const data = fixture(), entry = data.encounters[0];
+  entry.examSelections.heartRhythm = 'irregular';
+  entry.exam.general = 'ДЕМО: сохранить уточнение общего осмотра.';
+  entry.exam.cardiovascular = 'ДЕМО: сохранить уточнение сердца.';
+  entry.vitals.weight = '72'; entry.vitals.height = '180';
+  await seed(page, data); await openVisit(page, entry.id); await tab(page, 'exam');
+  const general = page.locator('[data-exam-section="general"]');
+  const cardio = page.locator('[data-exam-section="cardiovascular"]');
+  await general.locator(':scope > summary').click({ position: { x: 12, y: 15 } });
+  await general.locator('.exam-note > summary').click();
+  const normalCardio = cardio.locator('[data-action="normal-exam-section"]');
+  const before = await raw(page);
+  await normalCardio.click(); await cancel(page);
+  assert.equal(await raw(page), before);
+  assert.equal(await cardio.getAttribute('open'), null);
+  await normalCardio.click(); await accept(page);
+  assert.deepEqual(await listedIds(page, '.exam-group[open]', 'data-exam-section'), ['general']);
+  assert.equal(await general.locator('.exam-note[open]').count(), 0, 'closed note stays closed');
+  assert.equal(await cardio.locator('.exam-note[open]').count(), 1, 'existing note state survives the render');
+  assert.equal(await normalCardio.evaluate(node => document.activeElement === node), true);
+  let stored = (await saved(page)).encounters.find(value => value.id === entry.id);
+  assert.equal(stored.examSelections.generalCondition, '', 'section button changes only its section');
+  assert.equal(stored.examSelections.heartRhythm, 'regular');
+  assert.deepEqual(stored.exam, entry.exam); assert.deepEqual(stored.vitals, entry.vitals); assert.deepEqual(stored.draft, entry.draft);
+  await click(page, 'normal-exam');
+  assert.deepEqual(await listedIds(page, '.exam-group[open]', 'data-exam-section'), ['general']);
+  await click(page, 'collapse-exam'); await click(page, 'normal-exam');
+  assert.equal(await page.locator('.exam-group[open]').count(), 0, 'normal-all leaves every closed group closed');
+  stored = (await saved(page)).encounters.find(value => value.id === entry.id);
+  assert.deepEqual(stored.examSelections, examCatalog.NORMAL_SELECTIONS);
+  assert.deepEqual(stored.exam, entry.exam); assert.deepEqual(stored.vitals, entry.vitals); assert.deepEqual(stored.draft, entry.draft);
+  assert.equal(await page.locator('#bmi-value').innerText(), '22,2');
+});
+
+test("compact exam validation reveals the hidden erroneous field without losing entered text", { timeout: 20000 }, async t => {
+  const { page } = await openApp(t);
+  await seed(page); await openVisit(page, 'demo-today'); await tab(page, 'exam');
+  const group = page.locator('[data-exam-section="general"]');
+  await group.locator(':scope > summary').click({ position: { x: 12, y: 15 } });
+  await group.locator('.exam-note > summary').click();
+  const note = page.locator('[data-field="exam.general"]');
+  await note.evaluate(node => node.removeAttribute('maxlength'));
+  const invalid = 'ДЕМО: ' + 'я'.repeat(core.MAX_TEXT_LENGTH);
+  const before = await raw(page);
+  await note.fill(invalid);
+  assert.equal(await note.getAttribute('aria-invalid'), 'true');
+  assert.equal(await raw(page), before, 'invalid data does not replace saved records');
+  await click(page, 'collapse-exam'); await tab(page, 'draft'); await click(page, 'generate');
+  assert.equal(await group.getAttribute('open'), '');
+  assert.equal(await group.locator('.exam-note[open]').count(), 1);
+  assert.equal(await note.inputValue(), invalid);
+  assert.equal(await note.evaluate(node => document.activeElement === node), true);
+  assert.equal(await page.locator('#field-exam-general-error').isVisible(), true);
+  await note.fill('ДЕМО: исправленное описание.');
+  assert.equal(await note.getAttribute('aria-invalid'), 'false');
+  assert.equal((await saved(page)).encounters.find(value => value.id === 'demo-today').exam.general, 'ДЕМО: исправленное описание.');
 });
 
 test("invalid clinical fields prevent review even when the draft text is nonempty", { timeout: 20000 }, async t => {

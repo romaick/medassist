@@ -117,10 +117,10 @@
     app.innerHTML = '<div class="shell"><aside class="sidebar" aria-label="Главная навигация"><div class="brand"><img src="icon.svg" alt=""><div><strong>МедАссистент</strong><small>ПОЛИКЛИНИЧЕСКИЙ РЕЖИМ</small></div></div><p class="nav-caption">РАБОЧЕЕ ПРОСТРАНСТВО</p><nav class="nav">' +
       navButton('home', 'Обзор', 'home') + navButton('patients', 'Пациенты', 'user') + navButton('new', 'Новый пациент', 'plus') +
       (current ? navButton('visit', 'Текущий приём', 'document') : '') + navButton('followups', 'Повторные приёмы', 'calendar') + navButton('modules', 'Модули', 'grid') + navButton('help', 'Помощь и данные', 'help') + navButton('check-updates', 'Проверить обновления', 'download') +
-      '</nav><div class="side-bottom"><div class="local-indicator"><span class="dot"></span>Работает локально</div><div class="version">Прототип 0.9.2 · Демонстрация</div></div></aside><div class="workspace"><header class="topbar"><div class="topbar-left">Поликлиника <span aria-hidden="true">/</span> <span>' + sectionName + '</span></div><div class="topbar-right"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><span class="avatar" aria-hidden="true">МА</span></div></header><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
+      '</nav><div class="side-bottom"><div class="local-indicator"><span class="dot"></span>Работает локально</div><div class="version">Прототип 0.9.3 · Демонстрация</div></div></aside><div class="workspace"><header class="topbar"><div class="topbar-left">Поликлиника <span aria-hidden="true">/</span> <span>' + sectionName + '</span></div><div class="topbar-right"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><span class="avatar" aria-hidden="true">МА</span></div></header><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
       (state.migrated ? '<div class="migration-notice">Прежние записи доступны со статусом «Черновик». Карточки, данные и ручные тексты сохранены. Исходное сохранение предыдущей версии не изменяется.</div>' : '') +
       ({home: renderHome, patients: renderPatients, followups: renderFollowups, patient: renderPatient, visit: renderVisit, modules: renderModules, help: renderHelp}[state.view])() +
-      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.9.2</span></footer></main></div></div>';
+      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.9.3</span></footer></main></div></div>';
     updateClock();
     updateSaveStatus();
     if (state.view === 'visit') { updateValidation(); updateDraftState(); updateReviewState(); }
@@ -467,9 +467,22 @@
     state.patientCardDay = localDate();
     return '<div class="patient-card-page"><div class="patient-card-nav">' + button('patients', 'Все пациенты', 'user', 'ghost') + '<span class="small muted">Только вымышленные данные</span></div>' +
       '<section class="card patient-card-header" aria-labelledby="patient-heading"><div class="patient-card-identity"><div class="patient-card-name"><h1 id="patient-heading">' + escape(patientName(patient)) + '</h1>' + button('edit-patient', 'Изменить', 'edit', 'secondary compact', 'aria-controls="patient-edit-panel" aria-expanded="' + state.patientEditOpen + '" aria-label="Изменить ФИО пациента"') + '</div><div class="patient-card-meta"><span>Код пациента: ' + escape(shortId(patient)) + '</span><div id="save-status" class="save-indicator" role="status"></div></div></div>' +
-      '<div id="patient-edit-panel" class="patient-edit-panel"' + (state.patientEditOpen ? '' : ' hidden') + '>' + patientNameField(patient) + '<div class="patient-edit-actions"><span class="small muted">Изменения сохраняются при вводе.</span>' + button('finish-patient-edit', 'Готово', 'check', 'secondary compact') + '</div></div>' +
-      '<div class="patient-card-actions"><div id="patient-next-return" class="patient-next-return">' + renderPatientReturn() + '</div>' + button('repeat', visits.length ? 'Повторный приём' : 'Первый приём', 'plus', 'primary') + '</div></section>' +
+      '<div class="patient-card-actions"><div id="patient-next-return" class="patient-next-return">' + renderPatientReturn() + '</div>' + button('repeat', visits.length ? 'Повторный приём' : 'Первый приём', 'plus', 'primary') + '</div>' + renderPatientInformation(visits[0]) +
+      '<div id="patient-edit-panel" class="patient-edit-panel"' + (state.patientEditOpen ? '' : ' hidden') + '>' + patientNameField(patient) + '<div class="patient-edit-actions"><span class="small muted">Изменения сохраняются при вводе.</span>' + button('finish-patient-edit', 'Готово', 'check', 'secondary compact') + '</div></div></section>' +
       '<section id="patient-history" class="card"><div class="card-head"><h2>История приёмов</h2><span class="result-count">' + visits.length + ' записей</span></div><div class="list">' + (visits.length ? visits.map((entry) => '<div class="visit-row patient-visit-row" data-visit-id="' + escape(entry.id) + '"><div class="visit-text"><strong>' + escape(dateText(entry.visitDate)) + '</strong><p>' + escape(entry.history.complaints.trim() || 'Жалобы не указаны') + '</p><p>Диагноз: ' + escape(entry.assessment.summary.trim() || 'не указан') + '</p><p>' + recordStatus(entry) + ' · Приём ' + escape(shortId(entry)) + '</p></div>' + button('open', 'Открыть приём', null, 'secondary compact', 'data-id="' + escape(entry.id) + '"') + '</div>').join('') : '<div class="empty"><p>Здесь появятся приёмы этого пациента.</p></div>') + '</div></section></div>';
+  }
+  function patientInformationValue(value) {
+    const text = value.trim();
+    if (!text) return '<span class="patient-fact-empty">Не указаны</span>';
+    if (text.length <= 180) return '<p>' + escape(text) + '</p>';
+    return '<details class="patient-fact-long"><summary><span class="patient-fact-preview">' + escape(text.slice(0, 180)) + '…</span><span class="patient-fact-expand">Показать полностью</span><span class="patient-fact-collapse">Свернуть</span></summary><p>' + escape(text) + '</p></details>';
+  }
+  function renderPatientInformation(entry) {
+    if (!entry) return '<section id="patient-information" class="patient-information"><p class="patient-fact-empty">Сведения появятся после первого приёма.</p></section>';
+    const sex = {female: 'Женский', male: 'Мужской', unspecified: 'Не уточнён'}[entry.sex] || 'Не указан';
+    return '<section id="patient-information" class="patient-information" aria-labelledby="patient-information-heading"><div class="patient-information-heading"><h2 id="patient-information-heading">Сведения из последнего приёма · <time datetime="' + escape(entry.visitDate) + '">' + escape(dateText(entry.visitDate)) + '</time></h2>' + button('edit-patient-information', 'Изменить сведения', 'edit', 'secondary compact', 'data-id="' + escape(entry.id) + '" aria-label="Изменить сведения в приёме от ' + escape(dateText(entry.visitDate)) + '"') + '</div>' +
+      '<dl class="patient-demographics"><div><dt>Возраст на дату приёма</dt><dd data-patient-information="age">' + escape(entry.age.trim() || 'Не указан') + '</dd></div><div><dt>Пол</dt><dd data-patient-information="sex">' + escape(sex) + '</dd></div></dl>' +
+      '<dl class="patient-facts">' + [['allergies', 'Аллергии'], ['medications', 'Постоянные препараты'], ['conditions', 'Заболевания и операции']].map(([key, title]) => '<div><dt>' + title + '</dt><dd data-patient-information="' + key + '">' + patientInformationValue(entry.history[key]) + '</dd></div>').join('') + '</dl></section>';
   }
   function renderPatientReturn() {
     const today = localDate();
@@ -571,7 +584,16 @@
     const items = examCatalog.FIELDS.filter((item) => item.section === section.id);
     const count = items.filter((item) => active().examSelections[item.id]).length;
     const note = active().exam[section.id];
-    return '<details class="exam-group" data-exam-section="' + section.id + '"' + (section.id === 'general' || section.id === 'cardiovascular' || note.trim() ? ' open' : '') + '><summary><span>' + escape(section.title) + '</span><span class="exam-count" data-count-section="' + section.id + '">' + count + ' из ' + items.length + '</span>' + button('normal-exam-section', 'Осмотр без особенностей', null, 'secondary compact exam-section-normal', 'data-section="' + section.id + '" aria-label="Осмотр без особенностей: ' + escape(section.title) + '"') + '</summary><div class="exam-group-content"><div class="field-grid">' + items.map((item) => field('examSelections.' + item.id, item.label, '', {select: [['', 'Не выбрано'], ...item.options.map((option) => [option.value, option.label])]})).join('') + '</div><details class="exam-note"' + (note.trim() ? ' open' : '') + '><summary>Уточнение или сохранённое описание</summary>' + field('exam.' + section.id, 'Уточнение: ' + section.title.toLocaleLowerCase('ru'), 'Локализация, особенности или своя формулировка (необязательно)', {hint: 'Этот текст включается вместе с выбранными признаками. Проверьте их согласованность.'}) + '</details></div></details>';
+    return '<details class="exam-group" data-exam-section="' + section.id + '"><summary><span class="exam-section-title">' + escape(section.title) + '</span><span class="exam-count" data-count-section="' + section.id + '">' + count + ' из ' + items.length + '</span>' + button('normal-exam-section', 'Осмотр без особенностей', null, 'secondary compact exam-section-normal', 'data-section="' + section.id + '" aria-label="Осмотр без особенностей: ' + escape(section.title) + '"') + '<span class="exam-preview" data-exam-preview="' + section.id + '">' + renderExamSummary(section) + '</span></summary><div class="exam-group-content"><div class="field-grid">' + items.map((item) => field('examSelections.' + item.id, item.label, '', {select: [['', 'Не выбрано'], ...item.options.map((option) => [option.value, option.label])]})).join('') + '</div><details class="exam-note"' + (note.trim() ? ' open' : '') + '><summary>Уточнение или сохранённое описание</summary>' + field('exam.' + section.id, 'Уточнение: ' + section.title.toLocaleLowerCase('ru'), 'Локализация, особенности или своя формулировка (необязательно)', {hint: 'Этот текст включается вместе с выбранными признаками. Проверьте их согласованность.'}) + '</details></div></details>';
+  }
+  function renderExamSummary(section) {
+    const selected = examCatalog.FIELDS.filter(item => item.section === section.id).map(item => item.options.find(option => option.value === active().examSelections[item.id])).filter(Boolean);
+    const description = selected.map(option => option.text).join('; ');
+    const note = active().exam[section.id].trim();
+    const shortened = description.length > 200 || note.length > 140;
+    return '<span class="exam-selected-preview' + (description ? '' : ' muted') + '">' + (description ? escape(description.slice(0, 200)) + (description.length > 200 ? '…' : '') : 'Признаки не выбраны') + '</span>' +
+      (note ? '<span class="exam-note-preview"><strong>Уточнение:</strong> ' + escape(note.slice(0, 140)) + (note.length > 140 ? '…' : '') + '</span>' : '') +
+      '<span class="exam-open-label">' + (shortened ? 'Открыть полный текст и поля' : 'Открыть поля') + '</span>';
   }
   function bmiHint(value) {
     return value ? 'кг/м² · Рассчитано по массе и росту' : 'Для расчёта нужны корректные масса (кг) и рост (см) больше нуля.';
@@ -588,7 +610,7 @@
     document.getElementById('bmi-hint').textContent = bmiHint(value);
   }
   function renderExam() {
-    return '<div class="form-layout"><section class="card form-card"><h2>Осмотр</h2><p class="section-intro">Выберите только оценённые признаки. Ритм и звучность тонов задаются отдельно. Для локализации и особенностей можно добавить уточнение.</p><div class="exam-toolbar"><h3>Описание осмотра</h3><div class="actions">' + button('normal-exam', 'Осмотр без особенностей', 'check') + button('expand-exam', 'Раскрыть все разделы', null, 'ghost') + '</div></div><p class="small muted">Кнопка «Осмотр без особенностей» заполняет варианты осмотра. Проверьте каждый признак и при необходимости измените его. Кнопка у названия раздела заполняет только этот раздел. Измеренные показатели и ваши уточнения сохраняются без изменений.</p>' + examCatalog.SECTIONS.map(renderExamGroup).join('') + '<div class="form-section">' + field('exam.other', 'Другие данные осмотра', 'Необязательно. Пустое поле не попадёт в черновик') + '</div><div class="form-section"><h3>Измеренные показатели</h3><div class="field-grid three">' + vitalFields.map(([key, title, unit]) => field('vitals.' + key, title, 'Не указано', {type: 'text', numeric: true, hint: unit})).join('') + renderBmi() + '</div></div>' + '</section>' + aside('Только выбранные признаки', 'Ни один результат не выбран заранее. Списки служат для записи осмотра и не определяют диагноз. Если нужного варианта нет, используйте уточнение. Источники перечислены в файле EXAM-SOURCES.md.') + '</div>';
+    return '<div class="exam-workspace"><section class="card form-card"><h2>Осмотр</h2><p class="section-intro">Выберите только оценённые признаки. Пустой раздел не означает норму.</p><section class="exam-measurements" aria-labelledby="exam-measurements-heading"><h3 id="exam-measurements-heading">Измеренные показатели</h3><div class="field-grid exam-vitals-grid">' + vitalFields.map(([key, title, unit]) => field('vitals.' + key, title, 'Не указано', {type: 'text', numeric: true, hint: unit})).join('') + renderBmi() + '</div></section><div class="exam-toolbar"><h3>Описание осмотра</h3><div class="actions">' + button('normal-exam', 'Осмотр без особенностей', 'check') + button('expand-exam', 'Раскрыть все', null, 'ghost') + button('collapse-exam', 'Свернуть все', null, 'ghost') + '</div></div><p class="exam-normal-hint">Кнопка у раздела заполняет его признаки; общая — весь осмотр. Уточнения и показатели сохраняются.</p>' + examCatalog.SECTIONS.map(renderExamGroup).join('') + '<div class="form-section">' + field('exam.other', 'Другие данные осмотра', 'Необязательно. Пустое поле не попадёт в черновик') + '</div></section></div>';
   }
   function renderDraft() {
     return '<div class="draft-layout"><section class="card draft-controls"><h2>Диагноз и рекомендации</h2><p class="section-intro">Заполняет врач. Рекомендации, повторный приём и больничный включаются в текст только при заполнении или явной отметке.</p>' +
@@ -722,7 +744,13 @@
     window.scrollTo({top: 0});
   }
   async function handleAction(action, target) {
-    if (['new', 'example', 'open', 'repeat', 'start-followup'].includes(action) && !canReplaceActive()) return;
+    if (['new', 'example', 'open', 'repeat', 'start-followup', 'edit-patient-information'].includes(action) && !canReplaceActive()) return;
+    if (action === 'edit-patient-information') {
+      if (state.view !== 'patient' || !requireFreshState()) return;
+      const entry = patientHistory(state.patientId)[0];
+      if (!entry || entry.id !== target.dataset.id) return;
+      state.activeId = entry.id; navigate('visit', 'history'); return;
+    }
     if (action === 'edit-patient' || action === 'finish-patient-edit') {
       if (state.view !== 'patient' || !requireFreshState()) return;
       const opening = action === 'edit-patient';
@@ -896,16 +924,17 @@
       if (!requireFreshState()) return;
       const reviewReset = fields.some(field => entry.examSelections[field.id] !== examCatalog.NORMAL_SELECTIONS[field.id]) && invalidateReview(entry);
       const openSections = new Set(Array.from(app.querySelectorAll('.exam-group[open]'), (group) => group.dataset.examSection));
+      const openNotes = new Set(Array.from(app.querySelectorAll('.exam-note[open]'), (note) => note.closest('.exam-group').dataset.examSection));
       for (const field of fields) entry.examSelections[field.id] = examCatalog.NORMAL_SELECTIONS[field.id];
       entry.updatedAt = new Date().toISOString();
       persist(); render();
-      app.querySelectorAll('.exam-group').forEach((group) => { group.open = !section || group.dataset.examSection === section.id || openSections.has(group.dataset.examSection); });
+      app.querySelectorAll('.exam-group').forEach((group) => { group.open = openSections.has(group.dataset.examSection); group.querySelector('.exam-note').open = openNotes.has(group.dataset.examSection); });
       app.querySelector(section ? '[data-action="normal-exam-section"][data-section="' + section.id + '"]' : '[data-action="normal-exam"]').focus({preventScroll: true});
       toast((section ? 'Заполнен раздел «' + section.title + '».' : 'Варианты осмотра заполнены.') + ' Проверьте признаки и при необходимости измените отдельные пункты.' + (reviewReset ? ' Запись возвращена в черновики.' : ''));
       return;
     }
-    if (action === 'expand-exam') {
-      app.querySelectorAll('.exam-group').forEach((group) => { group.open = true; });
+    if (action === 'expand-exam' || action === 'collapse-exam') {
+      app.querySelectorAll('.exam-group').forEach((group) => { group.open = action === 'expand-exam'; });
     }
   }
   app.addEventListener('click', (event) => {
@@ -961,6 +990,10 @@
       });
       const total = document.getElementById('exam-total');
       if (total) total.textContent = filledCount(active().examSelections) + ' из ' + examCatalog.FIELDS.length;
+    }
+    if (control.dataset.field.startsWith('examSelections.') || control.dataset.field.startsWith('exam.')) {
+      const group = control.closest('.exam-group');
+      if (group) group.querySelector('.exam-preview').innerHTML = renderExamSummary(examCatalog.SECTIONS.find(section => section.id === group.dataset.examSection));
     }
     updateValidation(); persist(); updateDraftState(); updateReviewState();
     if (planReset || reviewReset) toast((planReset ? 'Дата изменена: отметка и связь с повторным приёмом сброшены. Сам приём сохранён в истории. ' : '') + (reviewReset ? 'Запись возвращена в черновики.' : ''));

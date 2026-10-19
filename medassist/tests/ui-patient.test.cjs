@@ -749,3 +749,160 @@ test('compact patient card retains unsaved identity and visible warnings after s
   assert.equal((await saved(page)).patients.length, 5);
   assert.equal((await saved(page)).encounters.length, 9);
 });
+
+const patientInformationValue = (page, field) => page.locator('#patient-information [data-patient-information="' + field + '"]');
+
+test('patient information uses one latest dated encounter, leaves missing details explicit and never changes stored records', { timeout: 20000 }, async t => {
+  const { page } = await openApp(t);
+  const core = require(path.join(appRoot, 'core.js'));
+  const { patients, encounters } = await patientCardFixture(page);
+  const latest = encounters.find(entry => entry.id === 'card-c');
+  latest.age = '42'; latest.sex = 'female';
+  latest.history.allergies = '';
+  latest.history.conditions = '';
+  latest.history.medications = 'ДЕМО: сведения только из последнего приёма';
+  const old = encounters.find(entry => entry.id === 'card-older');
+  old.updatedAt = '2032-04-18T08:00:00.000Z';
+  old.age = '64'; old.sex = 'male';
+  const tied = JSON.parse(JSON.stringify(latest));
+  tied.id = 'card-d'; tied.age = '27'; tied.sex = 'male';
+  tied.history.medications = 'ДЕМО: другой приём с теми же датами';
+  encounters.unshift(tied);
+  const other = encounters.find(entry => entry.id === 'card-other-visit');
+  other.visitDate = '2032-04-20';
+  const blank = encounters.find(entry => entry.id === 'card-completed-visit');
+  blank.age = ''; blank.sex = '';
+  for (const field of ['allergies', 'medications', 'conditions']) blank.history[field] = '';
+  const earlierCompleted = JSON.parse(JSON.stringify(old));
+  earlierCompleted.id = 'card-completed-old'; earlierCompleted.patientId = 'card-completed';
+  encounters.push(earlierCompleted);
+  const initial = core.serializeBundle(encounters, patients);
+  await page.evaluate(({ key, raw }) => localStorage.setItem(key, raw), { key, raw: initial });
+  await page.reload(); await openPatientCard(page);
+  const info = page.locator('#patient-information');
+  assert.equal(await info.isVisible(), true);
+  assert.match(await info.innerText(), /Сведения из последнего приёма[\s\S]*12\.04\.2032/);
+  assert.match(await patientInformationValue(page, 'age').innerText(), /42/);
+  assert.match(await patientInformationValue(page, 'sex').innerText(), /женский/i);
+  assert.equal(await patientInformationValue(page, 'medications').innerText(), latest.history.medications);
+  for (const field of ['allergies', 'conditions']) assert.equal(await patientInformationValue(page, field).innerText(), 'Не указаны', 'missing ' + field + ' is not copied from an older encounter');
+  assert.equal(await info.locator('input,textarea,select').count(), 0, 'patient information opens as a readable summary');
+  assert.equal(await page.locator('#patient-edit-panel').isVisible(), false);
+  assert.equal(await page.locator('[data-action="edit-patient-information"]').getAttribute('data-id'), 'card-c', 'source follows visit date, creation time and stable id, not updatedAt or array order');
+  assert.doesNotMatch(await info.innerText(), /card-older|card-other-visit|другой приём с теми же датами/);
+  await click(page, 'edit-patient');
+  assert.equal(await page.evaluate(() => {
+    const info = document.getElementById('patient-information');
+    const editor = document.getElementById('patient-edit-panel');
+    return Boolean(info.compareDocumentPosition(editor) & Node.DOCUMENT_POSITION_FOLLOWING);
+  }), true, 'information comes before its editing controls');
+  await click(page, 'finish-patient-edit');
+  await openPatientCard(page, 'completed');
+  for (const field of ['age', 'sex']) assert.equal(await patientInformationValue(page, field).innerText(), 'Не указан');
+  for (const field of ['allergies', 'medications', 'conditions']) assert.equal(await patientInformationValue(page, field).innerText(), 'Не указаны');
+  await openPatientCard(page, 'empty');
+  assert.match(await info.innerText(), /приёмов пока нет|нет приёмов|появятся после|пока нет сведений/i);
+  assert.equal(await page.locator('[data-action="edit-patient-information"]').count(), 0);
+  assert.equal(await page.locator('#patient-history [data-visit-id]').count(), 0);
+  assert.equal(await page.evaluate(key => localStorage.getItem(key), key), initial, 'viewing summaries and toggling identity editing do not save, merge or transfer information');
+});
+
+test('patient information edits its existing source encounter and refreshes after returning without creating a repeat', { timeout: 20000 }, async t => {
+  const { page } = await openApp(t);
+  const { initial, encounters } = await patientCardFixture(page);
+  await openPatientCard(page);
+  const edit = page.locator('[data-action="edit-patient-information"]');
+  await edit.focus(); await page.keyboard.press('Enter');
+  assert.equal(await page.locator('.tab-bar [data-tab="history"]').getAttribute('aria-current'), 'step');
+  assert.equal(await page.locator('[data-field="history.allergies"]').inputValue(), encounters.find(entry => entry.id === 'card-c').history.allergies);
+  assert.equal(await page.locator('#repeat-dialog').isVisible(), false);
+  assert.equal(await page.evaluate(key => localStorage.getItem(key), key), initial, 'opening the source for editing does not save it');
+  const changed = 'ДЕМО: уточнённые сведения об аллергии <сохранить дословно>';
+  await page.locator('[data-field="history.allergies"]').fill(changed);
+  const result = await saved(page);
+  assert.equal(result.patients.length, 5);
+  assert.equal(result.encounters.length, encounters.length, 'editing the source creates no extra encounter');
+  const source = result.encounters.find(entry => entry.id === 'card-c');
+  assert.equal(source.history.allergies, changed);
+  assert.equal(source.workflow.reviewStatus, 'draft');
+  assert.equal(source.draft.text, encounters.find(entry => entry.id === 'card-c').draft.text, 'manual draft is not regenerated');
+  for (const original of JSON.parse(initial).encounters.filter(entry => entry.id !== 'card-c')) {
+    assert.deepEqual(result.encounters.find(entry => entry.id === original.id), original, 'another encounter remains unchanged: ' + original.id);
+  }
+  await click(page, 'patient');
+  assert.equal(await patientInformationValue(page, 'allergies').innerText(), changed);
+  assert.equal(await page.locator('#patient-edit-panel').isVisible(), false);
+  assert.match(await page.locator('#patient-history [data-visit-id="card-c"] .record-status').innerText(), /Черновик/);
+  await page.reload(); await openPatientCard(page);
+  assert.equal(await patientInformationValue(page, 'allergies').innerText(), changed);
+});
+
+test('patient information blocks editing stale source details after another window saves and shows the conflict', { timeout: 20000 }, async t => {
+  const { page, context } = await openApp(t);
+  await patientCardFixture(page); await openPatientCard(page);
+  const originalText = await patientInformationValue(page, 'medications').innerText();
+  const second = await context.newPage(); await second.goto(url); await openPatientCard(second);
+  await click(second, 'edit-patient-information');
+  const changed = 'ДЕМО: сведения о препарате из второго окна';
+  await second.locator('[data-field="history.medications"]').fill(changed);
+  await page.waitForFunction(() => document.getElementById('storage-banner').textContent.includes('другом окне'));
+  const persisted = await page.evaluate(key => localStorage.getItem(key), key);
+  await click(page, 'edit-patient-information');
+  assert.equal(await page.locator('#patient-information').isVisible(), true, 'stale window stays on the card');
+  assert.equal(await patientInformationValue(page, 'medications').innerText(), originalText, 'newer information is not silently mixed into the old snapshot');
+  assert.equal(await page.locator('[data-field="history.medications"]').count(), 0, 'stale editor does not open');
+  assert.equal(await page.locator('#storage-banner').isVisible(), true);
+  assert.match(await page.locator('#storage-banner').innerText(), /другом окне/);
+  assert.equal(await page.evaluate(key => localStorage.getItem(key), key), persisted, 'blocked action cannot overwrite data');
+  await page.reload(); await openPatientCard(page);
+  assert.equal(await patientInformationValue(page, 'medications').innerText(), changed);
+  assert.equal((await saved(page)).encounters.length, 9);
+});
+
+test('patient information preserves full escaped long details with readable type and no horizontal overflow', { timeout: 20000 }, async t => {
+  const { page } = await openApp(t);
+  const core = require(path.join(appRoot, 'core.js'));
+  const { patients, encounters } = await patientCardFixture(page);
+  const latest = encounters.find(entry => entry.id === 'card-c');
+  const details = {
+    allergies: 'ДЕМО: <img src="bad" onerror="throw 1"> & сведения об аллергии\n' + 'ДлинноеВымышленноеСведение'.repeat(18),
+    medications: 'ДЕМО: <em>препарат</em> & строка первая\n' + 'Учебные сведения о приёме препарата. '.repeat(18),
+    conditions: 'ДЕМО: <script>throw 1</script> & заболевания\n' + 'Вымышленная история заболевания. '.repeat(18)
+  };
+  Object.assign(latest.history, details);
+  latest.assessment.summary = 'ДЕМО: условный диагноз для проверки читаемости';
+  patients.find(patient => patient.id === 'card-main').label = ('Тестова <Демонстрационная> ' + 'Ф'.repeat(120)).slice(0, 120);
+  const initial = core.serializeBundle(encounters, patients);
+  await page.evaluate(({ key, raw }) => localStorage.setItem(key, raw), { key, raw: initial });
+  await page.reload(); await openPatientCard(page);
+  for (const [field, expected] of Object.entries(details)) {
+    const disclosure = patientInformationValue(page, field).locator('details');
+    assert.equal(await disclosure.getAttribute('open'), null, 'long ' + field + ' starts compact');
+    assert.match(await disclosure.locator('summary').innerText(), /Показать полностью/);
+    assert.equal(await disclosure.locator('p').isVisible(), false);
+    await disclosure.locator('summary').focus(); await page.keyboard.press('Enter');
+    assert.equal(await disclosure.locator('p').isVisible(), true, 'complete ' + field + ' is accessible with the keyboard');
+    assert.equal(await disclosure.locator('p').textContent(), expected.trim());
+  }
+  for (const width of [1366, 800, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'patient details fit width ' + width);
+    for (const [field, expected] of Object.entries(details)) {
+      const value = patientInformationValue(page, field).locator('details > p');
+      assert.equal(await value.textContent(), expected.trim(), 'complete ' + field + ' text is available at ' + width);
+      assert.equal(await value.locator('img,em,script').count(), 0, 'markup is displayed as text');
+      const metrics = await value.evaluate(node => {
+        const style = getComputedStyle(node);
+        return { font: parseFloat(style.fontSize), width: node.clientWidth, scrollWidth: node.scrollWidth, height: node.clientHeight, scrollHeight: node.scrollHeight, clamp: style.webkitLineClamp };
+      });
+      assert.ok(metrics.font >= 14, 'information values use readable type at ' + width);
+      assert.ok(metrics.scrollWidth <= metrics.width + 1 && metrics.scrollHeight <= metrics.height + 1, 'information is not clipped at ' + width);
+      assert.ok(metrics.clamp === 'none' || metrics.clamp === '0', 'information is not line-clamped');
+    }
+    for (const selector of ['#patient-next-return strong', '#patient-history [data-visit-id="card-c"] .visit-text strong', '#patient-history [data-visit-id="card-c"] .record-status']) {
+      assert.ok(await page.locator(selector).evaluate(node => parseFloat(getComputedStyle(node).fontSize)) >= 14, 'important dates and status remain readable at ' + width);
+    }
+    assert.ok(await page.locator('#patient-history [data-visit-id="card-c"] p').filter({ hasText: 'Диагноз: ' + latest.assessment.summary }).evaluate(node => parseFloat(getComputedStyle(node).fontSize)) >= 14, 'diagnosis remains readable at ' + width);
+  }
+  assert.equal(await page.evaluate(key => localStorage.getItem(key), key), initial, 'responsive rendering never rewrites long details');
+});

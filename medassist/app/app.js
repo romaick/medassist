@@ -1,4 +1,4 @@
-(function () {
+(async function () {
   'use strict';
   const core = window.MedAssistCore;
   const repository = window.MedAssistStorage;
@@ -8,6 +8,12 @@
     return;
   }
 
+  let icd;
+  let icdLoadError = '';
+  try {
+    if (!window.MedAssistICDReady) throw new Error('Файл справочника отсутствует.');
+    icd = await window.MedAssistICDReady;
+  } catch (error) { icdLoadError = error.message; }
   const loaded = repository.load();
   const updateScheme = /^#updates=(medassist-update-[a-f0-9]{32})$/.exec(window.location.hash);
   const updateUrl = window.location.protocol === 'file:' && updateScheme ? updateScheme[1] + '://check' : '';
@@ -49,6 +55,7 @@
     ['context', 'Дополнительный анамнез', 'Необязательно. Пустое поле не попадёт в черновик']
   ];
   const examCatalog = window.MedAssistExam;
+  let diagnosisSuggestions = null;
   const vitalFields = [
     ['systolic', 'АД систолическое', 'мм рт. ст.'], ['diastolic', 'АД диастолическое', 'мм рт. ст.'],
     ['pulse', 'Пульс', 'уд/мин'], ['temperature', 'Температура', '°C'],
@@ -109,6 +116,7 @@
   }
 
   function render() {
+    diagnosisSuggestions = null;
     const current = active();
     if (state.view === 'visit' && !current) state.view = 'home';
     if (state.view === 'patient' && !selectedPatient()) state.view = 'patients';
@@ -117,10 +125,10 @@
     app.innerHTML = '<div class="shell"><aside class="sidebar" aria-label="Главная навигация"><div class="brand"><img src="icon.svg" alt=""><div><strong>МедАссистент</strong><small>ПОЛИКЛИНИЧЕСКИЙ РЕЖИМ</small></div></div><p class="nav-caption">РАБОЧЕЕ ПРОСТРАНСТВО</p><nav class="nav">' +
       navButton('home', 'Обзор', 'home') + navButton('patients', 'Пациенты', 'user') + navButton('new', 'Новый пациент', 'plus') +
       (current ? navButton('visit', 'Текущий приём', 'document') : '') + navButton('followups', 'Повторные приёмы', 'calendar') + navButton('modules', 'Модули', 'grid') + navButton('help', 'Помощь и данные', 'help') + navButton('check-updates', 'Проверить обновления', 'download') +
-      '</nav><div class="side-bottom"><div class="local-indicator"><span class="dot"></span>Работает локально</div><div class="version">Прототип 0.9.4 · Демонстрация</div></div></aside><div class="workspace"><header class="topbar"><div class="topbar-left">Поликлиника <span aria-hidden="true">/</span> <span>' + sectionName + '</span></div><div class="topbar-right"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><span class="avatar" aria-hidden="true">МА</span></div></header><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
+      '</nav><div class="side-bottom"><div class="local-indicator"><span class="dot"></span>Работает локально</div><div class="version">Прототип 0.10.0 · Демонстрация</div></div></aside><div class="workspace"><header class="topbar"><div class="topbar-left">Поликлиника <span aria-hidden="true">/</span> <span>' + sectionName + '</span></div><div class="topbar-right"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><span class="avatar" aria-hidden="true">МА</span></div></header><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
       (state.migrated ? '<div class="migration-notice">Прежние записи доступны со статусом «Черновик». Карточки, данные и ручные тексты сохранены. Исходное сохранение предыдущей версии не изменяется.</div>' : '') +
       ({home: renderHome, patients: renderPatients, followups: renderFollowups, patient: renderPatient, visit: renderVisit, modules: renderModules, help: renderHelp}[state.view])() +
-      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.9.4</span></footer></main></div></div>';
+      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.10.0</span></footer></main></div></div>';
     updateClock();
     updateSaveStatus();
     if (state.view === 'visit') { updateValidation(); updateDraftState(); updateReviewState(); }
@@ -613,9 +621,70 @@
   function renderExam() {
     return '<div class="exam-workspace"><section class="card form-card"><h2>Осмотр</h2><p class="section-intro">Выберите только оценённые признаки. Пустой раздел не означает норму.</p><section class="exam-measurements" aria-labelledby="exam-measurements-heading"><h3 id="exam-measurements-heading">Измеренные показатели</h3><div class="field-grid exam-vitals-grid">' + vitalFields.map(([key, title, unit]) => field('vitals.' + key, title, 'Не указано', {type: 'text', numeric: true, hint: unit})).join('') + renderBmi() + '</div></section><div class="exam-toolbar"><h3>Описание осмотра</h3><div class="actions">' + button('normal-exam', 'Осмотр без особенностей', 'check') + button('expand-exam', 'Раскрыть все', null, 'ghost') + button('collapse-exam', 'Свернуть все', null, 'ghost') + '</div></div><p class="exam-normal-hint">Кнопка у раздела заполняет его признаки; общая — весь осмотр. Уточнения и показатели сохраняются.</p>' + examCatalog.SECTIONS.map(renderExamGroup).join('') + '<div class="form-section">' + field('exam.other', 'Другие данные осмотра', 'Необязательно. Пустое поле не попадёт в черновик') + '</div></section></div>';
   }
+  function renderDiagnosis() {
+    const id = 'field-assessment-summary';
+    if (!icd) return field('assessment.summary', 'Диагноз', 'Введите диагноз самостоятельно', {hint: 'Справочник МКБ не загрузился: ' + icdLoadError + ' Можно сохранить собственную формулировку диагноза.'});
+    return '<div class="field diagnosis-field"><label for="' + id + '">Диагноз</label>' +
+      '<textarea id="' + id + '" data-field="assessment.summary" rows="3" maxlength="10000" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="diagnosis-options" aria-describedby="diagnosis-hint ' + id + '-error" placeholder="Начните вводить диагноз или код МКБ-10">' + escape(active().assessment.summary) + '</textarea>' +
+      '<div id="diagnosis-suggestions" class="diagnosis-suggestions" hidden><p id="diagnosis-result-count" role="status" aria-live="polite"></p><div id="diagnosis-options" role="listbox" aria-label="Подсказки МКБ-10"></div></div>' +
+      '<p class="hint" id="diagnosis-hint">Выберите подсказку или оставьте свою формулировку. После выбора диагноз можно уточнить. Каждый диагноз — с новой строки; выбор заменит текущую строку. ↓ ↑ — выбор, Enter — вставить, Esc — закрыть.</p>' +
+      '<p class="field-error" id="' + id + '-error" hidden></p><details class="icd-source"><summary>О справочнике МКБ-10</summary><p>' + escape(icd.metadata.publisher + '. ' + icd.metadata.release) + '. Записей: ' + icd.size + '. Дата проверки: ' + escape(icd.metadata.checkedAt) + '.</p><p>' + escape(icd.metadata.note) + '</p><a href="' + escape(icd.metadata.sourceUrl) + '" target="_blank" rel="noopener noreferrer">Источник справочника (интернет)</a></details></div>';
+  }
+  function closeDiagnosisSuggestions() {
+    diagnosisSuggestions = null;
+    const control = document.getElementById('field-assessment-summary');
+    const panel = document.getElementById('diagnosis-suggestions');
+    if (panel) panel.hidden = true;
+    if (control) { control.setAttribute('aria-expanded', 'false'); control.removeAttribute('aria-activedescendant'); }
+  }
+  function showDiagnosisSuggestions(control) {
+    if (!icd || !active() || !document.getElementById('diagnosis-options')) return;
+    const start = control.selectionStart === 0 ? 0 : control.value.lastIndexOf('\n', control.selectionStart - 1) + 1;
+    const nextLine = control.value.indexOf('\n', control.selectionStart);
+    const end = nextLine === -1 ? control.value.length : nextLine;
+    if (control.selectionEnd > end) { closeDiagnosisSuggestions(); return; }
+    const query = control.value.slice(start, end).trim();
+    if (query.length < 2) { closeDiagnosisSuggestions(); return; }
+    const result = icd.search(query);
+    diagnosisSuggestions = {entryId: active().id, value: control.value, start, end, items: result.items, selected: -1};
+    const panel = document.getElementById('diagnosis-suggestions');
+    document.getElementById('diagnosis-options').innerHTML = result.items.map((item, index) => '<div class="diagnosis-option" id="diagnosis-option-' + index + '" role="option" aria-selected="false" data-action="select-diagnosis" data-code="' + escape(item.code) + '"><span><strong>' + escape(item.title) + '</strong><small>' + (item.parent ? escape(item.parent.code + ' · ' + item.parent.title) : item.kind === 'category' ? 'Рубрика' : 'Подрубрика') + '</small></span><span class="diagnosis-code">' + escape(item.code) + '</span></div>').join('');
+    document.getElementById('diagnosis-result-count').textContent = result.total ? (result.total > result.items.length ? 'Показано ' + result.items.length + ' из ' + result.total + '. Уточните название или код.' : 'Совпадений: ' + result.total + '. Выберите нужную формулировку.') : 'Совпадений в этом справочнике нет. Можно оставить введённый диагноз.';
+    panel.hidden = false;
+    document.getElementById('diagnosis-options').scrollTop = 0;
+    control.setAttribute('aria-expanded', 'true'); control.removeAttribute('aria-activedescendant');
+  }
+  function highlightDiagnosisSuggestion(index) {
+    const suggestions = diagnosisSuggestions;
+    if (!suggestions || !suggestions.items.length) return;
+    suggestions.selected = Math.max(0, Math.min(index, suggestions.items.length - 1));
+    const options = document.getElementById('diagnosis-options');
+    Array.from(options.children).forEach((option, position) => option.setAttribute('aria-selected', String(position === suggestions.selected)));
+    const selected = options.children[suggestions.selected];
+    document.getElementById('field-assessment-summary').setAttribute('aria-activedescendant', selected.id);
+    if (selected.offsetTop < options.scrollTop) options.scrollTop = selected.offsetTop;
+    if (selected.offsetTop + selected.offsetHeight > options.scrollTop + options.clientHeight) options.scrollTop = selected.offsetTop + selected.offsetHeight - options.clientHeight;
+  }
+  function selectDiagnosis(code) {
+    const suggestions = diagnosisSuggestions;
+    const control = document.getElementById('field-assessment-summary');
+    if (!suggestions || !control || !active() || suggestions.entryId !== active().id || suggestions.value !== control.value) { closeDiagnosisSuggestions(); return; }
+    if (control.selectionStart < suggestions.start || control.selectionStart > suggestions.end || control.selectionEnd > suggestions.end) { showDiagnosisSuggestions(control); return; }
+    const item = suggestions.items.find(item => item.code === code);
+    if (!item || !requireFreshState()) return;
+    const text = item.title + ' (' + item.code + ')';
+    const value = control.value.slice(0, suggestions.start) + text + control.value.slice(suggestions.end);
+    if (value.length > control.maxLength) { toast('Диагноз слишком длинный. Сократите текущую строку перед выбором.', true); return; }
+    control.value = value;
+    handleInput({target: control});
+    control.focus({preventScroll: true});
+    const caret = suggestions.start + text.length;
+    control.setSelectionRange(caret, caret);
+    closeDiagnosisSuggestions();
+  }
   function renderDraft() {
     return '<div class="draft-layout"><section class="card draft-controls"><h2>Диагноз и рекомендации</h2><p class="section-intro">Заполняет врач. Рекомендации, повторный приём и больничный включаются в текст только при заполнении или явной отметке.</p>' +
-      field('assessment.summary', 'Диагноз', 'Введите диагноз самостоятельно') + field('assessment.plan', 'Рекомендации', 'Необязательно. Пустое поле не попадёт в черновик') +
+      renderDiagnosis() + field('assessment.plan', 'Рекомендации', 'Необязательно. Пустое поле не попадёт в черновик') +
       (active().assessment.followUp.trim() ? '<div class="legacy-note"><p>Сохранено из предыдущей версии. Перенесите нужное в рекомендации или выберите дату, затем очистите старый текст, если он больше не нужен.</p>' + field('assessment.followUp', 'Наблюдение из предыдущей версии', '') + '</div>' : '') +
       field('assessment.sickLeaveIssued', 'Листок нетрудоспособности', '', {select: [['', 'Не отмечено — не включать'], ['no', 'Не выдавался — не включать'], ['yes', 'Выдан']], hint: 'Это только отметка в черновике, не оформление документа.'}) +
       '<div id="sickleave-period"' + (active().assessment.sickLeaveIssued === 'yes' ? '' : ' hidden') + '>' + field('assessment.sickLeaveNumber', 'Номер листка нетрудоспособности', 'Введите номер вручную', {type: 'text'}) + '<div class="field-grid">' + field('assessment.sickLeaveFrom', 'Период: с', '', {type: 'date'}) + field('assessment.sickLeaveTo', 'По', '', {type: 'date'}) + '</div><div class="sickleave-duration"><label for="sickleave-days">Календарных дней</label><output id="sickleave-days" for="field-assessment-sickLeaveFrom field-assessment-sickLeaveTo" aria-live="polite" aria-describedby="sickleave-days-hint">' + (core.calculateSickLeaveDays(active().assessment.sickLeaveFrom, active().assessment.sickLeaveTo) ?? '—') + '</output><p id="sickleave-days-hint">По указанному периоду: обе даты и выходные включены. Для расчёта нужны корректные начало и окончание.</p></div></div>' +
@@ -751,6 +820,7 @@
     window.scrollTo({top: 0});
   }
   async function handleAction(action, target) {
+    if (action === 'select-diagnosis') { selectDiagnosis(target.dataset.code); return; }
     if (['new', 'example', 'open', 'repeat', 'start-followup', 'edit-patient-information'].includes(action) && !canReplaceActive()) return;
     if (action === 'edit-patient-information') {
       if (state.view !== 'patient' || !requireFreshState()) return;
@@ -945,6 +1015,8 @@
     }
   }
   app.addEventListener('click', (event) => {
+    if (event.target.id === 'field-assessment-summary') showDiagnosisSuggestions(event.target);
+    else if (!event.target.closest('#diagnosis-suggestions')) closeDiagnosisSuggestions();
     const target = event.target.closest('[data-action]');
     if (target && target.dataset.action === 'normal-exam-section') event.preventDefault();
     if (target && !target.disabled) handleAction(target.dataset.action, target).catch((error) => toast(error.message, true));
@@ -1004,9 +1076,34 @@
       if (group) group.querySelector('.exam-preview').innerHTML = renderExamSummary(examCatalog.SECTIONS.find(section => section.id === group.dataset.examSection));
     }
     updateValidation(); persist(); updateDraftState(); updateReviewState();
+    if (control.dataset.field === 'assessment.summary') {
+      if (event.isComposing) closeDiagnosisSuggestions(); else showDiagnosisSuggestions(control);
+    }
     if (planReset || reviewReset) toast((planReset ? 'Дата изменена: отметка и связь с повторным приёмом сброшены. Сам приём сохранён в истории. ' : '') + (reviewReset ? 'Запись возвращена в черновики.' : ''));
   }
   app.addEventListener('input', handleInput);
+  app.addEventListener('focusin', (event) => { if (event.target.id === 'field-assessment-summary') showDiagnosisSuggestions(event.target); });
+  app.addEventListener('focusout', (event) => { if (event.target.id === 'field-assessment-summary') closeDiagnosisSuggestions(); });
+  app.addEventListener('pointerdown', (event) => { if (event.button === 0 && event.target.closest('.diagnosis-option')) event.preventDefault(); });
+  app.addEventListener('compositionend', (event) => { if (event.target.id === 'field-assessment-summary') showDiagnosisSuggestions(event.target); });
+  app.addEventListener('keyup', (event) => {
+    if (event.target.id !== 'field-assessment-summary' || event.isComposing) return;
+    if (['Home', 'End', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown'].includes(event.key) || ((event.ctrlKey || event.metaKey || event.shiftKey) && ['ArrowUp', 'ArrowDown', 'a', 'A'].includes(event.key))) showDiagnosisSuggestions(event.target);
+  });
+  app.addEventListener('keydown', (event) => {
+    if (event.target.id !== 'field-assessment-summary' || event.isComposing) return;
+    if (event.key === 'Escape') { if (diagnosisSuggestions) event.preventDefault(); closeDiagnosisSuggestions(); return; }
+    if (event.key === 'Tab') { closeDiagnosisSuggestions(); return; }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      if (event.ctrlKey || event.metaKey || event.shiftKey) { closeDiagnosisSuggestions(); return; }
+      if (!diagnosisSuggestions) showDiagnosisSuggestions(event.target);
+      if (!diagnosisSuggestions?.items.length) return;
+      event.preventDefault();
+      highlightDiagnosisSuggestion(diagnosisSuggestions.selected + (event.key === 'ArrowDown' ? 1 : -1));
+    } else if (event.key === 'Enter' && diagnosisSuggestions?.selected >= 0) {
+      event.preventDefault(); selectDiagnosis(diagnosisSuggestions.items[diagnosisSuggestions.selected].code);
+    }
+  });
   app.addEventListener('change', (event) => { if (event.target.tagName === 'SELECT') handleInput(event); });
   document.getElementById('import-file').addEventListener('change', async (event) => {
     const file = event.target.files[0];

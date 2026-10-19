@@ -4,7 +4,8 @@
   else root.MedAssistStorage = factory(root.MedAssistCore, root);
 })(typeof globalThis !== "undefined" ? globalThis : this, function (core, root) {
   "use strict";
-  const KEY = "medassist.demo.v2";
+  const KEY = "medassist.demo.v3";
+  const PREVIOUS_KEY = "medassist.demo.v2";
   const LEGACY_KEY = "medassist.demo.v1";
 
   function describe(error) {
@@ -29,34 +30,38 @@
         let raw = storage.getItem(KEY);
         let migrated = false;
         if (raw === null) {
+          raw = storage.getItem(PREVIOUS_KEY);
+          migrated = raw !== null;
+        }
+        if (raw === null) {
           raw = storage.getItem(LEGACY_KEY);
           migrated = raw !== null;
         }
-        const encounters = raw === null ? [] : core.parseBundle(raw).encounters;
+        const { patients, encounters } = raw === null ? { patients: [], encounters: [] } : core.parseBundle(raw);
         checked = true;
         blocked = null;
-        return migrated ? { encounters, error: null, migrated: true } : { encounters, error: null };
+        return migrated ? { patients, encounters, error: null, migrated: true } : { patients, encounters, error: null };
       } catch (error) {
         checked = true;
         blocked = "Не удалось прочитать локальное сохранение. Автоматическая запись остановлена, исходные данные не изменены. " + describe(error);
-        return { encounters: [], error: blocked };
+        return { patients: [], encounters: [], error: blocked };
       }
     }
 
-    function save(encounters) {
+    function save(encounters, patients) {
       if (!checked) load();
       if (blocked) return { ok: false, error: blocked };
       try {
-        target().setItem(KEY, core.serializeBundle(encounters));
+        target().setItem(KEY, core.serializeBundle(encounters, patients));
         return { ok: true, error: null };
       } catch (error) {
         return { ok: false, error: "Не удалось сохранить данные в браузере. " + describe(error) };
       }
     }
 
-    function reset(encounters = []) {
+    function reset(encounters = [], patients = []) {
       try {
-        target().setItem(KEY, core.serializeBundle(encounters));
+        target().setItem(KEY, core.serializeBundle(encounters, patients));
         checked = true;
         blocked = null;
         return { ok: true, error: null };
@@ -69,5 +74,5 @@
   }
 
   const repository = createRepository(() => root.localStorage);
-  return Object.freeze({ KEY, LEGACY_KEY, createRepository, load: repository.load, save: repository.save, reset: repository.reset });
+  return Object.freeze({ KEY, PREVIOUS_KEY, LEGACY_KEY, createRepository, load: repository.load, save: repository.save, reset: repository.reset });
 });

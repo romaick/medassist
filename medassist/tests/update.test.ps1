@@ -26,15 +26,15 @@ function Check {
 }
 
 function New-FixturePackage {
-    param([string]$Version = '0.3.0')
+    param([string]$Version = '0.3.0', [int]$DataSchemaVersion = 2)
     $files = @()
     foreach ($name in $script:MedAssistAppFiles) {
         $content = 'Fixture file: ' + $name + ' version: ' + $Version
-        if ($name -ceq 'version.json') { $content = @{version = $Version; dataSchemaVersion = 2} | ConvertTo-Json -Compress }
+        if ($name -ceq 'version.json') { $content = @{version = $Version; dataSchemaVersion = $DataSchemaVersion} | ConvertTo-Json -Compress }
         $bytes = [Text.Encoding]::UTF8.GetBytes($content)
         $files += [pscustomobject]@{ name = $name; sha256 = Get-UpdateHash $bytes; contentBase64 = [Convert]::ToBase64String($bytes) }
     }
-    return [pscustomobject]@{ format = 'medassist-update'; formatVersion = 1; version = $Version; dataSchemaVersion = 2; files = $files }
+    return [pscustomobject]@{ format = 'medassist-update'; formatVersion = 1; version = $Version; dataSchemaVersion = $DataSchemaVersion; files = $files }
 }
 
 function Parse-Fixture {
@@ -79,8 +79,10 @@ function New-InterruptedFixture {
 }
 
 Check 'Strict valid bundle parsing and version metadata' {
-    $package = Parse-Fixture (New-FixturePackage)
-    Assert-True ($package.Version -ceq '0.3.0' -and $package.Files.Count -eq 9) 'Valid bundle did not load.'
+    foreach ($schema in @(2, 3)) {
+        $package = Parse-Fixture (New-FixturePackage -DataSchemaVersion $schema)
+        Assert-True ($package.Version -ceq '0.3.0' -and $package.DataSchemaVersion -eq $schema -and $package.Files.Count -eq 9) 'Valid bundle did not load.'
+    }
 }
 
 Check 'Valid update, retained backup and unrelated files preserved' {
@@ -102,6 +104,20 @@ Check 'Same version is skipped and downgrade is rejected' {
     Assert-True ($result.Status -ceq 'current') 'Same version should not be reinstalled.'
     Expect-Error { Apply-MedAssistUpdate $directory (Parse-Fixture (New-FixturePackage '0.1.0')) } 'Downgrade was accepted.'
     Assert-True ((Read-UpdateVersionJson ([IO.File]::ReadAllText((Join-Path $directory 'app/version.json')))).version -ceq '0.2.0') 'Skipped or rejected update changed the app.'
+}
+
+Check 'Schema 2 upgrades to 3 and subsequent schema 3 updates remain compatible' {
+    $directory = New-FixtureInstall
+    $result = Apply-MedAssistUpdate $directory (Parse-Fixture (New-FixturePackage '0.6.0' 3))
+    $installed = Read-UpdateVersionJson ([IO.File]::ReadAllText((Join-Path $directory 'app/version.json')))
+    $backup = Read-UpdateVersionJson ([IO.File]::ReadAllText((Join-Path $result.BackupPath 'version.json')))
+    Assert-True ($result.Status -ceq 'updated' -and $installed.version -ceq '0.6.0' -and $installed.dataSchemaVersion -eq 3) 'Schema 3 application was not installed.'
+    Assert-True ($backup.version -ceq '0.2.0' -and $backup.dataSchemaVersion -eq 2) 'Schema 2 application was not retained.'
+    Assert-True ([IO.File]::ReadAllText((Join-Path $directory 'user-backup.json')) -ceq 'fictional saved user data') 'Schema update changed unrelated data.'
+    $result = Apply-MedAssistUpdate $directory (Parse-Fixture (New-FixturePackage '0.6.1' 3))
+    Assert-True ($result.Status -ceq 'updated' -and $result.PreviousVersion -ceq '0.6.0') 'Installed schema 3 application cannot be updated.'
+    $current = Apply-MedAssistUpdate $directory (Parse-Fixture (New-FixturePackage '0.6.1' 3))
+    Assert-True ($current.Status -ceq 'current') 'Current schema 3 application was not recognized.'
 }
 
 Check 'Checksum corruption is rejected before installation' {
@@ -127,7 +143,7 @@ Check 'Malformed JSON, unsupported schemas, extra fields and wrong types are rej
         $document = New-FixturePackage
         $document.$field = '2'
         Expect-Error { Parse-Fixture $document } 'A string schema version was accepted.'
-        $document.$field = 9
+        $document.$field = 999
         Expect-Error { Parse-Fixture $document } 'An unsupported schema version was accepted.'
     }
     $document = New-FixturePackage
@@ -144,11 +160,25 @@ Check 'Package metadata and version.json must agree' {
     $document = New-FixturePackage
     $document.version = '0.4.0'
     Expect-Error { Parse-Fixture $document } 'Inconsistent version.json accepted.'
-    $document = New-FixturePackage
-    $bytes = [Text.Encoding]::UTF8.GetBytes('{"version":"0.3.0","dataSchemaVersion":3}')
-    $document.files[8].contentBase64 = [Convert]::ToBase64String($bytes)
-    $document.files[8].sha256 = Get-UpdateHash $bytes
-    Expect-Error { Parse-Fixture $document } 'Unsupported nested schema accepted.'
+    foreach ($schema in @(2, 3)) {
+        $document = New-FixturePackage -DataSchemaVersion $schema
+        $document.dataSchemaVersion = 5 - $schema
+        Expect-Error { Parse-Fixture $document } 'Mismatched data schemas accepted.'
+    }
+}
+
+Check 'Local and nested metadata reject unsupported and non-integer data schemas' {
+    foreach ($schemaJson in @('999', '1', '0', '-1', '"2"', '"3"', '2.0', '3.0', 'true', 'null', '[2]', '{}')) {
+        $json = '{"version":"0.3.0","dataSchemaVersion":' + $schemaJson + '}'
+        Expect-Error { Read-UpdateVersionJson $json } ('Invalid local data schema accepted: ' + $schemaJson)
+        $document = New-FixturePackage
+        $bytes = [Text.Encoding]::UTF8.GetBytes($json)
+        $document.files[8].contentBase64 = [Convert]::ToBase64String($bytes)
+        $document.files[8].sha256 = Get-UpdateHash $bytes
+        Expect-Error { Parse-Fixture $document } ('Invalid nested data schema accepted: ' + $schemaJson)
+        $bundleJson = (New-FixturePackage | ConvertTo-Json -Depth 8 -Compress).Replace('"dataSchemaVersion":2', '"dataSchemaVersion":' + $schemaJson)
+        Expect-Error { Load-UpdatePackage $bundleJson } ('Invalid package data schema accepted: ' + $schemaJson)
+    }
 }
 
 Check 'Malformed Base64, response limits and decoded limits are enforced' {

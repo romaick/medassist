@@ -6,13 +6,15 @@ const path = require("node:path");
 const vm = require("node:vm");
 const core = require("../app/core.js");
 const examCatalog = require("../app/exam-options.js");
-const { createRepository, KEY, LEGACY_KEY } = require("../app/storage.js");
+const { createRepository, KEY, PREVIOUS_KEY, LEGACY_KEY } = require("../app/storage.js");
 const NOW = "2026-10-19T09:30:00.000Z";
 
 function encounter(id = "test-visit-1") { return core.createEncounter({ now: NOW, id }); }
-function bundle(encounters) { return JSON.parse(core.serializeBundle(encounters)); }
-function memoryStorage(initial = null, legacy = null) {
-  const values = new Map([[KEY, initial], [LEGACY_KEY, legacy]]);
+function patientsFor(encounters) { return [...new Set(encounters.map(data => data.patientId))].map(id => core.createPatient({ id, now: NOW })); }
+function serialize(encounters, patients = patientsFor(encounters)) { return core.serializeBundle(encounters, patients); }
+function bundle(encounters, patients = patientsFor(encounters)) { return JSON.parse(serialize(encounters, patients)); }
+function memoryStorage(initial = null, legacy = null, previous = null) {
+  const values = new Map([[KEY, initial], [PREVIOUS_KEY, previous], [LEGACY_KEY, legacy]]);
   let writes = 0;
   const reads = [];
   return {
@@ -20,13 +22,22 @@ function memoryStorage(initial = null, legacy = null) {
     setItem(key, value) { assert.equal(key, KEY); values.set(key, value); writes += 1; },
     get raw() { return values.get(KEY); },
     get legacyRaw() { return values.get(LEGACY_KEY); },
+    get previousRaw() { return values.get(PREVIOUS_KEY); },
     get reads() { return reads; },
     get writes() { return writes; }
   };
 }
 
-function legacyBundle(data = encounter()) {
+function previousBundle(data = encounter()) {
   const value = bundle([data]);
+  value.schemaVersion = 2;
+  delete value.patients;
+  delete value.encounters[0].patientId;
+  return value;
+}
+
+function legacyBundle(data = encounter()) {
+  const value = previousBundle(data);
   value.schemaVersion = 1;
   delete value.encounters[0].examSelections;
   for (const field of ["returnVisitDate", "sickLeaveIssued", "sickLeaveNumber", "sickLeaveFrom", "sickLeaveTo"]) delete value.encounters[0].assessment[field];
@@ -42,7 +53,7 @@ test("new encounters have independent, valid empty fields and a local visit date
   first.history.complaints = "Changed";
   assert.equal(second.history.complaints, "");
   assert.equal(first.draft.text, "");
-  assert.equal(core.SCHEMA_VERSION, 2);
+  assert.equal(core.SCHEMA_VERSION, 3);
   assert.deepEqual(Object.keys(first.examSelections), examCatalog.FIELDS.map(field => field.id));
   assert.ok(Object.values(first.examSelections).every(value => value === ""));
   assert.equal(core.createDemoEncounter({ now: NOW }).assessment.followUp, "");
@@ -178,7 +189,7 @@ test("sick leave is generated only when issued, with optional dates and validate
   for (const status of ["", "no"]) {
     data.assessment.sickLeaveIssued = status;
     assert.doesNotMatch(core.generateDraft(data), /Листок нетрудоспособности|19\.10\.2026 по 22\.10\.2026/);
-    assert.deepEqual(core.parseBundle(core.serializeBundle([data])).encounters[0].assessment, data.assessment);
+    assert.deepEqual(core.parseBundle(serialize([data])).encounters[0].assessment, data.assessment);
   }
   data.assessment.sickLeaveIssued = "yes";
   assert.match(core.generateDraft(data), /Листок нетрудоспособности: выдан\. Период: с 19\.10\.2026 по 22\.10\.2026\./);
@@ -232,7 +243,7 @@ test("sick leave number is entered manually, precedes dates and is omitted with 
     data.assessment.sickLeaveIssued = status;
     const draft = core.generateDraft(data);
     assert.doesNotMatch(draft, /ДЕМО-АБ\/12345|Листок нетрудоспособности|Период:/);
-    assert.equal(core.parseBundle(core.serializeBundle([data])).encounters[0].assessment.sickLeaveNumber, data.assessment.sickLeaveNumber);
+    assert.equal(core.parseBundle(serialize([data])).encounters[0].assessment.sickLeaveNumber, data.assessment.sickLeaveNumber);
   }
   data.assessment.sickLeaveIssued = "yes";
   assert.match(core.generateDraft(data), /Листок нетрудоспособности: выдан\. № ДЕМО-АБ\/12345\. Период: с 19\.10\.2026 по 22\.10\.2026\./);
@@ -300,7 +311,7 @@ test("JSON round trip preserves manual draft independently of edited source fiel
   data.draft.generatedAt = NOW;
   data.draft.sourceFingerprint = core.fingerprint(data);
   data.history.complaints = "Обновлённое поле без перезаписи черновика";
-  const restored = core.parseBundle("\uFEFF" + core.serializeBundle([data])).encounters[0];
+  const restored = core.parseBundle("\uFEFF" + serialize([data])).encounters[0];
   assert.deepEqual(restored, data);
   assert.notEqual(restored.draft.sourceFingerprint, core.fingerprint(restored));
   assert.equal(restored.draft.text, data.draft.text);
@@ -318,7 +329,7 @@ test("version 1 import preserves every original field and manual draft while add
   const oldBefore = JSON.stringify(oldBundle);
   const restoredBundle = core.parseBundle(oldBefore);
   const restored = restoredBundle.encounters[0];
-  assert.equal(restoredBundle.schemaVersion, 2);
+  assert.equal(restoredBundle.schemaVersion, 3);
   assert.equal(restoredBundle.exportedAt, oldBundle.exportedAt);
   for (const [key, value] of Object.entries(oldBundle.encounters[0])) {
     if (key === "assessment") {
@@ -330,9 +341,9 @@ test("version 1 import preserves every original field and manual draft while add
   assert.deepEqual(restored.draft, original.draft);
   assert.notEqual(core.fingerprint(restored), restored.draft.sourceFingerprint);
   assert.equal(JSON.stringify(oldBundle), oldBefore);
-  assert.deepEqual(core.parseBundle(core.serializeBundle([restored])).encounters[0], restored);
+  assert.deepEqual(core.parseBundle(serialize([restored])).encounters[0], restored);
   assert.ok(core.validateEncounter(oldBundle.encounters[0]).length);
-  assert.throws(() => core.validateBundle(oldBundle), /версия/);
+  assert.throws(() => core.validateBundle(oldBundle), /структура|версия/);
 });
 
 test("version 1 import rejects invalid legacy data before migration instead of discarding it", () => {
@@ -441,7 +452,7 @@ test("BMI is derived after old-schema import without adding fields to stored or 
     assert.equal(core.calculateBmi(restored.vitals.weight, restored.vitals.height), "23,7");
     assert.match(core.generateDraft(restored), /Индекс массы тела: 23,7 кг\/м²\./);
     const exported = bundle([restored]);
-    assert.equal(exported.schemaVersion, 2);
+    assert.equal(exported.schemaVersion, 3);
     assert.deepEqual(exported.encounters[0], restored);
     assert.deepEqual(exported.encounters[0].vitals, data.vitals);
   }
@@ -452,16 +463,16 @@ test("import rejects unsupported format, version, duplicates, malformed JSON and
   assert.throws(() => core.validateBundle([]), /объектом/);
   const valid = bundle([encounter()]);
   assert.throws(() => core.validateBundle({ ...valid, format: "other" }), /не является/);
-  assert.throws(() => core.validateBundle({ ...valid, schemaVersion: 3 }), /версия/);
+  assert.throws(() => core.validateBundle({ ...valid, schemaVersion: 4 }), /версия/);
   assert.throws(() => core.validateBundle({ ...valid, encounters: [encounter(), encounter()] }), /повторяется/);
   assert.throws(() => core.validateBundle({ ...valid, encounters: "wrong" }), /массивом/);
   assert.throws(() => core.validateBundle({ ...valid, exportedAt: "yesterday" }), /дата/);
   assert.throws(() => core.validateBundle({ ...valid, unexpected: true }), /структура/);
   const oversized = encounter(); oversized.history.complaints = "x".repeat(10001);
-  assert.throws(() => core.serializeBundle([oversized]), /10000/);
+  assert.throws(() => serialize([oversized]), /10000/);
   oversized.history.complaints = ""; oversized.draft.text = "x".repeat(100001);
-  assert.throws(() => core.serializeBundle([oversized]), /100000/);
-  assert.throws(() => core.serializeBundle(Array.from({ length: 501 }, (_, i) => encounter("visit-" + i))), /500/);
+  assert.throws(() => serialize([oversized]), /100000/);
+  assert.throws(() => serialize(Array.from({ length: 501 }, (_, i) => encounter("visit-" + i))), /500/);
 });
 
 test("bundle normalization returns detached values and rejects unknown prototype-like keys", () => {
@@ -484,10 +495,10 @@ test("an oversized generated note is refused without altering source data", () =
 test("repository persists valid data and restores manual edits after reload", () => {
   const storage = memoryStorage();
   const first = createRepository(storage);
-  assert.deepEqual(first.load(), { encounters: [], error: null });
+  assert.deepEqual(first.load(), { patients: [], encounters: [], error: null });
   const data = encounter(); data.draft.text = "Сохранённая ручная правка";
-  assert.deepEqual(first.save([data]), { ok: true, error: null });
-  assert.deepEqual(createRepository(storage).load(), { encounters: [data], error: null });
+  assert.deepEqual(first.save([data], patientsFor([data])), { ok: true, error: null });
+  assert.deepEqual(createRepository(storage).load(), { patients: patientsFor([data]), encounters: [data], error: null });
 });
 
 test("legacy storage is migrated in memory and kept untouched by read, save and reset", () => {
@@ -506,62 +517,62 @@ test("legacy storage is migrated in memory and kept untouched by read, save and 
   assert.equal(storage.writes, 0);
   assert.equal(storage.raw, null);
   assert.equal(storage.legacyRaw, legacy);
-  assert.equal(repository.save(result.encounters).ok, true);
-  assert.equal(JSON.parse(storage.raw).schemaVersion, 2);
+  assert.equal(repository.save(result.encounters, result.patients).ok, true);
+  assert.equal(JSON.parse(storage.raw).schemaVersion, 3);
   assert.equal(storage.legacyRaw, legacy);
   assert.equal(createRepository(storage).load().migrated, undefined);
   assert.equal(repository.reset([]).ok, true);
-  assert.deepEqual(repository.load(), { encounters: [], error: null });
+  assert.deepEqual(repository.load(), { patients: [], encounters: [], error: null });
   assert.equal(storage.legacyRaw, legacy);
 });
 
-test("version 2 storage takes priority and corrupt version 2 never falls back to the legacy copy", () => {
+test("version 3 storage takes priority and corrupt version 3 never falls back to older copies", () => {
   const legacy = JSON.stringify(legacyBundle());
-  const storage = memoryStorage(core.serializeBundle([]), legacy);
-  assert.deepEqual(createRepository(storage).load(), { encounters: [], error: null });
+  const storage = memoryStorage(serialize([]), legacy);
+  assert.deepEqual(createRepository(storage).load(), { patients: [], encounters: [], error: null });
   assert.deepEqual(storage.reads, [KEY]);
   const corrupt = memoryStorage("{broken", legacy);
   const repository = createRepository(corrupt);
   assert.match(repository.load().error, /Автоматическая запись остановлена/);
-  assert.equal(repository.save([]).ok, false);
+  assert.equal(repository.save([], []).ok, false);
   assert.deepEqual(corrupt.reads, [KEY]);
   assert.equal(corrupt.raw, "{broken");
   assert.equal(corrupt.legacyRaw, legacy);
   assert.equal(corrupt.writes, 0);
 });
 
-test("corrupt legacy storage blocks ordinary saves and reset affects only the version 2 key", () => {
+test("corrupt legacy storage blocks ordinary saves and reset affects only the version 3 key", () => {
   const storage = memoryStorage(null, "{broken legacy");
   const repository = createRepository(storage);
-  assert.equal(repository.save([encounter()]).ok, false);
+  assert.equal(repository.save([encounter()], patientsFor([encounter()])).ok, false);
   assert.equal(storage.writes, 0);
   assert.equal(storage.raw, null);
   assert.equal(storage.legacyRaw, "{broken legacy");
   assert.equal(repository.reset([]).ok, true);
   assert.equal(storage.legacyRaw, "{broken legacy");
-  assert.deepEqual(repository.load(), { encounters: [], error: null });
+  assert.deepEqual(repository.load(), { patients: [], encounters: [], error: null });
 });
 
 test("corrupt data is never overwritten by ordinary save, even if load was not called", () => {
   const storage = memoryStorage("{broken");
   const repository = createRepository(storage);
-  assert.equal(repository.save([encounter()]).ok, false);
+  assert.equal(repository.save([encounter()], patientsFor([encounter()])).ok, false);
   assert.match(repository.load().error, /Автоматическая запись остановлена/);
   assert.equal(storage.raw, "{broken");
   assert.equal(storage.writes, 0);
-  assert.equal(repository.reset([encounter()]).ok, true);
+  assert.equal(repository.reset([encounter()], patientsFor([encounter()])).ok, true);
   assert.equal(repository.load().error, null);
   assert.equal(repository.load().encounters.length, 1);
-  assert.equal(repository.save([]).ok, true);
+  assert.equal(repository.save([], []).ok, true);
 });
 
 test("invalid saves and resets leave previously stored data intact", () => {
-  const initial = core.serializeBundle([encounter()]);
+  const initial = serialize([encounter()]);
   const storage = memoryStorage(initial);
   const repository = createRepository(storage);
   const invalid = encounter(); invalid.age = "not a number";
-  assert.equal(repository.save([invalid]).ok, false);
-  assert.equal(repository.reset([invalid]).ok, false);
+  assert.equal(repository.save([invalid], patientsFor([invalid])).ok, false);
+  assert.equal(repository.reset([invalid], patientsFor([invalid])).ok, false);
   assert.equal(storage.raw, initial);
   assert.equal(storage.writes, 0);
 });
@@ -569,11 +580,215 @@ test("invalid saves and resets leave previously stored data intact", () => {
 test("denied storage access and quota failure are reported rather than claimed as saved", () => {
   const unavailable = createRepository(() => { throw new Error("Access denied"); });
   assert.match(unavailable.load().error, /Access denied/);
-  assert.equal(unavailable.save([encounter()]).ok, false);
+  assert.equal(unavailable.save([encounter()], patientsFor([encounter()])).ok, false);
   assert.equal(unavailable.reset([]).ok, false);
   const quota = createRepository({ getItem() { return null; }, setItem() { throw new Error("Quota exceeded"); } });
   assert.equal(quota.load().error, null);
-  assert.deepEqual(quota.save([encounter()]), { ok: false, error: "Не удалось сохранить данные в браузере. Quota exceeded" });
+  assert.deepEqual(quota.save([encounter()], patientsFor([encounter()])), { ok: false, error: "Не удалось сохранить данные в браузере. Quota exceeded" });
+});
+
+test("patient cards accept an optional display label and reject malformed fields without normalizing text", () => {
+  const patient = core.createPatient({ id: "patient-1", now: NOW, label: "  Вымышленный пациент <1>\n  " });
+  assert.deepEqual(patient, { id: "patient-1", label: "  Вымышленный пациент <1>\n  ", createdAt: NOW, updatedAt: NOW });
+  assert.deepEqual(core.validatePatient(patient), []);
+  assert.equal(core.createPatient({ now: NOW }).label, "");
+  assert.notEqual(core.createPatient().id, core.createPatient().id);
+  assert.equal(core.createPatient({ label: "я".repeat(120) }).label.length, 120);
+  for (const [field, value] of [["id", "<unsafe>"], ["id", "x".repeat(81)], ["label", 3], ["label", "я".repeat(121)], ["createdAt", "2026-02-30T00:00:00.000Z"], ["updatedAt", NOW.slice(0, 10)]]) {
+    assert.ok(core.validatePatient({ ...patient, [field]: value }).some(error => error.field === field), field);
+  }
+  assert.ok(core.validatePatient({ ...patient, unexpected: "value" }).some(error => error.field === "unexpected"));
+  const missing = { ...patient }; delete missing.label;
+  assert.ok(core.validatePatient(missing).some(error => error.field === "label"));
+  for (const value of [null, [], "patient"]) assert.ok(core.validatePatient(value).length);
+  assert.throws(() => core.createPatient({ label: "x".repeat(121) }), /120/);
+  assert.throws(() => core.createPatient({ now: "invalid" }), /время/);
+});
+
+test("encounters require a valid patient ID and bundles require explicit existing patient references", () => {
+  const patient = core.createPatient({ id: "shared-patient", now: NOW });
+  const first = core.createEncounter({ id: "first-visit", patientId: patient.id, now: NOW });
+  const second = core.createEncounter({ id: "second-visit", patientId: patient.id, now: NOW });
+  assert.equal(encounter().patientId, encounter().id);
+  assert.deepEqual(core.parseBundle(core.serializeBundle([first, second], [patient])).encounters, [first, second]);
+  assert.throws(() => core.serializeBundle([first]), /карточек/);
+  assert.throws(() => core.serializeBundle([first], []), /отсутствует карточка/);
+  for (const value of [null, "", "<unsafe>", "x".repeat(81)]) {
+    assert.ok(core.validateEncounter({ ...first, patientId: value }).some(error => error.field === "patientId"));
+  }
+  const missing = { ...first }; delete missing.patientId;
+  assert.ok(core.validateEncounter(missing).some(error => error.field === "patientId"));
+  assert.throws(() => core.serializeBundle([first], [patient, patient]), /повторяется идентификатор карточки/);
+  assert.throws(() => core.serializeBundle([], "not an array"), /массивом/);
+  const orphanCard = core.createPatient({ id: "card-without-visits", now: NOW });
+  assert.deepEqual(core.parseBundle(core.serializeBundle([], [orphanCard])).patients, [orphanCard]);
+});
+
+test("patient and encounter IDs occupy independent namespaces and limits apply to each collection", () => {
+  const first = encounter("same-id");
+  const patients = patientsFor([first]);
+  assert.deepEqual(core.parseBundle(core.serializeBundle([first], patients)).patients, patients);
+  const manyCards = Array.from({ length: 500 }, (_, index) => core.createPatient({ id: "p-" + index, now: NOW }));
+  assert.equal(core.parseBundle(core.serializeBundle([], manyCards)).patients.length, 500);
+  assert.throws(() => core.serializeBundle([], [...manyCards, core.createPatient({ id: "p-extra", now: NOW })]), /500/);
+  const manyVisits = Array.from({ length: 500 }, (_, index) => core.createEncounter({ id: "v-" + index, patientId: patients[0].id, now: NOW }));
+  assert.equal(core.parseBundle(core.serializeBundle(manyVisits, patients)).encounters.length, 500);
+  assert.throws(() => core.serializeBundle([...manyVisits, first], patients), /500 демонстрационных приёмов/);
+});
+
+test("repeat encounters copy only each explicitly selected combination of the three permitted history fields", () => {
+  const source = core.createDemoEncounter({ id: "source-visit", patientId: "same-patient", now: NOW });
+  source.history.conditions = "  Вымышленное заболевание\n  ";
+  source.history.medications = "Вымышленный препарат";
+  source.history.allergies = "Вымышленная реакция";
+  source.reason = "Старый повод";
+  source.assessment.sickLeaveNumber = "DEMO-1";
+  source.assessment.returnVisitDate = "2026-10-26";
+  source.draft = { text: "Ручная запись", generatedAt: NOW, sourceFingerprint: core.fingerprint(source) };
+  Object.assign(source.examSelections, examCatalog.NORMAL_SELECTIONS);
+  const before = JSON.stringify(source);
+  const nextTime = "2026-10-26T09:30:00.000Z";
+  const fields = ["conditions", "medications", "allergies"];
+  for (let mask = 0; mask < 8; mask += 1) {
+    const selected = fields.filter((_, index) => mask & (1 << index));
+    const repeat = core.createRepeatEncounter(source, { id: "repeat-" + mask, now: nextTime, carryHistoryFields: selected });
+    const expected = core.createEncounter({ id: repeat.id, now: nextTime, patientId: source.patientId });
+    for (const field of selected) expected.history[field] = source.history[field];
+    assert.deepEqual(repeat, expected);
+    assert.notStrictEqual(repeat.history, source.history);
+    assert.notStrictEqual(repeat.examSelections, source.examSelections);
+    assert.deepEqual(core.validateEncounter(repeat), []);
+  }
+  assert.deepEqual(core.createRepeatEncounter(source, { id: "repeat-default", now: nextTime }), core.createEncounter({ id: "repeat-default", now: nextTime, patientId: source.patientId }));
+  assert.equal(JSON.stringify(source), before);
+});
+
+test("repeat creation rejects unsupported carry fields and duplicate visit identity", () => {
+  const source = encounter();
+  for (const carryHistoryFields of [true, "allergies", null, {}, ["complaints"], ["conditions", "context"], [undefined], new Array(1), ["__proto__"]]) {
+    assert.throws(() => core.createRepeatEncounter(source, { carryHistoryFields }), /явно выбранные/);
+  }
+  assert.throws(() => core.createRepeatEncounter(source, { id: source.id }), /новый идентификатор/);
+  assert.throws(() => core.createRepeatEncounter({ ...source, patientId: "" }), /patientId/);
+});
+
+test("version 2 migration creates one deterministic unlabelled card per encounter and preserves every old value", () => {
+  const source = core.createDemoEncounter({ id: "first-old", now: NOW });
+  source.draft = { text: "  Ручной черновик\n<Текст>  ", generatedAt: NOW, sourceFingerprint: core.fingerprint(source) };
+  const old = previousBundle(source);
+  const second = previousBundle(core.createDemoEncounter({ id: "second-old", now: NOW })).encounters[0];
+  old.encounters.push(second);
+  const text = JSON.stringify(old);
+  const migrated = core.parseBundle(text);
+  assert.equal(migrated.schemaVersion, 3);
+  assert.equal(migrated.exportedAt, old.exportedAt);
+  assert.deepEqual(core.parseBundle(text), migrated);
+  assert.equal(migrated.patients.length, 2);
+  for (let index = 0; index < old.encounters.length; index += 1) {
+    const original = old.encounters[index];
+    const restored = migrated.encounters[index];
+    assert.equal(restored.patientId, original.id);
+    assert.deepEqual(migrated.patients[index], { id: original.id, label: "", createdAt: original.createdAt, updatedAt: original.updatedAt });
+    const { patientId, ...oldFields } = restored;
+    assert.deepEqual(oldFields, original);
+  }
+  assert.equal(core.fingerprint(migrated.encounters[0]), source.draft.sourceFingerprint);
+  assert.equal(JSON.stringify(old), text);
+  const roundTrip = core.parseBundle(core.serializeBundle(migrated.encounters, migrated.patients));
+  assert.deepEqual(roundTrip.patients, migrated.patients);
+  assert.deepEqual(roundTrip.encounters, migrated.encounters);
+});
+
+test("version 2 import validates source fields before adding cards", () => {
+  const unknown = previousBundle(); unknown.encounters[0].patientId = "unexpected";
+  assert.throws(() => core.parseBundle(JSON.stringify(unknown)), /Неизвестное поле/);
+  const invalid = previousBundle(); invalid.encounters[0].examSelections.heartRhythm = "unknown";
+  assert.throws(() => core.parseBundle(JSON.stringify(invalid)), /Неизвестный вариант/);
+  const missing = previousBundle(); delete missing.encounters[0].assessment.sickLeaveNumber;
+  assert.throws(() => core.parseBundle(JSON.stringify(missing)), /отсутствует/);
+  const duplicate = previousBundle(); duplicate.encounters.push(duplicate.encounters[0]);
+  assert.throws(() => core.parseBundle(JSON.stringify(duplicate)), /повторяется/);
+});
+
+test("version 1 migration adds deterministic cards without merging encounters with similar clinical data", () => {
+  const old = legacyBundle();
+  old.encounters.push({ ...old.encounters[0], id: "another-old-visit" });
+  const migrated = core.parseBundle(JSON.stringify(old));
+  assert.equal(migrated.patients.length, 2);
+  for (let index = 0; index < old.encounters.length; index += 1) {
+    assert.equal(migrated.encounters[index].patientId, old.encounters[index].id);
+    assert.equal(migrated.patients[index].id, old.encounters[index].id);
+    assert.deepEqual(migrated.encounters[index].draft, old.encounters[index].draft);
+  }
+});
+
+test("bundle normalization detaches patient labels and keeps multiple visits associated after round trip", () => {
+  const patient = core.createPatient({ id: "patient-a", label: "Демо А", now: NOW });
+  const first = core.createEncounter({ id: "first", patientId: patient.id, now: NOW });
+  const second = core.createRepeatEncounter(first, { id: "second", now: NOW });
+  const original = bundle([first, second], [patient]);
+  const normalized = core.validateBundle(original);
+  normalized.patients[0].label = "Изменённое условное имя";
+  assert.equal(original.patients[0].label, "Демо А");
+  assert.ok(normalized.encounters.every(data => data.patientId === patient.id));
+  const poisoned = { ...original, patients: [{ ...patient, unexpected: "value" }] };
+  assert.throws(() => core.validateBundle(poisoned), /Неизвестное поле/);
+});
+
+test("version 2 storage is read-only on migration, takes priority over v1, and remains intact after a v3 save", () => {
+  const previous = JSON.stringify(previousBundle());
+  const legacy = JSON.stringify(legacyBundle(encounter("legacy-only")));
+  const storage = memoryStorage(null, legacy, previous);
+  const repository = createRepository(storage);
+  const loaded = repository.load();
+  assert.equal(loaded.migrated, true);
+  assert.equal(loaded.error, null);
+  assert.equal(loaded.patients[0].id, encounter().id);
+  assert.equal(storage.writes, 0);
+  assert.deepEqual(storage.reads, [KEY, PREVIOUS_KEY]);
+  assert.equal(repository.save(loaded.encounters, loaded.patients).ok, true);
+  assert.equal(storage.writes, 1);
+  assert.equal(storage.previousRaw, previous);
+  assert.equal(storage.legacyRaw, legacy);
+  assert.deepEqual(JSON.parse(storage.raw).patients, loaded.patients);
+  assert.deepEqual(createRepository(storage).load(), { patients: loaded.patients, encounters: loaded.encounters, error: null });
+  assert.equal(repository.reset().ok, true);
+  assert.equal(storage.previousRaw, previous);
+  assert.equal(storage.legacyRaw, legacy);
+});
+
+test("corrupt version 2 storage blocks writing and never falls back to valid v1", () => {
+  const legacy = JSON.stringify(legacyBundle());
+  const storage = memoryStorage(null, legacy, "{broken v2");
+  const repository = createRepository(storage);
+  const result = repository.load();
+  assert.match(result.error, /Автоматическая запись остановлена/);
+  assert.deepEqual(result.patients, []);
+  assert.equal(repository.save([], []).ok, false);
+  assert.deepEqual(storage.reads, [KEY, PREVIOUS_KEY]);
+  assert.equal(storage.writes, 0);
+  assert.equal(storage.previousRaw, "{broken v2");
+  assert.equal(storage.legacyRaw, legacy);
+});
+
+test("patient and encounter edits are saved together and missing references cannot replace either collection", () => {
+  const data = encounter();
+  const patients = patientsFor([data]);
+  const storage = memoryStorage(serialize([data], patients));
+  const repository = createRepository(storage);
+  const loaded = repository.load();
+  loaded.patients[0].label = "Вымышленный пациент";
+  loaded.encounters[0].history.complaints = "Вымышленные жалобы";
+  assert.equal(repository.save(loaded.encounters, loaded.patients).ok, true);
+  assert.equal(storage.writes, 1);
+  const raw = storage.raw;
+  assert.deepEqual(core.parseBundle(raw).patients, loaded.patients);
+  assert.deepEqual(core.parseBundle(raw).encounters, loaded.encounters);
+  for (const method of ["save", "reset"]) {
+    assert.equal(repository[method](loaded.encounters, []).ok, false);
+    assert.equal(storage.raw, raw);
+    assert.equal(storage.writes, 1);
+  }
 });
 
 test("classic browser scripts export their APIs without accessing localStorage during startup", () => {
@@ -588,6 +803,6 @@ test("classic browser scripts export their APIs without accessing localStorage d
   assert.match(browser.MedAssistStorage.load().error, /Browser storage disabled/);
   const accessesAfterLoad = browser.accesses;
   assert.ok(accessesAfterLoad > 0);
-  assert.equal(browser.MedAssistStorage.save([]).ok, false);
+  assert.equal(browser.MedAssistStorage.save([], []).ok, false);
   assert.equal(browser.accesses, accessesAfterLoad);
 });

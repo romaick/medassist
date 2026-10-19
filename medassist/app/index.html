@@ -23,6 +23,14 @@
     <div class="dialog-actions"><button id="dialog-cancel" class="button secondary" type="button">Отмена</button><button id="dialog-accept" class="button primary" type="button">Продолжить</button></div>
   </dialog>
   <input type="file" id="import-file" accept="application/json,.json" hidden>
+  <dialog id="repeat-dialog" aria-labelledby="repeat-title" aria-describedby="repeat-description">
+    <h2 id="repeat-title">Повторный приём</h2>
+    <p id="repeat-patient"></p>
+    <p id="repeat-description">Отметьте только сведения, которые хотите перенести, и подтвердите создание приёма. Без отметок анамнез останется пустым. Возраст, пол, жалобы, осмотр, показатели и заключение заполняются заново.</p>
+    <div id="repeat-source-wrap" class="field"><label for="repeat-source">Перенести из приёма</label><select id="repeat-source"></select><p class="hint">При выборе другой записи отметки сбрасываются. Проверьте актуальность сведений.</p></div>
+    <div id="repeat-fields"></div>
+    <div class="dialog-actions"><button id="repeat-cancel" class="button secondary" type="button">Отмена</button><button id="repeat-create" class="button primary" type="button">Создать приём</button></div>
+  </dialog>
   <dialog id="update-help" aria-labelledby="update-help-title" aria-describedby="update-help-message">
     <h2 id="update-help-title">Подключение кнопки обновления</h2>
     <p id="update-help-message">Закройте это окно программы и запустите МедАссистент через Start-MedAssist.cmd из той же папки. При запуске кнопка подключается автоматически.

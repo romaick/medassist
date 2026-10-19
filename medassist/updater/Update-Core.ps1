@@ -18,8 +18,8 @@ function Assert-UpdateVersion {
 }
 
 function Assert-UpdateInteger {
-    param($Value, [int]$Expected)
-    if (($Value -isnot [int] -and $Value -isnot [long]) -or $Value -ne $Expected) { throw 'Unsupported numeric format or data schema version.' }
+    param($Value, [int[]]$Expected)
+    if (($Value -isnot [int] -and $Value -isnot [long]) -or $Expected -notcontains $Value) { throw 'Unsupported numeric format or data schema version.' }
 }
 
 function Get-UpdateHash {
@@ -34,7 +34,7 @@ function Read-UpdateVersionJson {
     $value = ConvertFrom-Json -InputObject $Json -ErrorAction Stop
     Assert-UpdateProperties $value @('version', 'dataSchemaVersion')
     Assert-UpdateVersion $value.version
-    Assert-UpdateInteger $value.dataSchemaVersion 2
+    Assert-UpdateInteger $value.dataSchemaVersion @(2, 3)
     return $value
 }
 
@@ -45,7 +45,7 @@ function Load-UpdatePackage {
     Assert-UpdateProperties $document @('format', 'formatVersion', 'version', 'dataSchemaVersion', 'files')
     if ($document.format -isnot [string] -or $document.format -cne 'medassist-update') { throw 'Invalid update package format.' }
     Assert-UpdateInteger $document.formatVersion 1
-    Assert-UpdateInteger $document.dataSchemaVersion 2
+    Assert-UpdateInteger $document.dataSchemaVersion @(2, 3)
     Assert-UpdateVersion $document.version
     if ($document.files -isnot [array] -or $document.files.Count -ne $script:MedAssistAppFiles.Count) { throw 'Update package must contain all application files.' }
     $seen = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
@@ -66,7 +66,8 @@ function Load-UpdatePackage {
     $utf8 = New-Object Text.UTF8Encoding($false, $true)
     $versionFile = Read-UpdateVersionJson ($utf8.GetString($versionBytes).TrimStart([char]0xFEFF))
     if ($versionFile.version -cne $document.version) { throw 'Package and application versions differ.' }
-    return [pscustomobject]@{ Json = $Json; Version = $document.version; DataSchemaVersion = 2; Files = $files.ToArray() }
+    if ($versionFile.dataSchemaVersion -ne $document.dataSchemaVersion) { throw 'Package and application data schemas differ.' }
+    return [pscustomobject]@{ Json = $Json; Version = $document.version; DataSchemaVersion = $document.dataSchemaVersion; Files = $files.ToArray() }
 }
 
 function Get-MedAssistUpdate {

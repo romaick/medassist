@@ -73,6 +73,11 @@
     return Number(rounded) > 0 && !rounded.includes("e") ? rounded.replace(".", ",") : "";
   }
 
+  function calculateSickLeaveDays(from, to) {
+    if (typeof from !== "string" || typeof to !== "string" || !validDate(from) || !validDate(to) || from > to) return null;
+    return (Date.parse(to + "T00:00:00.000Z") - Date.parse(from + "T00:00:00.000Z")) / 86400000 + 1;
+  }
+
   function newId(prefix = "visit") {
     if (typeof globalThis.crypto?.randomUUID === "function") return prefix + "-" + globalThis.crypto.randomUUID();
     return prefix + "-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 12);
@@ -382,9 +387,11 @@
       const period = [];
       if (assessment.sickLeaveFrom) period.push("с " + formatDate(assessment.sickLeaveFrom));
       if (assessment.sickLeaveTo) period.push("по " + formatDate(assessment.sickLeaveTo));
+      const days = calculateSickLeaveDays(assessment.sickLeaveFrom, assessment.sickLeaveTo);
       return ["Листок нетрудоспособности: выдан."
         + (assessment.sickLeaveNumber.trim() ? " № " + assessment.sickLeaveNumber.trim() + "." : "")
-        + (period.length ? " Период: " + period.join(" ") + "." : "")];
+        + (period.length ? " Период: " + period.join(" ") + "." : "")
+        + (days !== null ? " Календарных дней: " + days + "." : "")];
     }
     const date = encounter.visitDate ? formatDate(encounter.visitDate) : "не указана";
     const bmi = calculateBmi(encounter.vitals.weight, encounter.vitals.height);
@@ -534,5 +541,5 @@
     return validateBundle(parsed);
   }
 
-  return Object.freeze({ createPatient, createEncounter, createRepeatEncounter, createDemoEncounter, setReviewStatus, setReturnVisitStatus, linkReturnVisit, getReturnVisits, calculateBmi, generateDraft, fingerprint, validatePatient, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_PATIENTS, MAX_PATIENT_LABEL_LENGTH, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
+  return Object.freeze({ createPatient, createEncounter, createRepeatEncounter, createDemoEncounter, setReviewStatus, setReturnVisitStatus, linkReturnVisit, getReturnVisits, calculateBmi, calculateSickLeaveDays, generateDraft, fingerprint, validatePatient, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_PATIENTS, MAX_PATIENT_LABEL_LENGTH, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
 });

@@ -87,6 +87,85 @@ async function markReviewed(page) {
   await accept(page);
 }
 
+test('sick leave day counter updates the entered period, hides inactive leave and preserves manual text until generation', {timeout: 20000}, async t => {
+  const {page} = await openApp(t);
+  const data = fixture();
+  await seed(page, data); await openVisit(page, 'demo-today'); await tab(page, 'draft');
+  const status = page.locator('[data-field="assessment.sickLeaveIssued"]');
+  const from = page.locator('[data-field="assessment.sickLeaveFrom"]');
+  const to = page.locator('[data-field="assessment.sickLeaveTo"]');
+  const counter = page.locator('#sickleave-days');
+  const manual = await page.locator('#draft-text').inputValue();
+  assert.equal(await counter.isVisible(), false);
+  await status.selectOption('yes');
+  assert.equal(await counter.innerText(), '—');
+  await from.fill('2032-02-28');
+  assert.equal(await counter.innerText(), '—');
+  await to.fill('2032-03-01');
+  assert.equal(await counter.innerText(), '3');
+  assert.equal(await to.evaluate(node => node === document.activeElement), true);
+  assert.match(await page.locator('#sickleave-days-hint').innerText(), /обе даты и выходные включены/);
+  await to.fill('2032-02-28');
+  assert.equal(await counter.innerText(), '1');
+  await to.fill('2032-02-27');
+  assert.equal(await counter.innerText(), '—');
+  assert.equal(await to.getAttribute('aria-invalid'), 'true');
+  assert.equal(await page.locator('#field-assessment-sickLeaveTo-error').isVisible(), true);
+  await to.fill('');
+  assert.equal(await counter.innerText(), '—');
+  await from.fill('2031-12-31'); await to.fill('2032-01-02');
+  assert.equal(await counter.innerText(), '3');
+  await status.selectOption('no');
+  assert.equal(await counter.isVisible(), false);
+  await status.selectOption('yes');
+  assert.equal(await counter.innerText(), '3');
+  assert.equal(await from.inputValue(), '2031-12-31');
+  assert.equal(await to.inputValue(), '2032-01-02');
+  assert.equal(await page.locator('#draft-text').inputValue(), manual);
+  await page.reload(); await openVisit(page, 'demo-today'); await tab(page, 'draft');
+  const before = await raw(page);
+  assert.equal(await counter.innerText(), '3');
+  assert.equal(await page.locator('#draft-text').inputValue(), manual);
+  for (const width of [1366, 800, 390]) {
+    await page.setViewportSize({width, height:844});
+    await counter.scrollIntoViewIfNeeded();
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  }
+  assert.equal(await raw(page), before, 'reading the calculated value does not save or change the schema');
+  await click(page, 'generate'); await cancel(page);
+  assert.equal(await page.locator('#draft-text').inputValue(), manual);
+  await click(page, 'generate'); await accept(page);
+  const generated = await page.locator('#draft-text').inputValue();
+  assert.match(generated, /Период: с 31\.12\.2031 по 02\.01\.2032\. Календарных дней: 3\./);
+  assert.equal(generated.split('\n').at(-1), 'Повторный приём: 15.04.2032');
+  await markReviewed(page); await to.fill('2032-01-03');
+  assert.equal(await counter.innerText(), '4');
+  assert.equal(await page.locator('#draft-text').inputValue(), generated, 'date changes keep the manually editable draft intact');
+  await assertReview(page, 'demo-today', 'draft');
+});
+
+test('sick leave day counter in the patient list describes each period without adding overlapping records', {timeout:20000}, async t => {
+  const {page} = await openApp(t);
+  const data = fixture();
+  Object.assign(data.encounters[0].assessment, {sickLeaveIssued:'yes', sickLeaveNumber:'ДЕМО-101', sickLeaveFrom:'2032-04-14', sickLeaveTo:'2032-04-16'});
+  Object.assign(data.encounters[1].assessment, {sickLeaveIssued:'yes', sickLeaveNumber:'ДЕМО-101', sickLeaveFrom:'2032-04-14', sickLeaveTo:'2032-04-16'});
+  Object.assign(data.encounters[2].assessment, {sickLeaveIssued:'yes', sickLeaveNumber:'ДЕМО-102', sickLeaveFrom:'2032-04-15', sickLeaveTo:'2032-04-18'});
+  Object.assign(data.encounters[4].assessment, {sickLeaveIssued:'yes', sickLeaveNumber:'ДЕМО-201', sickLeaveFrom:'2032-04-15', sickLeaveTo:''});
+  await seed(page, data); const initial = await raw(page); await click(page, 'patients');
+  const first = page.locator('[data-patient-id="demo-patient-a"].patient-row');
+  assert.equal(await first.locator('.patient-sick').count(), 2, 'identical period display remains deduplicated');
+  assert.equal(await first.locator('.patient-sick').filter({hasText:'ДЕМО-101'}).locator('.patient-sick-days').innerText(), 'Календарных дней: 3');
+  assert.equal(await first.locator('.patient-sick').filter({hasText:'ДЕМО-102'}).locator('.patient-sick-days').innerText(), 'Календарных дней: 4');
+  const second = page.locator('[data-patient-id="demo-patient-b"].patient-row');
+  assert.equal(await second.locator('.patient-sick-days').count(), 0);
+  assert.match(await second.locator('.patient-sick').innerText(), /окончание не указано/);
+  for(const width of [1366,800,390]) {
+    await page.setViewportSize({width,height:844});
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth),true);
+  }
+  assert.equal(await raw(page), initial);
+});
+
 async function assertVisibleWarning(page) {
   assert.equal(await page.locator("#confirmation").isVisible(), false, "the confirmation must close before showing the warning");
   assert.equal(await page.locator("#toast").isVisible(), true);
@@ -884,11 +963,12 @@ test("patient context and encounter actions remain visible while scrolling, upda
         const context = document.querySelector('.visit-context').getBoundingClientRect();
         const actions = document.querySelector('.visit-action-bar').getBoundingClientRect();
         return { focused: node === document.activeElement, top: box.top, bottom: box.bottom, contextBottom: context.bottom, actionTop: actions.top,
-          hit: document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2) === node };
+          hit: document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2) === node,
+          covering: document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)?.outerHTML.slice(0, 240) };
       });
       assert.equal(target.focused, true);
       assert.ok(target.top >= target.contextBottom && target.bottom <= target.actionTop, 'keyboard target remains between fixed panels at width ' + width + ': ' + JSON.stringify(target));
-      assert.equal(target.hit, true, 'keyboard target is not covered');
+      assert.equal(target.hit, true, 'keyboard target is not covered: ' + field + ' at ' + width + ': ' + JSON.stringify(target));
     }
   }
 });

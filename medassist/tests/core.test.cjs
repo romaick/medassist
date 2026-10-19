@@ -234,7 +234,7 @@ test("repeat visit is the last generated line after recommendations, legacy obse
     "Диагноз: Вымышленный диагноз",
     "Рекомендации: Вымышленные рекомендации",
     "Наблюдение (из предыдущей версии): Наблюдение прежней версии",
-    "Листок нетрудоспособности: выдан. № ДЕМО-12345. Период: с 19.10.2026 по 22.10.2026.",
+    "Листок нетрудоспособности: выдан. № ДЕМО-12345. Период: с 19.10.2026 по 22.10.2026. Календарных дней: 4.",
     "Повторный приём: 05.11.2026"
   ]);
   data.assessment.returnVisitDate = "";
@@ -265,6 +265,54 @@ test("sick leave number is entered manually, precedes dates and is omitted with 
   assert.ok(core.validateEncounter(data).some(error => error.field === "assessment.sickLeaveNumber"));
   data.assessment.sickLeaveNumber = "x".repeat(10001);
   assert.ok(core.validateEncounter(data).some(error => error.field === "assessment.sickLeaveNumber"));
+});
+
+test("sick leave days include both dates across month, year and leap-year boundaries", () => {
+  for (const [from, to, expected] of [
+    ["2026-10-19", "2026-10-19", 1], ["2026-10-19", "2026-10-22", 4],
+    ["2026-04-30", "2026-05-02", 3], ["2026-12-31", "2027-01-02", 3],
+    ["2028-02-28", "2028-03-01", 3], ["2027-02-28", "2027-03-01", 2],
+    ["1900-02-28", "1900-03-01", 2], ["2000-02-28", "2000-03-01", 3],
+    ["2028-01-01", "2028-12-31", 366], ["0099-12-31", "0100-01-01", 2],
+    ["0001-01-01", "0001-12-31", 365], ["9999-01-01", "9999-12-31", 365]
+  ]) assert.equal(core.calculateSickLeaveDays(from, to), expected, from + " to " + to);
+});
+
+test("sick leave days stay unknown for incomplete, invalid or reversed dates", () => {
+  for (const value of ["", " ", "2027-02-29", "2028-04-31", "2026-13-01", "0000-01-01", "10000-01-01", "19.10.2026", "2026-10-19T00:00:00Z", null, undefined, 20261019, {}, Symbol("date")]) {
+    assert.equal(core.calculateSickLeaveDays(value, "2026-10-19"), null);
+    assert.equal(core.calculateSickLeaveDays("2026-10-19", value), null);
+  }
+  assert.equal(core.calculateSickLeaveDays("2026-10-22", "2026-10-19"), null);
+});
+
+test("sick leave days are calendar counts across time zones and clock changes", () => {
+  const {execFileSync} = require("node:child_process");
+  const script = "const core=require(process.argv[1]);process.stdout.write(JSON.stringify([['2026-03-28','2026-03-30'],['2026-10-24','2026-10-26'],['2011-12-29','2011-12-31']].map(([from,to])=>core.calculateSickLeaveDays(from,to))));";
+  for (const zone of ["UTC", "Europe/Minsk", "Europe/Berlin", "America/New_York", "Pacific/Apia"]) {
+    const result = execFileSync(process.execPath, ["-e", script, path.resolve(__dirname, "../app/core.js")], {encoding: "utf8", env: {...process.env, TZ: zone}, windowsHide: true});
+    assert.deepEqual(JSON.parse(result), [3, 3, 3], zone);
+  }
+});
+
+test("sick leave days appear only for an issued complete period without mutating saved drafts or schema", () => {
+  const data = encounter();
+  Object.assign(data.assessment, {sickLeaveIssued: "yes", sickLeaveFrom: "2028-02-28", sickLeaveTo: "2028-03-01", returnVisitDate: "2028-03-02"});
+  data.draft.text = "ДЕМО: ручной текст сохранить";
+  const beforeEncounter = JSON.stringify(data);
+  const before = serialize([data]);
+  const generated = core.generateDraft(data);
+  assert.match(generated, /Календарных дней: 3\./);
+  assert.equal(generated.split("\n").at(-1), "Повторный приём: 02.03.2028");
+  assert.equal(JSON.stringify(data), beforeEncounter);
+  assert.deepEqual(core.parseBundle(before).encounters[0], data);
+  for (const status of ["", "no"]) {
+    data.assessment.sickLeaveIssued = status;
+    assert.doesNotMatch(core.generateDraft(data), /Календарных дней|Листок нетрудоспособности/);
+  }
+  data.assessment.sickLeaveIssued = "yes";
+  data.assessment.sickLeaveTo = "";
+  assert.doesNotMatch(core.generateDraft(data), /Календарных дней/);
 });
 
 test("draft generation uses entered text, accepts a Russian decimal and never mutates the encounter", () => {

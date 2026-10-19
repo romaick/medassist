@@ -117,10 +117,10 @@
     app.innerHTML = '<div class="shell"><aside class="sidebar" aria-label="Главная навигация"><div class="brand"><img src="icon.svg" alt=""><div><strong>МедАссистент</strong><small>ПОЛИКЛИНИЧЕСКИЙ РЕЖИМ</small></div></div><p class="nav-caption">РАБОЧЕЕ ПРОСТРАНСТВО</p><nav class="nav">' +
       navButton('home', 'Обзор', 'home') + navButton('patients', 'Пациенты', 'user') + navButton('new', 'Новый пациент', 'plus') +
       (current ? navButton('visit', 'Текущий приём', 'document') : '') + navButton('followups', 'Повторные приёмы', 'calendar') + navButton('modules', 'Модули', 'grid') + navButton('help', 'Помощь и данные', 'help') + navButton('check-updates', 'Проверить обновления', 'download') +
-      '</nav><div class="side-bottom"><div class="local-indicator"><span class="dot"></span>Работает локально</div><div class="version">Прототип 0.9.3 · Демонстрация</div></div></aside><div class="workspace"><header class="topbar"><div class="topbar-left">Поликлиника <span aria-hidden="true">/</span> <span>' + sectionName + '</span></div><div class="topbar-right"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><span class="avatar" aria-hidden="true">МА</span></div></header><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
+      '</nav><div class="side-bottom"><div class="local-indicator"><span class="dot"></span>Работает локально</div><div class="version">Прототип 0.9.4 · Демонстрация</div></div></aside><div class="workspace"><header class="topbar"><div class="topbar-left">Поликлиника <span aria-hidden="true">/</span> <span>' + sectionName + '</span></div><div class="topbar-right"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><span class="avatar" aria-hidden="true">МА</span></div></header><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
       (state.migrated ? '<div class="migration-notice">Прежние записи доступны со статусом «Черновик». Карточки, данные и ручные тексты сохранены. Исходное сохранение предыдущей версии не изменяется.</div>' : '') +
       ({home: renderHome, patients: renderPatients, followups: renderFollowups, patient: renderPatient, visit: renderVisit, modules: renderModules, help: renderHelp}[state.view])() +
-      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.9.3</span></footer></main></div></div>';
+      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.9.4</span></footer></main></div></div>';
     updateClock();
     updateSaveStatus();
     if (state.view === 'visit') { updateValidation(); updateDraftState(); updateReviewState(); }
@@ -336,7 +336,7 @@
       const past = dates.find(date => date < today) || '';
       const leaves = visits.filter(entry => entry.assessment.sickLeaveIssued === 'yes').map(entry => {
         const {sickLeaveNumber: number, sickLeaveFrom: from, sickLeaveTo: to} = entry.assessment;
-        return {number, from, to, current: Boolean(from && to && from <= today && to >= today), unknown: !from || !to};
+        return {number, from, to, days: core.calculateSickLeaveDays(from, to), current: Boolean(from && to && from <= today && to >= today), unknown: !from || !to};
       });
       return {patient, visits, dates, next, past, leaves, rank: next ? 0 : past ? 1 : 2, drafts: visits.filter(entry => entry.workflow.reviewStatus === 'draft').length};
     });
@@ -444,7 +444,7 @@
       let shownLeaves = leaves.filter(leave => state.patientCategory === 'sick' ? matchesSickFilter(leave, today) : leave.current || leave.unknown);
       if (!shownLeaves.length && leaves.length && state.patientCategory !== 'sick') shownLeaves = [leaves[0]];
       const uniqueLeaves = new Map(shownLeaves.map(leave => [JSON.stringify([leave.number, leave.from, leave.to]), leave]));
-      const sickText = [...uniqueLeaves.values()].map(leave => '<p class="patient-sick"><span>ЛН ' + (leave.number.trim() ? '№' + escape(leave.number) : '· номер не указан') + '</span><span class="patient-cell-note">' + (leave.from ? 'с ' + escape(dateText(leave.from)) : 'начало не указано') + ' · ' + (leave.to ? 'по ' + escape(dateText(leave.to)) : 'окончание не указано') + '</span>' + (leave.current ? '' : '<span class="patient-cell-note">' + (leave.unknown ? 'период требует уточнения' : leave.from > today ? 'период ещё не начался' : 'указанный период прошёл') + '</span>') + '</p>').join('');
+      const sickText = [...uniqueLeaves.values()].map(leave => '<p class="patient-sick"><span>ЛН ' + (leave.number.trim() ? '№' + escape(leave.number) : '· номер не указан') + '</span><span class="patient-cell-note">' + (leave.from ? 'с ' + escape(dateText(leave.from)) : 'начало не указано') + ' · ' + (leave.to ? 'по ' + escape(dateText(leave.to)) : 'окончание не указано') + '</span>' + (leave.days !== null ? '<span class="patient-cell-note patient-sick-days">Календарных дней: ' + leave.days + '</span>' : '') + (leave.current ? '' : '<span class="patient-cell-note">' + (leave.unknown ? 'период требует уточнения' : leave.from > today ? 'период ещё не начался' : 'указанный период прошёл') + '</span>') + '</p>').join('');
       const matchButton = entry => button('open', 'Приём ' + dateText(entry.visitDate) + ' · ' + shortId(entry), null, 'secondary compact', 'data-id="' + escape(entry.id) + '"');
       return '<div class="visit-row patient-row" data-patient-id="' + escape(patient.id) + '"><div class="patient-cell patient-identity visit-text"><strong>' + escape(patientName(patient)) + '</strong><p>Код: ' + escape(shortId(patient)) + ' · Приёмов: ' + visits.length + '</p></div>' +
         '<div class="patient-cell patient-last"><p>' + (visits.length ? '<span class="patient-cell-label">Последний приём: </span>' + escape(dateText(visits[0].visitDate)) : 'Приёмов пока нет') + '</p></div>' +
@@ -556,13 +556,14 @@
   let visitLayoutObserver;
   function observeVisitLayout() {
     if (visitLayoutObserver) visitLayoutObserver.disconnect();
-    const header = app.querySelector('.visit-context'), actions = app.querySelector('.visit-action-bar');
+    const header = app.querySelector('.visit-context'), actions = app.querySelector('.visit-action-bar'), notice = document.getElementById('toast');
     const measure = () => {
       document.documentElement.style.setProperty('--visit-context-height', header ? header.getBoundingClientRect().height + 'px' : '0px');
       document.documentElement.style.setProperty('--visit-actions-height', actions ? actions.getBoundingClientRect().height + 'px' : '0px');
+      document.documentElement.style.setProperty('--visit-toast-height', header && !notice.hidden ? notice.getBoundingClientRect().height + 12 + 'px' : '0px');
     };
     measure();
-    if (header && actions) { visitLayoutObserver = new ResizeObserver(measure); visitLayoutObserver.observe(header); visitLayoutObserver.observe(actions); }
+    if (header && actions) { visitLayoutObserver = new ResizeObserver(measure); visitLayoutObserver.observe(header); visitLayoutObserver.observe(actions); visitLayoutObserver.observe(notice); }
   }
   function aside(title, text) {
     const entry = active();
@@ -617,9 +618,15 @@
       field('assessment.summary', 'Диагноз', 'Введите диагноз самостоятельно') + field('assessment.plan', 'Рекомендации', 'Необязательно. Пустое поле не попадёт в черновик') +
       (active().assessment.followUp.trim() ? '<div class="legacy-note"><p>Сохранено из предыдущей версии. Перенесите нужное в рекомендации или выберите дату, затем очистите старый текст, если он больше не нужен.</p>' + field('assessment.followUp', 'Наблюдение из предыдущей версии', '') + '</div>' : '') +
       field('assessment.sickLeaveIssued', 'Листок нетрудоспособности', '', {select: [['', 'Не отмечено — не включать'], ['no', 'Не выдавался — не включать'], ['yes', 'Выдан']], hint: 'Это только отметка в черновике, не оформление документа.'}) +
-      '<div id="sickleave-period"' + (active().assessment.sickLeaveIssued === 'yes' ? '' : ' hidden') + '>' + field('assessment.sickLeaveNumber', 'Номер листка нетрудоспособности', 'Введите номер вручную', {type: 'text'}) + '<div class="field-grid">' + field('assessment.sickLeaveFrom', 'Период: с', '', {type: 'date'}) + field('assessment.sickLeaveTo', 'По', '', {type: 'date'}) + '</div><p class="small muted">Номер и даты необязательны. Срок программа не рассчитывает.</p></div>' +
+      '<div id="sickleave-period"' + (active().assessment.sickLeaveIssued === 'yes' ? '' : ' hidden') + '>' + field('assessment.sickLeaveNumber', 'Номер листка нетрудоспособности', 'Введите номер вручную', {type: 'text'}) + '<div class="field-grid">' + field('assessment.sickLeaveFrom', 'Период: с', '', {type: 'date'}) + field('assessment.sickLeaveTo', 'По', '', {type: 'date'}) + '</div><div class="sickleave-duration"><label for="sickleave-days">Календарных дней</label><output id="sickleave-days" for="field-assessment-sickLeaveFrom field-assessment-sickLeaveTo" aria-live="polite" aria-describedby="sickleave-days-hint">' + (core.calculateSickLeaveDays(active().assessment.sickLeaveFrom, active().assessment.sickLeaveTo) ?? '—') + '</output><p id="sickleave-days-hint">По указанному периоду: обе даты и выходные включены. Для расчёта нужны корректные начало и окончание.</p></div></div>' +
       field('assessment.returnVisitDate', 'Повторный приём', '', {type: 'date', hint: 'Оставьте дату пустой, чтобы не включать повторный приём в запись.'}) +
       '</section><section class="card draft-card"><div class="card-head"><h2>Текст записи</h2><span class="pill neutral">Редактируемый текст</span></div><div id="draft-state" class="draft-state" role="status"></div><label class="small muted" for="draft-text">Текст записи · свободное редактирование</label><textarea class="draft-editor" id="draft-text" data-field="draft.text" maxlength="100000" aria-describedby="draft-state field-draft-text-error" placeholder="Нажмите «Сформировать черновик» или начните писать здесь.">' + escape(active().draft.text) + '</textarea><p class="field-error" id="field-draft-text-error" hidden></p><div id="record-review-state" class="record-review-state"></div><p class="small muted">Это свободный демонстрационный черновик, не нормативная форма Беларуси.</p></section></div>';
+  }
+  function updateSickLeaveDays() {
+    const output = document.getElementById('sickleave-days');
+    if (!output) return;
+    const assessment = active().assessment;
+    output.textContent = assessment.sickLeaveIssued === 'yes' ? core.calculateSickLeaveDays(assessment.sickLeaveFrom, assessment.sickLeaveTo) ?? '—' : '—';
   }
   function renderModules() {
     return '<div class="page-heading"><div><h1>Модули</h1><p>Направления расширения МедАссистента.</p></div><span class="pill neutral">План развития</span></div>' + demoNotice() +
@@ -983,6 +990,7 @@
     if (control.dataset.field === 'assessment.sickLeaveIssued') {
       document.getElementById('sickleave-period').hidden = control.value !== 'yes';
     }
+    if (['assessment.sickLeaveIssued', 'assessment.sickLeaveFrom', 'assessment.sickLeaveTo'].includes(control.dataset.field)) updateSickLeaveDays();
     if (control.dataset.field.startsWith('examSelections.')) {
       app.querySelectorAll('[data-count-section]').forEach((element) => {
         const items = examCatalog.FIELDS.filter((item) => item.section === element.dataset.countSection);

@@ -468,7 +468,7 @@ test("patient full name is shared by card and visits without renaming a differen
   assert.equal(await page.locator(".visit-heading h1").innerText(), renamed);
   assert.deepEqual(data.encounters[0], original, "editing the patient name does not rewrite the encounter or draft");
 
-  await click(page, "patient"); assert.equal(await fullName().inputValue(), renamed);
+  await click(page, "patient"); await click(page, "edit-patient"); assert.equal(await fullName().inputValue(), renamed);
   const finalName = "Тестова Анна Учебная";
   await fullName().fill(finalName); assert.equal(await page.locator("#patient-heading").innerText(), finalName);
   await click(page, "repeat"); await page.locator("#repeat-create").click();
@@ -532,4 +532,220 @@ test("compact patient list shows four complete desktop rows and keeps secondary 
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'compact results fit width ' + width);
   }
   assert.equal(await page.evaluate(key => localStorage.getItem(key), key), initial, 'compact rendering and disclosure preserve data exactly');
+});
+
+async function patientCardFixture(page) {
+  const core = require(path.join(appRoot, 'core.js'));
+  const now = '2032-04-15T07:00:00.000Z';
+  await page.clock.setFixedTime(new Date(now));
+  const labels = { main: 'Тестова Анна Учебная', other: 'Тестов Борис Учебный', past: 'Тестова Прошедшая Явка', completed: 'Тестов Завершённый План', empty: 'Тестова Без Приёмов' };
+  const patients = Object.entries(labels).map(([id, label]) => core.createPatient({ id: 'card-' + id, label, now }));
+  const visit = (id, patientId, visitDate, returnDate, createdAt = now, completed = false) => {
+    let entry = core.createEncounter({ id, patientId: 'card-' + patientId, now: createdAt });
+    entry.visitDate = visitDate;
+    entry.assessment.returnVisitDate = returnDate;
+    entry.history.complaints = 'ДЕМО: жалоба для ' + id;
+    entry.history.medications = 'ДЕМО: препарат для ' + id;
+    entry.history.allergies = 'ДЕМО: аллергия для ' + id;
+    entry.history.conditions = 'ДЕМО: заболевание для ' + id;
+    entry.draft.text = 'ДЕМО: ручная запись <сохранить дословно> ' + id;
+    entry = core.setReviewStatus(entry, 'reviewed', { now });
+    return completed ? core.setReturnVisitStatus(entry, 'completed') : entry;
+  };
+  const encounters = [
+    visit('card-older', 'main', '2032-04-01', '2032-04-15'),
+    visit('card-b', 'main', '2032-04-12', '2032-04-18'),
+    visit('card-a', 'main', '2032-04-12', '2032-04-20'),
+    visit('card-c', 'main', '2032-04-12', '2032-04-16', '2032-04-15T08:00:00.000Z', true),
+    visit('card-oldest', 'main', '2032-03-31', '2032-04-14'),
+    visit('card-other-visit', 'other', '2032-04-10', '2032-04-19'),
+    visit('card-past-older', 'past', '2032-04-01', '2032-04-13'),
+    visit('card-past-latest', 'past', '2032-04-10', '2032-04-14'),
+    visit('card-completed-visit', 'completed', '2032-04-10', '2032-04-17', now, true)
+  ];
+  const initial = core.serializeBundle(encounters, patients);
+  await page.evaluate(({ key, raw }) => localStorage.setItem(key, raw), { key, raw: initial });
+  await page.reload();
+  return { initial, patients, encounters };
+}
+
+async function openPatientCard(page, id = 'main') {
+  await click(page, 'patients');
+  await page.locator('.patient-row[data-patient-id="card-' + id + '"] [data-action="patient"]').click();
+}
+
+test('compact patient card edits identity with keyboard, preserves drafts and shows history in the first desktop viewport', { timeout: 20000 }, async t => {
+  const { page } = await openApp(t);
+  const { encounters } = await patientCardFixture(page);
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await openPatientCard(page);
+  const edit = page.locator('[data-action="edit-patient"]');
+  const panel = page.locator('#patient-edit-panel');
+  const name = page.locator('#patient-label');
+  assert.equal(await page.locator('#patient-heading').innerText(), 'Тестова Анна Учебная');
+  assert.equal(await edit.getAttribute('aria-expanded'), 'false');
+  assert.equal(await edit.getAttribute('aria-controls'), 'patient-edit-panel');
+  assert.equal(await panel.isVisible(), false);
+  assert.equal(await name.isVisible(), false);
+  assert.equal(await page.locator('.patient-card-header [data-action="repeat"]').innerText(), 'Повторный приём');
+  const layout = await page.evaluate(() => {
+    const header = document.querySelector('.patient-card-header').getBoundingClientRect();
+    const history = document.querySelector('#patient-history').getBoundingClientRect();
+    const first = document.querySelector('#patient-history [data-visit-id]').getBoundingClientRect();
+    return { gap: history.top - header.bottom, firstTop: first.top, firstBottom: first.bottom, height: innerHeight };
+  });
+  assert.ok(layout.gap >= 0 && layout.gap <= 32, 'history follows the compact header directly');
+  assert.ok(layout.firstTop >= 0 && layout.firstBottom <= layout.height, 'a complete history row fits at 1366×768');
+  await edit.focus(); await page.keyboard.press('Enter');
+  assert.equal(await edit.getAttribute('aria-expanded'), 'true');
+  assert.equal(await name.evaluate(node => document.activeElement === node), true);
+  const label = ('Тестова <Демонстрационная> ' + 'Ф'.repeat(120)).slice(0, 120);
+  await name.fill(label);
+  assert.equal(await page.locator('#patient-heading').innerText(), label);
+  assert.equal(await page.locator('#patient-heading *').count(), 0, 'patient text is escaped');
+  assert.match(await page.locator('#save-status').innerText(), /Сохранено/);
+  const data = await saved(page);
+  assert.equal(data.patients.find(patient => patient.id === 'card-main').label, label);
+  assert.equal(data.patients.find(patient => patient.id === 'card-other').label, 'Тестов Борис Учебный');
+  for (const entry of encounters) {
+    const result = data.encounters.find(item => item.id === entry.id);
+    assert.equal(result.draft.text, entry.draft.text, 'editing identity preserves each manual draft');
+    assert.equal(result.workflow.reviewStatus, entry.patientId === 'card-main' ? 'draft' : 'reviewed');
+  }
+  assert.equal(await page.locator('#patient-history .record-status.reviewed').count(), 0);
+  const done = page.locator('[data-action="finish-patient-edit"]');
+  await done.focus(); await page.keyboard.press('Enter');
+  assert.equal(await panel.isVisible(), false);
+  assert.equal(await edit.getAttribute('aria-expanded'), 'false');
+  assert.equal(await edit.evaluate(node => document.activeElement === node), true);
+  for (const width of [1366, 800, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'long identity fits card width ' + width);
+    await edit.click();
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'open identity editor fits width ' + width);
+    await done.click();
+  }
+  await edit.click(); await click(page, 'patients'); await openPatientCard(page, 'other');
+  assert.equal(await panel.isVisible(), false, 'opening another card resets the editor');
+  await openPatientCard(page);
+  assert.equal(await panel.isVisible(), false, 'returning to the card does not reopen its editor');
+  await page.reload(); await openPatientCard(page);
+  assert.equal(await page.locator('#patient-heading').innerText(), label);
+  assert.equal(await panel.isVisible(), false);
+});
+
+test('compact patient card shows the nearest pending appointment and refreshes at midnight without replacing the open editor', { timeout: 20000 }, async t => {
+  const { page } = await openApp(t);
+  const { initial } = await patientCardFixture(page);
+  await openPatientCard(page);
+  const summary = page.locator('#patient-next-return');
+  assert.match(await summary.innerText(), /15\.04\.2032[\s\S]*сегодня/);
+  assert.equal(await page.evaluate(key => localStorage.getItem(key), key), initial, 'opening the card does not save');
+  await click(page, 'edit-patient');
+  await page.locator('#patient-label').fill('Тестова Анна Перед Полуночью');
+  await page.evaluate(() => { window.demoPatientInput = document.getElementById('patient-label'); });
+  const beforeMidnight = await page.evaluate(key => localStorage.getItem(key), key);
+  await page.clock.setFixedTime(new Date('2032-04-15T21:01:00.000Z'));
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  assert.match(await summary.innerText(), /18\.04\.2032/);
+  assert.doesNotMatch(await summary.innerText(), /16\.04\.2032/, 'completed appointment is excluded');
+  assert.equal(await page.locator('#patient-edit-panel').isVisible(), true);
+  assert.equal(await page.locator('#patient-label').inputValue(), 'Тестова Анна Перед Полуночью');
+  assert.equal(await page.locator('#patient-label').evaluate(node => node === window.demoPatientInput && node === document.activeElement), true, 'midnight preserves the input node and keyboard focus');
+  assert.equal(await page.evaluate(key => localStorage.getItem(key), key), beforeMidnight, 'midnight neither saves nor infers attendance');
+  await openPatientCard(page, 'past');
+  assert.match(await summary.innerText(), /14\.04\.2032[\s\S]*исход не отмечен/);
+  assert.doesNotMatch(await summary.innerText(), /не явился|пропустил/i);
+  for (const id of ['completed', 'empty']) {
+    await openPatientCard(page, id);
+    assert.match(await summary.innerText(), /не назначен|нет назначенн/i);
+    assert.doesNotMatch(await summary.innerText(), /17\.04\.2032/);
+  }
+  assert.equal(await page.evaluate(key => localStorage.getItem(key), key), beforeMidnight, 'all appointment summaries are read only');
+});
+
+test('compact patient card preserves ordered history and explicit repeat carry confirmation, including a first encounter', { timeout: 20000 }, async t => {
+  const { page } = await openApp(t);
+  const { initial, encounters } = await patientCardFixture(page);
+  await openPatientCard(page);
+  const historyIds = () => page.locator('#patient-history [data-visit-id]').evaluateAll(rows => rows.map(row => row.dataset.visitId));
+  assert.deepEqual(await historyIds(), ['card-c', 'card-a', 'card-b', 'card-older', 'card-oldest']);
+  await page.locator('#patient-history [data-id="card-older"]').click();
+  assert.equal(await page.locator('[data-field="visitDate"]').inputValue(), '2032-04-01');
+  assert.equal(await page.getByLabel('ФИО пациента', { exact: true }).isVisible(), true, 'encounter identity input remains directly visible');
+  await click(page, 'patient');
+  assert.equal(await page.locator('#patient-edit-panel').isVisible(), false);
+  await click(page, 'repeat');
+  assert.equal(await page.locator('#repeat-source').inputValue(), 'card-c');
+  assert.equal(await page.locator('#repeat-source').isDisabled(), false, 'card offers choice of source encounter');
+  assert.equal(await page.locator('#repeat-fields input:checked').count(), 0);
+  await page.locator('#repeat-cancel').click();
+  assert.equal(await page.evaluate(key => localStorage.getItem(key), key), initial, 'cancelling repeat does not create records');
+  await click(page, 'repeat'); await page.locator('#repeat-source').selectOption('card-older');
+  await page.locator('#repeat-fields input[value="medications"]').check();
+  await page.locator('#repeat-create').click();
+  const data = await saved(page), repeated = data.encounters.at(-1);
+  assert.equal(data.patients.length, 5);
+  assert.equal(data.encounters.length, encounters.length + 1);
+  assert.equal(repeated.patientId, 'card-main');
+  assert.equal(repeated.history.medications, encounters.find(entry => entry.id === 'card-older').history.medications);
+  assert.equal(repeated.history.allergies, '');
+  assert.equal(repeated.history.conditions, '');
+  assert.equal(repeated.history.complaints, '');
+  assert.equal(repeated.draft.text, '');
+  assert.deepEqual(data.encounters.slice(0, -1), JSON.parse(initial).encounters, 'original encounters and attendance are untouched');
+  await click(page, 'patient');
+  assert.equal((await historyIds())[0], repeated.id);
+  await openPatientCard(page, 'empty');
+  assert.equal(await page.locator('#patient-history [data-visit-id]').count(), 0);
+  assert.equal(await page.locator('.patient-card-header [data-action="repeat"]').innerText(), 'Первый приём');
+  await click(page, 'repeat');
+  assert.equal(await page.locator('#repeat-source-wrap').isVisible(), false);
+  assert.equal(await page.locator('#repeat-fields input').count(), 0);
+  await page.locator('#repeat-create').click();
+  const afterFirst = await saved(page);
+  assert.equal(afterFirst.patients.length, 5);
+  assert.equal(afterFirst.encounters.length, encounters.length + 2);
+  assert.equal(afterFirst.encounters.at(-1).patientId, 'card-empty');
+});
+
+test('compact patient card retains unsaved identity and visible warnings after storage failure or a second-window change', { timeout: 20000 }, async t => {
+  const { page, context } = await openApp(t);
+  const { initial } = await patientCardFixture(page);
+  await openPatientCard(page); await click(page, 'edit-patient');
+  await page.evaluate(key => {
+    const original = Storage.prototype.setItem;
+    window.restoreDemoStorage = () => { Storage.prototype.setItem = original; };
+    Storage.prototype.setItem = function (name, value) {
+      if (name === key) throw new DOMException('ДЕМО: хранилище заполнено', 'QuotaExceededError');
+      return original.call(this, name, value);
+    };
+  }, key);
+  await page.locator('#patient-label').fill('Тестова Анна Несохранённая');
+  await click(page, 'finish-patient-edit');
+  assert.equal(await page.locator('#patient-edit-panel').isVisible(), true);
+  assert.equal(await page.locator('#patient-label').inputValue(), 'Тестова Анна Несохранённая');
+  assert.equal(await page.locator('#storage-banner').isVisible(), true);
+  assert.match(await page.locator('#save-status').innerText(), /не сохранены/);
+  assert.equal(await page.evaluate(key => localStorage.getItem(key), key), initial);
+  await page.evaluate(() => window.restoreDemoStorage());
+  await page.locator('#patient-label').fill('Тестова Анна Сохранённая');
+  await click(page, 'finish-patient-edit');
+  assert.equal(await page.locator('#patient-edit-panel').isVisible(), false);
+  assert.equal((await saved(page)).patients.find(patient => patient.id === 'card-main').label, 'Тестова Анна Сохранённая');
+  await click(page, 'edit-patient');
+  const second = await context.newPage(); await second.goto(url); await openPatientCard(second);
+  await click(second, 'edit-patient');
+  await second.locator('#patient-label').fill('Тестова Анна Из Второго Окна');
+  await page.waitForFunction(() => document.getElementById('storage-banner').textContent.includes('другом окне'));
+  const latest = await page.evaluate(key => localStorage.getItem(key), key);
+  await page.locator('#patient-label').fill('Тестова Анна Локальная Правка');
+  await click(page, 'finish-patient-edit');
+  assert.equal(await page.locator('#patient-edit-panel').isVisible(), true);
+  assert.equal(await page.locator('#patient-label').inputValue(), 'Тестова Анна Локальная Правка');
+  assert.equal(await page.locator('#storage-banner').isVisible(), true);
+  assert.match(await page.locator('#storage-banner').innerText(), /другом окне/);
+  assert.equal(await page.evaluate(key => localStorage.getItem(key), key), latest, 'stale identity cannot overwrite the second window');
+  assert.equal((await saved(page)).patients.length, 5);
+  assert.equal((await saved(page)).encounters.length, 9);
 });

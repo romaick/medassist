@@ -86,6 +86,149 @@ test("patient list keeps the last visit, prioritizes the nearest pending return 
   assert.equal(await page.locator('#patient-heading').innerText(), labels.soon);
 });
 
+async function patientFilterFixture(page) {
+  const core = require(path.join(appRoot, 'core.js'));
+  const now = '2032-04-15T07:00:00.000Z';
+  await page.clock.setFixedTime(new Date(now));
+  const labels = {a: 'Альфа Тестовая', b: 'Бета Тестовая', c: 'Гамма Тестовая', d: 'Дельта Тестовая', u: 'Уточнение Тестовое', ended: 'Завершённый Тестовый', future: 'Будущий Тестовый', no: 'Нет Тестовый', empty: 'Пустая Тестовая'};
+  const patients = Object.entries(labels).map(([id, label]) => core.createPatient({id: 'patient-' + id, label, now}));
+  const encounters = [];
+  function visit(id, patient, {from = '', to = '', number = '', issued = 'yes', date = '', visitDate = '2032-04-14', reviewed = true, completed = false} = {}) {
+    let entry = core.createEncounter({id: 'visit-' + id, patientId: 'patient-' + patient, now});
+    entry.visitDate = visitDate;
+    Object.assign(entry.assessment, {sickLeaveIssued: issued, sickLeaveNumber: number, sickLeaveFrom: from, sickLeaveTo: to, returnVisitDate: date});
+    entry.draft.text = 'Вымышленная запись для проверки фильтров.';
+    if (reviewed) entry = core.setReviewStatus(entry, 'reviewed', {now});
+    if (completed) entry = core.setReturnVisitStatus(entry, 'completed');
+    encounters.push(entry);
+  }
+  visit('a', 'a', {from: '2032-04-15', to: '2032-04-15', number: 'DEMO-001', date: '2032-04-15'});
+  visit('b', 'b', {from: '2032-04-13', to: '2032-04-20', number: '<ДЕМО & №2>', date: '2032-04-18', reviewed: false});
+  visit('b-duplicate', 'b', {from: '2032-04-13', to: '2032-04-20', number: '<ДЕМО & №2>', date: '2032-04-21'});
+  visit('b-old', 'b', {from: '2032-04-01', to: '2032-04-14', number: 'DEMO-OLD', date: '2032-04-25', visitDate: '2032-04-01'});
+  visit('b-unknown', 'b', {from: '2032-04-15', number: 'DEMO-PARTIAL'});
+  visit('c', 'c', {from: '2032-04-10', to: '2032-04-17', number: 'DEMO-003', date: '2032-04-22', reviewed: false, visitDate: '2032-04-12'});
+  visit('d', 'd', {from: '2032-04-10', to: '2032-04-18', number: 'DEMO-004', date: '2032-04-14', visitDate: '2032-04-13'});
+  visit('u', 'u', {to: '2032-04-15', number: 'DEMO-UNKNOWN', reviewed: false});
+  visit('ended', 'ended', {from: '2032-04-01', to: '2032-04-14', number: 'DEMO-ENDED', date: '2032-04-15', completed: true, visitDate: '2032-04-10'});
+  visit('future', 'future', {from: '2032-04-16', to: '2032-04-25', number: 'DEMO-FUTURE', date: '2032-04-16'});
+  visit('no', 'no', {issued: 'no', number: 'HIDDEN-NUMBER', reviewed: false});
+  const initial = core.serializeBundle(encounters, patients);
+  await page.evaluate(({key, raw}) => localStorage.setItem(key, raw), {key, raw: initial});
+  await page.reload(); await click(page, 'patients');
+  return initial;
+}
+const patientCategory = (page, category) => page.locator('[data-action="patient-category"][data-category="' + category + '"]');
+const patientIds = page => page.locator('.patient-row').evaluateAll(rows => rows.map(row => row.dataset.patientId.replace('patient-', '')));
+const patientFilter = (page, key) => page.locator('#patient-filter-' + key);
+
+test("patient categories count unique patients; sick leave filters use inclusive dates, incomplete periods and refresh at midnight without saving", {timeout: 20000}, async t => {
+  const {page} = await openApp(t);
+  const initial = await patientFilterFixture(page);
+  for (const [category, count] of [['all', 9], ['sick', 5], ['return', 5], ['draft', 4]]) {
+    assert.match(await patientCategory(page, category).innerText(), new RegExp('· ' + count + '$'));
+  }
+  await patientCategory(page, 'sick').click();
+  assert.deepEqual(await patientIds(page), ['a', 'c', 'd', 'b', 'u']);
+  assert.equal(await patientFilter(page, 'sort').inputValue(), 'sick');
+  const rowB = page.locator('.patient-row[data-patient-id="patient-b"]');
+  assert.equal(await rowB.locator('.patient-sick').count(), 2, 'identical sick-leave rows are displayed once');
+  assert.match(await rowB.innerText(), /ЛН №<ДЕМО & №2>/);
+  assert.match(await rowB.innerText(), /период требует уточнения/);
+  await patientFilter(page, 'sick').selectOption('current');
+  assert.deepEqual(await patientIds(page), ['a', 'c', 'd', 'b']);
+  await patientFilter(page, 'sick').selectOption('today');
+  assert.deepEqual(await patientIds(page), ['a'], 'partial period with an end today is not inferred active');
+  await patientFilter(page, 'sick').selectOption('soon');
+  assert.deepEqual(await patientIds(page), ['a', 'c'], 'today plus two calendar days; expired and day four excluded');
+  await patientFilter(page, 'sick').selectOption('unknown');
+  assert.deepEqual((await patientIds(page)).sort(), ['b', 'u']);
+  await page.locator('#patient-search').fill('demo-partial');
+  assert.deepEqual(await patientIds(page), ['b']);
+  assert.match(await page.locator('#patient-filter-summary').innerText(), /Поиск: demo-partial/);
+  assert.match(await patientCategory(page, 'sick').innerText(), /· 5$/, 'counts remain unfiltered');
+  await click(page, 'patient-reset-filters');
+  assert.deepEqual(await patientIds(page), ['a', 'c', 'd', 'b', 'u']);
+  assert.equal(await patientCategory(page, 'sick').getAttribute('aria-pressed'), 'true');
+  await patientFilter(page, 'sick').selectOption('current');
+  for (const width of [1440, 800, 390]) {
+    await page.setViewportSize({width, height: 1000});
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'filters fit viewport ' + width);
+  }
+  await page.clock.setFixedTime(new Date('2032-04-15T21:01:00.000Z'));
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  assert.deepEqual(await patientIds(page), ['c', 'd', 'b', 'future'], 'ended period leaves, newly started period enters');
+  assert.match(await patientCategory(page, 'sick').innerText(), /· 5$/);
+  assert.equal(await patientFilter(page, 'sick').inputValue(), 'current');
+  assert.equal(await page.evaluate(key => localStorage.getItem(key), key), initial, 'rubrics, filters and midnight are read only');
+});
+
+test("patient filters combine search, return dates, latest visit and review status; reset and sorting preserve records", {timeout: 20000}, async t => {
+  const {page} = await openApp(t);
+  const initial = await patientFilterFixture(page);
+  await patientCategory(page, 'draft').click();
+  assert.deepEqual((await patientIds(page)).sort(), ['b', 'c', 'no', 'u']);
+  await patientCategory(page, 'return').click();
+  assert.equal((await patientIds(page)).length, 5);
+  await patientCategory(page, 'all').click();
+  await patientFilter(page, 'return').selectOption('today');
+  assert.deepEqual(await patientIds(page), ['a']);
+  await patientFilter(page, 'return').selectOption('week');
+  assert.deepEqual(await patientIds(page), ['a', 'future', 'b']);
+  await patientFilter(page, 'review').selectOption('draft');
+  assert.deepEqual(await patientIds(page), ['b']);
+  await patientCategory(page, 'sick').click();
+  assert.deepEqual(await patientIds(page), ['b'], 'shared filters persist across categories');
+  assert.match(await page.locator('#patient-filter-summary').innerText(), /Есть черновики/);
+  await patientFilter(page, 'sick').selectOption('soon');
+  assert.deepEqual(await patientIds(page), [], 'all conditions must hold for a patient');
+  assert.match(await page.locator('#patient-list').innerText(), /не найдены/);
+  await click(page, 'patient-reset-filters'); await patientCategory(page, 'all').click();
+  await patientFilter(page, 'return').selectOption('range');
+  await patientFilter(page, 'returnFrom').fill('2032-04-21');
+  await patientFilter(page, 'returnTo').fill('2032-04-21');
+  assert.deepEqual(await patientIds(page), ['b'], 'matches a later appointment, not just nearest');
+  assert.match(await page.locator('.patient-row').innerText(), /Другие явки по фильтру: 21\.04\.2032/);
+  await patientFilter(page, 'returnFrom').fill('2032-04-19');
+  await patientFilter(page, 'returnTo').fill('2032-04-20');
+  assert.deepEqual(await patientIds(page), [], 'both bounds must match the same appointment');
+  await patientFilter(page, 'returnFrom').fill('2032-04-22');
+  assert.match(await page.locator('#patient-filter-error').innerText(), /Повторная явка/);
+  assert.equal(await patientFilter(page, 'returnFrom').getAttribute('aria-invalid'), 'true');
+  await patientFilter(page, 'return').selectOption('past');
+  assert.deepEqual(await patientIds(page), ['d']);
+  assert.equal(await page.locator('#patient-filter-error').innerText(), '');
+  await patientFilter(page, 'return').selectOption('none');
+  assert.deepEqual((await patientIds(page)).sort(), ['empty', 'ended', 'no', 'u']);
+  await click(page, 'patient-reset-filters');
+  await patientFilter(page, 'review').selectOption('reviewed');
+  assert.deepEqual((await patientIds(page)).sort(), ['a', 'd', 'ended', 'future'], 'no visits and mixed review status excluded');
+  await patientFilter(page, 'lastFrom').fill('2032-04-10');
+  await patientFilter(page, 'lastTo').fill('2032-04-13');
+  assert.deepEqual((await patientIds(page)).sort(), ['d', 'ended']);
+  await patientFilter(page, 'lastFrom').fill('2032-04-14');
+  assert.match(await page.locator('#patient-filter-error').innerText(), /Последний приём/);
+  await click(page, 'patient-reset-filters');
+  await patientFilter(page, 'lastFrom').fill('2032-04-01');
+  await patientFilter(page, 'lastTo').fill('2032-04-01');
+  assert.deepEqual(await patientIds(page), [], 'an older visit does not satisfy the latest-visit filter');
+  await click(page, 'patient-reset-filters');
+  await patientFilter(page, 'sort').selectOption('name');
+  assert.deepEqual(await patientIds(page), ['a', 'b', 'future', 'c', 'd', 'ended', 'no', 'empty', 'u']);
+  await patientFilter(page, 'sort').selectOption('last');
+  assert.deepEqual((await patientIds(page)).slice(-4), ['d', 'c', 'ended', 'empty']);
+  await page.locator('#patient-search').fill('DEMO-ENDED');
+  assert.deepEqual(await patientIds(page), ['ended'], 'search finds historical sick leave');
+  assert.match(await page.locator('.patient-sick').innerText(), /указанный период прошёл/);
+  await page.locator('#patient-search').fill('HIDDEN-NUMBER');
+  assert.deepEqual(await patientIds(page), [], 'not-issued leave number is ignored');
+  await page.locator('#patient-search').fill('patient-b');
+  assert.deepEqual(await patientIds(page), ['b']);
+  assert.equal(await page.evaluate(key => localStorage.getItem(key), key), initial);
+  await page.locator('.patient-row [data-action="patient"]').click();
+  assert.equal(await page.locator('#patient-heading').innerText(), 'Бета Тестовая');
+});
+
 test("two windows: a conflict cancels repeat creation and exposes the warning, then explicit reload permits a confirmed repeat", { timeout: 20000 }, async t => {
   const { context, page } = await openApp(t);
   await click(page, "new");

@@ -95,7 +95,6 @@
     const encounter = createEncounter(options);
     encounter.age = "36";
     encounter.sex = "female";
-    encounter.reason = "Вымышленный учебный приём для проверки приложения";
     encounter.history.complaints = "Вымышленный пример: ощущение усталости к концу дня.";
     encounter.history.onset = "В учебном сценарии жалоба появилась несколько дней назад.";
     encounter.history.course = "Поле заполнено для демонстрации структуры анамнеза.";
@@ -261,7 +260,6 @@
       "Демо-пациент. Дата приёма: " + date + ".",
       line("Возраст (полных лет)", encounter.age),
       "Пол: " + SEXES[encounter.sex] + ".",
-      "Повод обращения: " + text(encounter.reason),
       "",
       "АНАМНЕЗ",
       "Жалобы: " + text(encounter.history.complaints),

@@ -58,6 +58,18 @@
   const filledCount = (object) => Object.values(object).filter((value) => value.trim()).length;
   const dateText = (value) => value ? new Date(value + 'T12:00:00').toLocaleDateString('ru-RU') : 'Дата не указана';
   const localDate = () => new Date().toLocaleDateString('sv-SE');
+  const headerDateFormat = new Intl.DateTimeFormat('ru-RU', {day: 'numeric', month: 'long'});
+  function updateClock() {
+    const now = new Date();
+    const month = headerDateFormat.formatToParts(now).find((part) => part.type === 'month').value;
+    const monthNumber = String(now.getMonth() + 1).padStart(2, '0');
+    const date = document.getElementById('current-date');
+    const time = document.getElementById('current-time');
+    date.textContent = now.getDate() + ' ' + month + '(' + monthNumber + ') ' + now.getFullYear();
+    date.dateTime = now.getFullYear() + '-' + monthNumber + '-' + String(now.getDate()).padStart(2, '0');
+    time.textContent = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+    time.dateTime = time.textContent;
+  }
   const shortId = (entry) => entry.id.replace(/^visit-/, '').slice(0, 8).toUpperCase();
   const patientLabel = (entry) => 'Демо-пациент · ' + shortId(entry);
   const get = (object, path) => path.split('.').reduce((value, key) => value[key], object);
@@ -92,10 +104,11 @@
     app.innerHTML = '<div class="shell"><aside class="sidebar" aria-label="Главная навигация"><div class="brand"><img src="icon.svg" alt=""><div><strong>МедАссистент</strong><small>ПОЛИКЛИНИЧЕСКИЙ РЕЖИМ</small></div></div><p class="nav-caption">РАБОЧЕЕ ПРОСТРАНСТВО</p><nav class="nav">' +
       navButton('home', 'Обзор', 'home') + navButton('new', 'Новый приём', 'plus') +
       (current ? navButton('visit', 'Текущий приём', 'document') : '') + navButton('modules', 'Модули', 'grid') + navButton('help', 'Помощь и данные', 'help') + navButton('check-updates', 'Проверить обновления', 'download') +
-      '</nav><div class="side-bottom"><div class="local-indicator"><span class="dot"></span>Работает локально</div><div class="version">Прототип 0.5.1 · Демонстрация</div></div></aside><div class="workspace"><header class="topbar"><div class="topbar-left">Поликлиника <span aria-hidden="true">/</span> <span>' + sectionName + '</span></div><div class="topbar-right"><span class="date muted">' + new Date().toLocaleDateString('ru-RU', {day: 'numeric', month: 'long'}) + '</span><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><span class="avatar" aria-hidden="true">МА</span></div></header><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
+      '</nav><div class="side-bottom"><div class="local-indicator"><span class="dot"></span>Работает локально</div><div class="version">Прототип 0.5.2 · Демонстрация</div></div></aside><div class="workspace"><header class="topbar"><div class="topbar-left">Поликлиника <span aria-hidden="true">/</span> <span>' + sectionName + '</span></div><div class="topbar-right"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><span class="avatar" aria-hidden="true">МА</span></div></header><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
       (state.migrated ? '<div class="migration-notice">Записи предыдущей версии загружены. Старый текст осмотра, наблюдения и ручные правки сохранены. Проверьте их перед повторной генерацией.</div>' : '') +
       ({home: renderHome, visit: renderVisit, modules: renderModules, help: renderHelp}[state.view])() +
-      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.5.1</span></footer></main></div></div>';
+      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.5.2</span></footer></main></div></div>';
+    updateClock();
     updateSaveStatus();
     if (state.view === 'visit') { updateValidation(); updateDraftState(); }
   }
@@ -108,15 +121,15 @@
     return '<div class="page-heading"><div><h1>Хорошего рабочего дня.</h1><p>Всё для первой записи — в одном рабочем пространстве.</p></div>' + button('new', 'Новый приём', 'plus', 'primary') + '</div>' + demoNotice() +
       '<section class="welcome"><div><p class="eyebrow">Спокойный порядок в записях</p><h2>От приёма к понятному черновику</h2><p>Заполните анамнез и осмотр. МедАссистент соберёт введённые сведения в текст, который вы сможете проверить и отредактировать.</p><div class="actions">' + button('new', 'Начать приём', 'arrow', 'primary') + button('example', 'Открыть пример', null, 'ghost') + '</div></div><div class="welcome-illustration" aria-hidden="true"><div class="sheet-art">' + icon('document') + '<span class="art-line"></span><span class="art-line"></span><span class="art-line short"></span><span class="art-line"></span></div><div class="art-check">' + icon('check') + '</div></div></section>' +
       '<div class="stats"><div class="stat"><div class="icon-tile">' + icon('calendar') + '</div><div><div class="stat-label">Приёмов в рабочем списке</div><div class="stat-value">' + state.encounters.length + '</div></div></div><div class="stat"><div class="icon-tile">' + icon('document') + '</div><div><div class="stat-label">С текстом черновика</div><div class="stat-value">' + drafts + '</div></div></div><div class="stat"><div class="icon-tile">' + icon('shield') + '</div><div><div class="stat-label">Режим работы</div><div class="stat-value text">На этом компьютере</div></div></div></div>' +
-      '<div class="dashboard-grid"><section class="card"><div class="card-head"><h2>Рабочий список</h2><span class="result-count">' + state.encounters.length + ' записей</span></div>' + (state.encounters.length ? '<div class="search-wrap"><input class="search-field" id="visit-search" aria-label="Найти приём" placeholder="Поиск по коду, дате или поводу обращения" value="' + escape(state.search) + '"></div><div id="visit-list" class="list">' + renderList() + '</div>' : '<div class="empty"><div class="icon-tile">' + icon('document') + '</div><h3>Здесь появятся ваши приёмы</h3><p>Начните с пустой формы или откройте заполненный вымышленный пример.</p>' + button('example', 'Открыть пример', 'document') + '</div>') + '</section><section class="card"><div class="card-head"><h2>Первый приём за 3 шага</h2></div><div class="guide-steps">' +
-      [['01', 'Заполните сведения', 'Повод обращения, анамнез и данные осмотра. Все поля можно оставить пустыми.'], ['02', 'Соберите запись', 'В черновик попадут только введённые вами сведения.'], ['03', 'Проверьте и сохраните', 'Отредактируйте текст и скачайте его в файл.']].map(([number, title, body]) => '<div class="guide-step"><span class="step-number">' + number + '</span><div><h3>' + title + '</h3><p>' + body + '</p></div></div>').join('') + '</div></section></div>' +
+      '<div class="dashboard-grid"><section class="card"><div class="card-head"><h2>Рабочий список</h2><span class="result-count">' + state.encounters.length + ' записей</span></div>' + (state.encounters.length ? '<div class="search-wrap"><input class="search-field" id="visit-search" aria-label="Найти приём" placeholder="Поиск по коду, дате или жалобам" value="' + escape(state.search) + '"></div><div id="visit-list" class="list">' + renderList() + '</div>' : '<div class="empty"><div class="icon-tile">' + icon('document') + '</div><h3>Здесь появятся ваши приёмы</h3><p>Начните с пустой формы или откройте заполненный вымышленный пример.</p>' + button('example', 'Открыть пример', 'document') + '</div>') + '</section><section class="card"><div class="card-head"><h2>Первый приём за 3 шага</h2></div><div class="guide-steps">' +
+      [['01', 'Заполните сведения', 'Жалобы, анамнез и данные осмотра. Все поля можно оставить пустыми.'], ['02', 'Соберите запись', 'В черновик попадут только введённые вами сведения.'], ['03', 'Проверьте и сохраните', 'Отредактируйте текст и скачайте его в файл.']].map(([number, title, body]) => '<div class="guide-step"><span class="step-number">' + number + '</span><div><h3>' + title + '</h3><p>' + body + '</p></div></div>').join('') + '</div></section></div>' +
       '<div class="module-strip"><div class="icon-tile">' + icon('grid') + '</div><div><h3>Основа для дальнейших модулей</h3><p>Калькуляторы, анализы и диспансерное наблюдение.</p></div>' + button('modules', 'Что дальше', 'arrow', 'ghost') + '</div>';
   }
   function renderList() {
     const query = state.search.toLocaleLowerCase('ru').trim();
-    const entries = [...state.encounters].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).filter((entry) => [patientLabel(entry), entry.visitDate, dateText(entry.visitDate), entry.reason].join(' ').toLocaleLowerCase('ru').includes(query));
+    const entries = [...state.encounters].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).filter((entry) => [patientLabel(entry), entry.visitDate, dateText(entry.visitDate), entry.history.complaints].join(' ').toLocaleLowerCase('ru').includes(query));
     if (!entries.length) return '<p class="muted small">По вашему запросу приёмов нет.</p>';
-    return entries.map((entry) => '<div class="visit-row"><div class="visit-identity"><div class="icon-tile">' + icon('user') + '</div><div class="visit-text"><strong>' + escape(patientLabel(entry)) + '</strong><p>' + escape(dateText(entry.visitDate)) + ' · ' + escape(entry.reason || 'Повод обращения не указан') + '</p><p>' + (entry.draft.text.trim() ? 'Черновик сохранён' : 'Форма приёма') + '</p></div></div>' + button('open', 'Открыть', null, 'secondary compact', 'data-id="' + escape(entry.id) + '" aria-label="Открыть ' + escape(patientLabel(entry)) + '"') + '</div>').join('');
+    return entries.map((entry) => '<div class="visit-row"><div class="visit-identity"><div class="icon-tile">' + icon('user') + '</div><div class="visit-text"><strong>' + escape(patientLabel(entry)) + '</strong><p>' + escape(dateText(entry.visitDate)) + ' · ' + escape(entry.history.complaints.trim() || 'Жалобы не указаны') + '</p><p>' + (entry.draft.text.trim() ? 'Черновик сохранён' : 'Форма приёма') + '</p></div></div>' + button('open', 'Открыть', null, 'secondary compact', 'data-id="' + escape(entry.id) + '" aria-label="Открыть ' + escape(patientLabel(entry)) + '"') + '</div>').join('');
   }
   function renderVisit() {
     return '<div class="page-heading visit-heading"><div><h1>' + escape(patientLabel(active())) + '</h1><p id="visit-date-summary">Демонстрационный приём · ' + escape(dateText(active().visitDate)) + '</p></div><div id="save-status" class="save-indicator" role="status"></div></div>' + demoNotice() +
@@ -134,7 +147,7 @@
     return '<div class="form-layout"><section class="card form-card"><h2>Сведения о приёме</h2><p class="section-intro">Форма для знакомства с рабочим процессом. Для пациента автоматически создан демонстрационный код.</p><div class="field-grid three">' +
       field('visitDate', 'Дата приёма', '', {type: 'date'}) + field('age', 'Возраст, полных лет', 'Не указан', {type: 'text', numeric: true}) +
       field('sex', 'Пол', '', {select: [['', 'Не указан'], ['female', 'Женский'], ['male', 'Мужской'], ['unspecified', 'Не уточнён']]}) +
-      field('reason', 'Повод обращения', 'Кратко опишите повод демонстрационного приёма', {full: true}) + '</div>' + nextFooter(null, 'history', 'Перейти к анамнезу') + '</section>' + aside('Начните с контекста', 'Имена и контактные данные здесь не нужны. На каждом шаге сведения сохраняются в этом браузере. Для переноса используйте резервную копию.') + '</div>';
+      '</div>' + nextFooter(null, 'history', 'Перейти к анамнезу') + '</section>' + aside('Начните с контекста', 'Имена и контактные данные здесь не нужны. На каждом шаге сведения сохраняются в этом браузере. Для переноса используйте резервную копию.') + '</div>';
   }
   function renderHistory() {
     return '<div class="form-layout"><section class="card form-card"><h2>Анамнез</h2><p class="section-intro">Запишите известные сведения. Пустое поле не означает отсутствие симптомов, заболеваний или аллергии. Дополнительный анамнез включается только при заполнении.</p><div class="field-grid">' + historyFields.map(([key, title, hint], i) => field('history.' + key, title, hint, {full: i === 0 || i === 6})).join('') + '</div>' + nextFooter('basic', 'exam', 'Перейти к осмотру') + '</section>' + aside('Никаких предположений', 'Генератор упорядочит ваши формулировки. Пустой дополнительный анамнез будет пропущен; основные незаполненные поля останутся обозначены.') + '</div>';
@@ -412,6 +425,8 @@
     updateSaveStatus();
   });
   render();
+  window.setInterval(updateClock, 1000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) updateClock(); });
   document.querySelector('.skip-link').addEventListener('click', (event) => {
     event.preventDefault();
     document.getElementById('main').focus();

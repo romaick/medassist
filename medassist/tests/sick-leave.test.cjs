@@ -291,3 +291,139 @@ test("repository round trip includes the journal and invalid saves cannot replac
   assert.equal(values.get(KEY), saved);
   assert.deepEqual(second.load().patients[0], card);
 });
+
+function countedEncounter(id, from, to, number = "ЛН-2032", visitDate = from) {
+  const result = encounter(id, { sickLeaveFrom: from, sickLeaveTo: to, sickLeaveNumber: number });
+  result.visitDate = visitDate;
+  return result;
+}
+
+test("repeat encounter counts 19–23 and 23–27 as nine continuous days for matching numbered or unnamed leaves", () => {
+  for (const number of ["ЛН-2032", ""]) {
+    const previous = countedEncounter("previous", "2032-04-19", "2032-04-23", number);
+    const current = countedEncounter("current", "2032-04-23", "2032-04-27", number);
+    const summary = core.getEncounterSickLeaveSummary(current, patient(), [previous, current]);
+    assert.deepEqual(summary, { periodDays: 5, totalDays: 9, from: "2032-04-19", to: "2032-04-27", unnumbered: number === "", hasPrevious: true });
+    assert.equal(core.calculateSickLeaveDays(current.assessment.sickLeaveFrom, current.assessment.sickLeaveTo), 5);
+  }
+});
+
+test("adjacent periods join with matching trimmed case-insensitive numbers", () => {
+  const previous = countedEncounter("previous", "2032-04-19", "2032-04-23", "  ЛН-2032 ");
+  const current = countedEncounter("current", "2032-04-24", "2032-04-27", "лн-2032");
+  assert.deepEqual(core.getEncounterSickLeaveSummary(current, patient(), [previous, current]), { periodDays: 4, totalDays: 9, from: "2032-04-19", to: "2032-04-27", unnumbered: false, hasPrevious: true });
+});
+
+test("continuous summary excludes different numbers, different patients, gaps, future visits and inactive leaves", () => {
+  const current = countedEncounter("current", "2032-04-23", "2032-04-27");
+  const otherPatient = countedEncounter("other-patient", "2032-04-19", "2032-04-23"); otherPatient.patientId = "another-patient";
+  const notIssued = countedEncounter("not-issued", "2032-04-19", "2032-04-23"); notIssued.assessment.sickLeaveIssued = "no";
+  const blankVisit = countedEncounter("blank-visit", "2032-04-19", "2032-04-23", "ЛН-2032", "");
+  const entries = [current, otherPatient, notIssued, blankVisit,
+    countedEncounter("different-number", "2032-04-19", "2032-04-23", "ЛН-OTHER"),
+    countedEncounter("blank-number", "2032-04-19", "2032-04-23", ""),
+    countedEncounter("gap", "2032-04-19", "2032-04-21"),
+    countedEncounter("future-visit", "2032-04-19", "2032-04-23", "ЛН-2032", "2032-04-24"),
+    countedEncounter("future-period", "2032-04-28", "2032-04-30", "ЛН-2032", "2032-04-20")
+  ];
+  assert.equal(core.getEncounterSickLeaveSummary(current, patient(), entries).totalDays, 5);
+  assert.equal(core.getEncounterSickLeaveSummary(current, patient(), entries).hasPrevious, false);
+  const unnamed = countedEncounter("unnamed-current", "2032-04-23", "2032-04-27", " ");
+  assert.equal(core.getEncounterSickLeaveSummary(unnamed, patient(), [unnamed, countedEncounter("numbered-previous", "2032-04-19", "2032-04-23")]).totalDays, 5);
+});
+
+test("summary joins a complete prior chain without bridging gaps or counting the same interval twice", () => {
+  const current = countedEncounter("current", "2032-04-23", "2032-04-27");
+  const entries = [current,
+    countedEncounter("first", "2032-04-15", "2032-04-18"),
+    countedEncounter("second", "2032-04-19", "2032-04-21"),
+    countedEncounter("third", "2032-04-21", "2032-04-24"),
+    countedEncounter("duplicate", "2032-04-21", "2032-04-24"),
+    countedEncounter("disconnected", "2032-04-01", "2032-04-13")
+  ];
+  const summary = core.getEncounterSickLeaveSummary(current, patient(), entries);
+  assert.equal(summary.totalDays, 13);
+  assert.equal(summary.from, "2032-04-15");
+  assert.deepEqual(core.getEncounterSickLeaveSummary(current, patient(), [...entries].reverse()), summary);
+});
+
+test("live summary tolerates unfinished clinical edits and returns unknown totals for invalid or inactive current periods", () => {
+  const previous = countedEncounter("previous", "2032-04-19", "2032-04-23");
+  const current = countedEncounter("current", "2032-04-23", "2032-04-27");
+  current.vitals.weight = "not a number";
+  current.assessment.returnVisitDate = "2032-02-30";
+  assert.equal(core.getEncounterSickLeaveSummary(current, patient(), [previous, current]).totalDays, 9);
+  for (const changes of [{ sickLeaveFrom: "" }, { sickLeaveTo: "" }, { sickLeaveFrom: "2032-04-28" }, { sickLeaveTo: "2032-02-30" }, { sickLeaveIssued: "no" }, { sickLeaveIssued: "" }]) {
+    const edited = structuredClone(current); Object.assign(edited.assessment, changes);
+    assert.deepEqual(core.getEncounterSickLeaveSummary(edited, patient(), [previous, edited]), { periodDays: null, totalDays: null, from: "", to: "", unnumbered: false, hasPrevious: false });
+  }
+  const noVisitDate = structuredClone(current); noVisitDate.visitDate = "";
+  assert.equal(core.getEncounterSickLeaveSummary(noVisitDate, patient(), [previous]).totalDays, 5);
+  const incompletePrevious = structuredClone(previous); incompletePrevious.assessment.sickLeaveFrom = "";
+  assert.equal(core.getEncounterSickLeaveSummary(current, patient(), [incompletePrevious]).totalDays, 5);
+});
+
+test("opening an earlier encounter after a repeat visit never adds days after that encounter's period", () => {
+  const previous = countedEncounter("previous", "2032-04-19", "2032-04-23");
+  const current = countedEncounter("current", "2032-04-23", "2032-04-27");
+  assert.deepEqual(core.getEncounterSickLeaveSummary(previous, patient(), [previous, current]), { periodDays: 5, totalDays: 5, from: "2032-04-19", to: "2032-04-23", unnumbered: false, hasPrevious: false });
+  const overlap = countedEncounter("overlap", "2032-04-19", "2032-04-30", "ЛН-2032", "2032-04-20");
+  assert.equal(core.getEncounterSickLeaveSummary(current, patient(), [previous, overlap, current]).totalDays, 9);
+});
+
+test("contextual summary respects journal source snapshots and closed clipping", () => {
+  const source = countedEncounter("previous", "2032-04-19", "2032-04-23");
+  const current = countedEncounter("current", "2032-04-23", "2032-04-27");
+  const card = issue(patient(), { number: "ЛН-2032", from: "2032-04-19", to: "2032-04-23", sourceEncounterId: source.id }, [source]);
+  assert.equal(core.getEncounterSickLeaveSummary(current, card, [source, current]).totalDays, 9);
+  source.assessment.sickLeaveFrom = "2032-04-10";
+  assert.equal(core.getEncounterSickLeaveSummary(current, card, [source, current]).totalDays, 9, "source edits cannot rewrite adopted history");
+  const closed = core.closeSickLeave(card, "leave-1", { date: "2032-04-21", now: NOW });
+  assert.equal(core.getEncounterSickLeaveSummary(current, closed, [source, current]).totalDays, 5, "the closed interval leaves an uncovered day before the repeat");
+  const connectedClose = core.closeSickLeave(card, "leave-1", { date: "2032-04-22", now: NOW });
+  assert.equal(core.getEncounterSickLeaveSummary(current, connectedClose, [source, current]).totalDays, 9);
+  const futureExtended = core.extendSickLeave(card, "leave-1", { from: "2032-04-23", to: "2032-04-30", now: NOW });
+  assert.equal(core.getEncounterSickLeaveSummary(current, futureExtended, [source, current]).totalDays, 9);
+});
+
+test("unrelated journal numbers and periods cannot change a contextual total", () => {
+  const current = countedEncounter("current", "2032-04-23", "2032-04-27");
+  let card = issue(patient(), { number: "ЛН-OTHER", from: "2032-04-19", to: "2032-04-23" });
+  card = issue(card, { id: "another-leave", eventId: "another-event", number: "ЛН-2032", from: "2032-04-29", to: "2032-04-30" });
+  assert.equal(core.getEncounterSickLeaveSummary(current, card, [current]).totalDays, 5);
+});
+
+test("contextual draft reports the current period and nine-day continuous total without rewriting saved text", () => {
+  const previous = countedEncounter("previous", "2032-04-19", "2032-04-23");
+  const current = countedEncounter("current", "2032-04-23", "2032-04-27");
+  current.draft.text = "Ручная запись вымышленного пациента";
+  const context = freeze({ patient: patient(), encounters: [previous, current] });
+  const before = JSON.stringify(context);
+  const draft = core.generateDraft(current, context);
+  assert.match(draft, /Период: с 23\.04\.2032 по 27\.04\.2032\./);
+  assert.match(draft, /Календарных дней за текущий период: 5\. Всего за непрерывный период с 19\.04\.2032 по 27\.04\.2032: 9\./);
+  assert.match(core.generateDraft(current), /Календарных дней: 5\./);
+  assert.doesNotMatch(core.generateDraft(current), /Всего за непрерывный период/);
+  assert.equal(JSON.stringify(context), before);
+});
+
+test("contextual fingerprints track only changed cumulative information and preserve old fingerprints otherwise", () => {
+  const previous = countedEncounter("previous", "2032-04-19", "2032-04-23");
+  const current = countedEncounter("current", "2032-04-23", "2032-04-27");
+  const card = patient();
+  const context = { patient: card, encounters: [previous, current] };
+  const fingerprint = core.fingerprint(current, context);
+  assert.notEqual(fingerprint, core.fingerprint(current));
+  previous.history.complaints = "Изменён вымышленный текст";
+  previous.draft.text = "Другой ручной текст";
+  previous.updatedAt = LATER;
+  assert.equal(core.fingerprint(current, context), fingerprint);
+  previous.assessment.sickLeaveFrom = "2032-04-20";
+  assert.notEqual(core.fingerprint(current, context), fingerprint);
+  previous.assessment.sickLeaveNumber = "ДРУГОЙ-НОМЕР";
+  assert.equal(core.fingerprint(current, context), core.fingerprint(current));
+  assert.equal(core.generateDraft(current, context), core.generateDraft(current));
+  assert.equal(core.fingerprint(current, { patient: card, encounters: [current] }), core.fingerprint(current));
+  assert.equal(core.SCHEMA_VERSION, 4);
+  assert.equal(Object.hasOwn(card, "sickLeaves"), false);
+});

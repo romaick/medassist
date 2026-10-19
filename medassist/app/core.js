@@ -215,6 +215,31 @@
     };
   }
 
+  function getEncounterSickLeaveSummary(encounter, patient, encounters = []) {
+    assertPatient(patient);
+    validateJournalEncounters([encounter]);
+    validateJournalEncounters(encounters);
+    if (encounter.patientId !== patient.id) throw new Error("Приём и журнал больничных должны относиться к одному пациенту.");
+    const assessment = encounter.assessment;
+    const number = assessment.sickLeaveNumber.trim().toLocaleLowerCase("ru");
+    const periodDays = assessment.sickLeaveIssued === "yes" ? calculateSickLeaveDays(assessment.sickLeaveFrom, assessment.sickLeaveTo) : null;
+    const summary = { periodDays, totalDays: null, from: "", to: "", unnumbered: !number, hasPrevious: false };
+    if (periodDays === null) return summary;
+    const older = typeof encounter.visitDate === "string" && validDate(encounter.visitDate)
+      ? encounters.filter(entry => entry.id !== encounter.id && entry.patientId === patient.id && typeof entry.visitDate === "string" && validDate(entry.visitDate) && entry.visitDate <= encounter.visitDate)
+      : [];
+    const journal = getSickLeaveJournal(patient, older);
+    const sameNumber = leave => leave.number.trim().toLocaleLowerCase("ru") === number;
+    const periods = [
+      ...journal.leaves.filter(sameNumber).flatMap(leave => leave.periods),
+      ...journal.legacy.filter(leave => sameNumber(leave) && leave.days !== null).map(leave => ({ from: leave.from, to: leave.to }))
+    ].filter(period => period.from <= assessment.sickLeaveTo).map(period => ({ from: period.from, to: period.to > assessment.sickLeaveTo ? assessment.sickLeaveTo : period.to }));
+    periods.push({ from: assessment.sickLeaveFrom, to: assessment.sickLeaveTo });
+    const connected = mergeSickLeavePeriods(periods).find(period => period.from <= assessment.sickLeaveFrom && period.to >= assessment.sickLeaveTo);
+    const totalDays = calculateSickLeaveDays(connected.from, connected.to);
+    return { periodDays, totalDays, from: connected.from, to: connected.to, unnumbered: !number, hasPrevious: totalDays > periodDays };
+  }
+
   function sickLeaveActionTime(options, allowed) {
     if (!isObject(options) || Object.keys(options).some(field => !allowed.includes(field))) throw new Error("Некорректные параметры действия с больничным.");
     const now = options.now === undefined ? new Date() : new Date(options.now);
@@ -568,12 +593,17 @@
     return source;
   }
 
-  function fingerprint(encounter) {
+  function fingerprint(encounter, context) {
     assertEncounter(encounter);
-    return JSON.stringify(sourceData(encounter));
+    const source = sourceData(encounter);
+    if (context !== undefined) {
+      const summary = getEncounterSickLeaveSummary(encounter, context.patient, context.encounters);
+      if (summary.hasPrevious) source.sickLeaveSummary = { from: summary.from, to: summary.to, totalDays: summary.totalDays };
+    }
+    return JSON.stringify(source);
   }
 
-  function generateDraft(encounter) {
+  function generateDraft(encounter, context) {
     assertEncounter(encounter);
     function text(value) { return value.trim() || "не заполнено"; }
     function line(label, value, unit = "") { return label + ": " + (value.trim() ? value.trim() + unit : "не заполнено") + "."; }
@@ -595,10 +625,14 @@
       if (assessment.sickLeaveFrom) period.push("с " + formatDate(assessment.sickLeaveFrom));
       if (assessment.sickLeaveTo) period.push("по " + formatDate(assessment.sickLeaveTo));
       const days = calculateSickLeaveDays(assessment.sickLeaveFrom, assessment.sickLeaveTo);
+      const summary = context === undefined ? null : getEncounterSickLeaveSummary(encounter, context.patient, context.encounters);
+      const count = summary?.hasPrevious
+        ? " Календарных дней за текущий период: " + days + ". Всего за непрерывный период с " + formatDate(summary.from) + " по " + formatDate(summary.to) + ": " + summary.totalDays + "."
+        : days !== null ? " Календарных дней: " + days + "." : "";
       return ["Листок нетрудоспособности: выдан."
         + (assessment.sickLeaveNumber.trim() ? " № " + assessment.sickLeaveNumber.trim() + "." : "")
         + (period.length ? " Период: " + period.join(" ") + "." : "")
-        + (days !== null ? " Календарных дней: " + days + "." : "")];
+        + count];
     }
     const date = encounter.visitDate ? formatDate(encounter.visitDate) : "не указана";
     const bmi = calculateBmi(encounter.vitals.weight, encounter.vitals.height);
@@ -756,5 +790,5 @@
     return validateBundle(parsed);
   }
 
-  return Object.freeze({ createPatient, createEncounter, createRepeatEncounter, createDemoEncounter, setReviewStatus, setReturnVisitStatus, linkReturnVisit, getReturnVisits, calculateBmi, calculateSickLeaveDays, calculateSickLeaveTotalDays, getSickLeaveJournal, issueSickLeave, extendSickLeave, closeSickLeave, undoSickLeaveAction, generateDraft, fingerprint, validatePatient, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_PATIENTS, MAX_PATIENT_LABEL_LENGTH, MAX_SICK_LEAVES, MAX_SICK_LEAVE_EVENTS, MAX_SICK_LEAVE_NUMBER_LENGTH, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
+  return Object.freeze({ createPatient, createEncounter, createRepeatEncounter, createDemoEncounter, setReviewStatus, setReturnVisitStatus, linkReturnVisit, getReturnVisits, calculateBmi, calculateSickLeaveDays, calculateSickLeaveTotalDays, getSickLeaveJournal, getEncounterSickLeaveSummary, issueSickLeave, extendSickLeave, closeSickLeave, undoSickLeaveAction, generateDraft, fingerprint, validatePatient, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_PATIENTS, MAX_PATIENT_LABEL_LENGTH, MAX_SICK_LEAVES, MAX_SICK_LEAVE_EVENTS, MAX_SICK_LEAVE_NUMBER_LENGTH, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
 });

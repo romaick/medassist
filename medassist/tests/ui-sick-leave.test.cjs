@@ -22,6 +22,61 @@ const dialog = page => page.locator("#sick-leave-dialog");
 const row = (page, id) => page.locator('.sick-leave-entry[data-leave-id="' + id + '"]');
 const total = async page => Number((await page.locator("#sick-leave-total").innerText()).match(/\d+/)?.[0]);
 
+for (const number of ["ДЕМО-ПРОДЛЕНИЕ-19", ""]) {
+  test("repeat encounter shows nine total days for 19–23 plus 23–27 and five days for the new period" + (number ? " with a number" : " without a number"), {timeout: 25000}, async t => {
+    const {page} = await openApp(t);
+    await page.clock.setFixedTime(new Date("2032-04-23T07:00:00.000Z"));
+    const patient = core.createPatient({id: patientId, label: "Тестов Пациент Вымышленный", now: "2032-04-19T07:00:00.000Z"});
+    let first = core.createEncounter({id: visitId, patientId, now: "2032-04-19T07:00:00.000Z"});
+    Object.assign(first.assessment, {sickLeaveIssued: "yes", sickLeaveNumber: number, sickLeaveFrom: "2032-04-19", sickLeaveTo: "2032-04-23"});
+    first.draft.text = manualDraft;
+    first = core.setReviewStatus(first, "reviewed", {now});
+    await page.evaluate(({key, value}) => localStorage.setItem(key, value), {key, value: core.serializeBundle([first], [patient])});
+    await page.reload(); await openCard(page);
+    await click(page, "repeat");
+    await page.locator("#repeat-create").click();
+    await page.locator('[data-action="tab"][data-tab="draft"]').first().click();
+    await page.locator('#field-assessment-sickLeaveIssued').selectOption("yes");
+    await page.locator('#field-assessment-sickLeaveNumber').fill(number);
+    await page.locator('#field-assessment-sickLeaveFrom').fill("2032-04-23");
+    await page.locator('#field-assessment-sickLeaveTo').fill("2032-04-27");
+    assert.equal(await page.locator('#sickleave-days').innerText(), "9");
+    assert.equal(await page.locator('#sickleave-current-period strong').innerText(), "5");
+    assert.match(await page.locator('#sickleave-days-hint').innerText(), /19\.04\.2032.*27\.04\.2032/);
+    if (!number) assert.match(await page.locator('#sickleave-days-hint').innerText(), /без номера/i);
+    const current = (await saved(page)).encounters.find(entry => entry.id !== visitId);
+    assert.equal((await saved(page)).encounters.length, 2);
+    assert.deepEqual((await saved(page)).encounters.find(entry => entry.id === visitId), first);
+    await click(page, "generate");
+    const text = await page.locator('#draft-text').inputValue();
+    assert.match(text, /Календарных дней за текущий период: 5/);
+    assert.match(text, /Всего за непрерывный период с 19\.04\.2032 по 27\.04\.2032: 9/);
+    await page.locator('#draft-text').fill(text + "\nДЕМО: ручное уточнение.");
+    const edited = await page.locator('#draft-text').inputValue();
+    await page.reload();
+    await page.locator('[data-action="open"][data-id="' + current.id + '"]').first().click();
+    await page.locator('[data-action="tab"][data-tab="draft"]').first().click();
+    assert.equal(await page.locator('#sickleave-days').innerText(), "9");
+    assert.equal(await page.locator('#draft-text').inputValue(), edited);
+    await page.locator('#field-assessment-sickLeaveNumber').fill("ДРУГОЙ-ЛН");
+    assert.equal(await page.locator('#sickleave-days').innerText(), "5", "different numbered leaves are independent");
+    await page.locator('#field-assessment-sickLeaveNumber').fill(number);
+    assert.equal(await page.locator('#sickleave-days').innerText(), "9");
+    await click(page, "patients");
+    await page.locator('[data-action="patient"]').first().click();
+    await page.locator('#patient-history [data-action="open"][data-id="' + visitId + '"]').click();
+    await page.locator('[data-action="tab"][data-tab="draft"]').first().click();
+    assert.equal(await page.locator('#sickleave-days').innerText(), "5", "the first visit does not count its later continuation");
+    await page.locator('#field-assessment-sickLeaveFrom').fill("2032-04-18");
+    await click(page, "patients"); await page.locator('[data-action="patient"]').first().click();
+    await page.locator('#patient-history [data-action="open"][data-id="' + current.id + '"]').click();
+    await page.locator('[data-action="tab"][data-tab="draft"]').first().click();
+    assert.equal(await page.locator('#sickleave-days').innerText(), "10");
+    assert.equal(await page.locator('#draft-text').inputValue(), edited, "changing prior coverage never rewrites manual text");
+    assert.match(await page.locator('#draft-state').getAttribute('class'), /stale/);
+  });
+}
+
 async function openApp(t) {
   const browser = await chromium.launch({
     headless: true,
@@ -104,6 +159,10 @@ async function issue(page, number, from, to) {
 async function extend(page, id, from, to) {
   await row(page, id).locator('[data-action="sick-extend"]').click();
   await period(page, from, to);
+  const patient = await savedPatient(page);
+  const previous = core.getSickLeaveJournal(patient, (await saved(page)).encounters).leaves.find(leave => leave.id === id);
+  const expected = core.calculateSickLeaveTotalDays([...previous.periods, {from, to}]);
+  assert.match(await page.locator('#sick-leave-preview').innerText(), new RegExp('После продления — всего ' + expected + ' календ'));
   await saveDialog(page);
 }
 

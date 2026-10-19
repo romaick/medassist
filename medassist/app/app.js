@@ -126,10 +126,10 @@
     app.innerHTML = '<div class="shell"><aside class="sidebar" aria-label="Главная навигация"><div class="brand"><img src="icon.svg" alt=""><div><strong>МедАссистент</strong><small>ПОЛИКЛИНИЧЕСКИЙ РЕЖИМ</small></div></div><p class="nav-caption">РАБОЧЕЕ ПРОСТРАНСТВО</p><nav class="nav">' +
       navButton('home', 'Обзор', 'home') + navButton('patients', 'Пациенты', 'user') + navButton('new', 'Новый пациент', 'plus') +
       (current ? navButton('visit', 'Текущий приём', 'document') : '') + navButton('followups', 'Повторные приёмы', 'calendar') + navButton('modules', 'Модули', 'grid') + navButton('help', 'Помощь и данные', 'help') + navButton('check-updates', 'Проверить обновления', 'download') +
-      '</nav><div class="side-bottom"><div class="local-indicator"><span class="dot"></span>Работает локально</div><div class="version">Прототип 0.11.0 · Демонстрация</div></div></aside><div class="workspace"><header class="topbar"><div class="topbar-left">Поликлиника <span aria-hidden="true">/</span> <span>' + sectionName + '</span></div><div class="topbar-right"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><span class="avatar" aria-hidden="true">МА</span></div></header><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
+      '</nav><div class="side-bottom"><div class="local-indicator"><span class="dot"></span>Работает локально</div><div class="version">Прототип 0.11.1 · Демонстрация</div></div></aside><div class="workspace"><header class="topbar"><div class="topbar-left">Поликлиника <span aria-hidden="true">/</span> <span>' + sectionName + '</span></div><div class="topbar-right"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><span class="avatar" aria-hidden="true">МА</span></div></header><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
       (state.migrated ? '<div class="migration-notice">Прежние записи доступны со статусом «Черновик». Карточки, данные и ручные тексты сохранены. Исходное сохранение предыдущей версии не изменяется.</div>' : '') +
       ({home: renderHome, patients: renderPatients, followups: renderFollowups, patient: renderPatient, visit: renderVisit, modules: renderModules, help: renderHelp}[state.view])() +
-      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.11.0</span></footer></main></div></div>';
+      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.11.1</span></footer></main></div></div>';
     updateClock();
     updateSaveStatus();
     if (state.view === 'visit') { updateValidation(); updateDraftState(); updateReviewState(); }
@@ -541,8 +541,15 @@
   }
   function updateSickLeavePreview() {
     if (!sickLeaveForm) return;
-    const days = core.calculateSickLeaveDays(document.getElementById('sick-leave-from').value, document.getElementById('sick-leave-to').value);
-    document.getElementById('sick-leave-preview').textContent = ['close', 'number'].includes(sickLeaveForm.mode) ? '' : days === null ? 'Укажите обе даты в правильном порядке.' : 'В этом периоде: ' + days + ' календ. дн. Пересечения будут исключены из общего подсчёта.';
+    const from = document.getElementById('sick-leave-from').value, to = document.getElementById('sick-leave-to').value;
+    const days = core.calculateSickLeaveDays(from, to);
+    let text = ['close', 'number'].includes(sickLeaveForm.mode) ? '' : days === null ? 'Укажите обе даты в правильном порядке.' : 'В этом периоде: ' + days + ' календ. дн. Пересечения будут исключены из общего подсчёта.';
+    if (sickLeaveForm.mode === 'extend' && days !== null) {
+      const patient = state.patients.find(item => item.id === sickLeaveForm.patientId);
+      const leave = core.getSickLeaveJournal(patient, state.encounters).leaves.find(item => item.id === sickLeaveForm.leaveId);
+      if (from >= leave.events[0].from && to > leave.periods.at(-1).to) text = 'После продления — всего ' + core.calculateSickLeaveTotalDays([...leave.periods, {from, to}]) + ' календ. дн. В текущем периоде: ' + days + '. Пересекающиеся дни учитываются один раз.';
+    }
+    document.getElementById('sick-leave-preview').textContent = text;
   }
   function saveSickLeave() {
     if (!sickLeaveForm) return;
@@ -778,15 +785,32 @@
       renderDiagnosis() + field('assessment.plan', 'Рекомендации', 'Необязательно. Пустое поле не попадёт в черновик') +
       (active().assessment.followUp.trim() ? '<div class="legacy-note"><p>Сохранено из предыдущей версии. Перенесите нужное в рекомендации или выберите дату, затем очистите старый текст, если он больше не нужен.</p>' + field('assessment.followUp', 'Наблюдение из предыдущей версии', '') + '</div>' : '') +
       field('assessment.sickLeaveIssued', 'Листок нетрудоспособности', '', {select: [['', 'Не отмечено — не включать'], ['no', 'Не выдавался — не включать'], ['yes', 'Выдан']], hint: 'Это только отметка в черновике, не оформление документа.'}) +
-      '<div id="sickleave-period"' + (active().assessment.sickLeaveIssued === 'yes' ? '' : ' hidden') + '>' + field('assessment.sickLeaveNumber', 'Номер листка нетрудоспособности', 'Введите номер вручную', {type: 'text'}) + '<div class="field-grid">' + field('assessment.sickLeaveFrom', 'Период: с', '', {type: 'date'}) + field('assessment.sickLeaveTo', 'По', '', {type: 'date'}) + '</div><div class="sickleave-duration"><label for="sickleave-days">Календарных дней</label><output id="sickleave-days" for="field-assessment-sickLeaveFrom field-assessment-sickLeaveTo" aria-live="polite" aria-describedby="sickleave-days-hint">' + (core.calculateSickLeaveDays(active().assessment.sickLeaveFrom, active().assessment.sickLeaveTo) ?? '—') + '</output><p id="sickleave-days-hint">По указанному периоду: обе даты и выходные включены. Для расчёта нужны корректные начало и окончание.</p></div></div>' +
+      '<div id="sickleave-period"' + (active().assessment.sickLeaveIssued === 'yes' ? '' : ' hidden') + '>' + field('assessment.sickLeaveNumber', 'Номер листка нетрудоспособности', 'При продлении укажите прежний номер', {type: 'text'}) + '<div class="field-grid">' + field('assessment.sickLeaveFrom', 'Период: с', '', {type: 'date'}) + field('assessment.sickLeaveTo', 'По', '', {type: 'date'}) + '</div>' + renderEncounterSickLeaveDuration() + '</div>' +
       field('assessment.returnVisitDate', 'Повторный приём', '', {type: 'date', hint: 'Оставьте дату пустой, чтобы не включать повторный приём в запись.'}) +
       '</section><section class="card draft-card"><div class="card-head"><h2>Текст записи</h2><span class="pill neutral">Редактируемый текст</span></div><div id="draft-state" class="draft-state" role="status"></div><label class="small muted" for="draft-text">Текст записи · свободное редактирование</label><textarea class="draft-editor" id="draft-text" data-field="draft.text" maxlength="100000" aria-describedby="draft-state field-draft-text-error" placeholder="Нажмите «Сформировать черновик» или начните писать здесь.">' + escape(active().draft.text) + '</textarea><p class="field-error" id="field-draft-text-error" hidden></p><div id="record-review-state" class="record-review-state"></div><p class="small muted">Это свободный демонстрационный черновик, не нормативная форма Беларуси.</p></section></div>';
+  }
+  function encounterContext(entry = active()) {
+    return {patient: patientFor(entry), encounters: state.encounters};
+  }
+  function encounterSickLeaveSummary() {
+    return core.getEncounterSickLeaveSummary(active(), patientFor(active()), state.encounters);
+  }
+  function encounterSickLeaveHint(summary) {
+    if (summary.totalDays === null) return 'Для расчёта нужны корректные начало и окончание. В расчёт обе даты и выходные включены.';
+    return 'Непрерывный период: с ' + dateText(summary.from) + ' по ' + dateText(summary.to) + '. В расчёт обе даты и выходные включены; пересечения учитываются один раз. ' +
+      (summary.unnumbered ? 'Без номера объединяются непрерывные периоды без номера. Укажите номер, чтобы различать больничные.' : 'Учтены непрерывные периоды с этим номером из истории пациента.');
+  }
+  function renderEncounterSickLeaveDuration() {
+    const summary = encounterSickLeaveSummary();
+    return '<div class="sickleave-duration"><label for="sickleave-days">Всего календарных дней</label><output id="sickleave-days" for="field-assessment-sickLeaveNumber field-assessment-sickLeaveFrom field-assessment-sickLeaveTo" aria-live="polite" aria-describedby="sickleave-current-period sickleave-days-hint">' + (summary.totalDays ?? '—') + '</output><p id="sickleave-current-period">В текущем периоде: <strong>' + (summary.periodDays ?? '—') + '</strong> календ. дн.</p><p id="sickleave-days-hint">' + escape(encounterSickLeaveHint(summary)) + '</p></div>';
   }
   function updateSickLeaveDays() {
     const output = document.getElementById('sickleave-days');
     if (!output) return;
-    const assessment = active().assessment;
-    output.textContent = assessment.sickLeaveIssued === 'yes' ? core.calculateSickLeaveDays(assessment.sickLeaveFrom, assessment.sickLeaveTo) ?? '—' : '—';
+    const summary = encounterSickLeaveSummary();
+    output.textContent = summary.totalDays ?? '—';
+    document.querySelector('#sickleave-current-period strong').textContent = summary.periodDays ?? '—';
+    document.getElementById('sickleave-days-hint').textContent = encounterSickLeaveHint(summary);
   }
   function renderModules() {
     return '<div class="page-heading"><div><h1>Модули</h1><p>Направления расширения МедАссистента.</p></div><span class="pill neutral">План развития</span></div>' + demoNotice() +
@@ -830,9 +854,9 @@
     if (entry.draft.text.trim()) {
       if (!entry.draft.sourceFingerprint) message = 'Текст введён вручную. Изменения полей не изменяют его автоматически.';
       else {
-        try { stale = entry.draft.sourceFingerprint !== core.fingerprint(entry); }
+        try { stale = entry.draft.sourceFingerprint !== core.fingerprint(entry, encounterContext(entry)); }
         catch (error) { stale = true; }
-        message = stale ? 'Поля приёма изменились после генерации. Проверьте текст; повторная генерация заменит ручные правки.' : 'Черновик можно редактировать. Ручные правки сохраняются отдельно от полей формы.';
+        message = stale ? 'Сведения приёма или учтённые периоды больничного изменились после генерации. Проверьте текст; повторная генерация заменит ручные правки.' : 'Черновик можно редактировать. Ручные правки сохраняются отдельно от полей формы.';
       }
     }
     target.textContent = message;
@@ -1059,7 +1083,7 @@
       if (entry.draft.text.trim() && !await confirmAction('Заменить текст черновика?', 'Будет создан новый текст из текущих полей приёма. Все ручные правки в этом черновике будут заменены. Чтобы сохранить их отдельно, сначала скачайте .txt.', 'Заменить черновик')) return;
       if (!requireFreshState()) return;
       invalidateReview(entry);
-      entry.draft = {text: core.generateDraft(entry), generatedAt: new Date().toISOString(), sourceFingerprint: core.fingerprint(entry)};
+      entry.draft = {text: core.generateDraft(entry, encounterContext(entry)), generatedAt: new Date().toISOString(), sourceFingerprint: core.fingerprint(entry, encounterContext(entry))};
       entry.updatedAt = new Date().toISOString(); persist(); render(); document.getElementById('draft-text').focus(); toast('Черновик сформирован. Проверьте и отредактируйте текст.'); return;
     }
     if (action === 'download-text' || action === 'copy') {
@@ -1167,7 +1191,7 @@
     if (control.dataset.field === 'assessment.sickLeaveIssued') {
       document.getElementById('sickleave-period').hidden = control.value !== 'yes';
     }
-    if (['assessment.sickLeaveIssued', 'assessment.sickLeaveFrom', 'assessment.sickLeaveTo'].includes(control.dataset.field)) updateSickLeaveDays();
+    if (['assessment.sickLeaveIssued', 'assessment.sickLeaveNumber', 'assessment.sickLeaveFrom', 'assessment.sickLeaveTo', 'visitDate'].includes(control.dataset.field)) updateSickLeaveDays();
     if (control.dataset.field.startsWith('examSelections.')) {
       app.querySelectorAll('[data-count-section]').forEach((element) => {
         const items = examCatalog.FIELDS.filter((item) => item.section === element.dataset.countSection);

@@ -79,7 +79,7 @@ function New-InterruptedFixture {
 }
 
 Check 'Strict valid bundle parsing and version metadata' {
-    foreach ($schema in @(2, 3)) {
+    foreach ($schema in @(2, 3, 4)) {
         $package = Parse-Fixture (New-FixturePackage -DataSchemaVersion $schema)
         Assert-True ($package.Version -ceq '0.3.0' -and $package.DataSchemaVersion -eq $schema -and $package.Files.Count -eq 9) 'Valid bundle did not load.'
     }
@@ -118,6 +118,23 @@ Check 'Schema 2 upgrades to 3 and subsequent schema 3 updates remain compatible'
     Assert-True ($result.Status -ceq 'updated' -and $result.PreviousVersion -ceq '0.6.0') 'Installed schema 3 application cannot be updated.'
     $current = Apply-MedAssistUpdate $directory (Parse-Fixture (New-FixturePackage '0.6.1' 3))
     Assert-True ($current.Status -ceq 'current') 'Current schema 3 application was not recognized.'
+}
+
+Check 'Schema 3 upgrades to 4 and subsequent schema 4 updates remain compatible' {
+    $directory = New-FixtureInstall
+    $null = Apply-MedAssistUpdate $directory (Parse-Fixture (New-FixturePackage '0.6.1' 3))
+    $result = Apply-MedAssistUpdate $directory (Parse-Fixture (New-FixturePackage '0.7.0' 4))
+    $installed = Read-UpdateVersionJson ([IO.File]::ReadAllText((Join-Path $directory 'app/version.json')))
+    $backup = Read-UpdateVersionJson ([IO.File]::ReadAllText((Join-Path $result.BackupPath 'version.json')))
+    Assert-True ($result.Status -ceq 'updated' -and $installed.version -ceq '0.7.0' -and $installed.dataSchemaVersion -eq 4) 'Schema 4 application was not installed.'
+    Assert-True ($backup.version -ceq '0.6.1' -and $backup.dataSchemaVersion -eq 3) 'Schema 3 application was not retained.'
+    Assert-True ([IO.File]::ReadAllText((Join-Path $directory 'user-backup.json')) -ceq 'fictional saved user data') 'Schema update changed unrelated data.'
+    $result = Apply-MedAssistUpdate $directory (Parse-Fixture (New-FixturePackage '0.7.1' 4))
+    Assert-True ($result.Status -ceq 'updated' -and $result.PreviousVersion -ceq '0.7.0') 'Installed schema 4 application cannot be updated.'
+    $installed = Read-UpdateVersionJson ([IO.File]::ReadAllText((Join-Path $directory 'app/version.json')))
+    Assert-True ($installed.version -ceq '0.7.1' -and $installed.dataSchemaVersion -eq 4) 'Subsequent schema 4 application was not installed.'
+    $current = Apply-MedAssistUpdate $directory (Parse-Fixture (New-FixturePackage '0.7.1' 4))
+    Assert-True ($current.Status -ceq 'current') 'Current schema 4 application was not recognized.'
 }
 
 Check 'Checksum corruption is rejected before installation' {
@@ -160,15 +177,18 @@ Check 'Package metadata and version.json must agree' {
     $document = New-FixturePackage
     $document.version = '0.4.0'
     Expect-Error { Parse-Fixture $document } 'Inconsistent version.json accepted.'
-    foreach ($schema in @(2, 3)) {
-        $document = New-FixturePackage -DataSchemaVersion $schema
-        $document.dataSchemaVersion = 5 - $schema
-        Expect-Error { Parse-Fixture $document } 'Mismatched data schemas accepted.'
+    foreach ($schema in @(2, 3, 4)) {
+        foreach ($packageSchema in @(2, 3, 4)) {
+            if ($schema -eq $packageSchema) { continue }
+            $document = New-FixturePackage -DataSchemaVersion $schema
+            $document.dataSchemaVersion = $packageSchema
+            Expect-Error { Parse-Fixture $document } 'Mismatched data schemas accepted.'
+        }
     }
 }
 
 Check 'Local and nested metadata reject unsupported and non-integer data schemas' {
-    foreach ($schemaJson in @('999', '1', '0', '-1', '"2"', '"3"', '2.0', '3.0', 'true', 'null', '[2]', '{}')) {
+    foreach ($schemaJson in @('999', '5', '1', '0', '-1', '"2"', '"3"', '"4"', '2.0', '3.0', '4.0', 'true', 'null', '[2]', '{}')) {
         $json = '{"version":"0.3.0","dataSchemaVersion":' + $schemaJson + '}'
         Expect-Error { Read-UpdateVersionJson $json } ('Invalid local data schema accepted: ' + $schemaJson)
         $document = New-FixturePackage

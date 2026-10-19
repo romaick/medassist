@@ -34,7 +34,7 @@ function Read-UpdateVersionJson {
     $value = ConvertFrom-Json -InputObject $Json -ErrorAction Stop
     Assert-UpdateProperties $value @('version', 'dataSchemaVersion')
     Assert-UpdateVersion $value.version
-    Assert-UpdateInteger $value.dataSchemaVersion @(2, 3)
+    Assert-UpdateInteger $value.dataSchemaVersion @(2, 3, 4)
     return $value
 }
 
@@ -45,7 +45,7 @@ function Load-UpdatePackage {
     Assert-UpdateProperties $document @('format', 'formatVersion', 'version', 'dataSchemaVersion', 'files')
     if ($document.format -isnot [string] -or $document.format -cne 'medassist-update') { throw 'Invalid update package format.' }
     Assert-UpdateInteger $document.formatVersion 1
-    Assert-UpdateInteger $document.dataSchemaVersion @(2, 3)
+    Assert-UpdateInteger $document.dataSchemaVersion @(2, 3, 4)
     Assert-UpdateVersion $document.version
     if ($document.files -isnot [array] -or $document.files.Count -ne $script:MedAssistAppFiles.Count) { throw 'Update package must contain all application files.' }
     $seen = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)

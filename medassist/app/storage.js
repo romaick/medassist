@@ -4,9 +4,11 @@
   else root.MedAssistStorage = factory(root.MedAssistCore, root);
 })(typeof globalThis !== "undefined" ? globalThis : this, function (core, root) {
   "use strict";
-  const KEY = "medassist.demo.v3";
-  const PREVIOUS_KEY = "medassist.demo.v2";
+  const KEY = "medassist.demo.v4";
+  const PREVIOUS_KEY = "medassist.demo.v3";
+  const V2_KEY = "medassist.demo.v2";
   const LEGACY_KEY = "medassist.demo.v1";
+  const WATCHED_KEYS = Object.freeze([KEY, PREVIOUS_KEY, V2_KEY, LEGACY_KEY]);
 
   function describe(error) {
     return error instanceof Error ? error.message : String(error);
@@ -27,15 +29,14 @@
     function load() {
       try {
         const storage = target();
-        let raw = storage.getItem(KEY);
+        let raw = null;
         let migrated = false;
-        if (raw === null) {
-          raw = storage.getItem(PREVIOUS_KEY);
-          migrated = raw !== null;
-        }
-        if (raw === null) {
-          raw = storage.getItem(LEGACY_KEY);
-          migrated = raw !== null;
+        for (const key of WATCHED_KEYS) {
+          raw = storage.getItem(key);
+          if (raw !== null) {
+            migrated = key !== KEY;
+            break;
+          }
         }
         const { patients, encounters } = raw === null ? { patients: [], encounters: [] } : core.parseBundle(raw);
         checked = true;
@@ -74,5 +75,5 @@
   }
 
   const repository = createRepository(() => root.localStorage);
-  return Object.freeze({ KEY, PREVIOUS_KEY, LEGACY_KEY, createRepository, load: repository.load, save: repository.save, reset: repository.reset });
+  return Object.freeze({ KEY, PREVIOUS_KEY, V2_KEY, LEGACY_KEY, WATCHED_KEYS, createRepository, load: repository.load, save: repository.save, reset: repository.reset });
 });

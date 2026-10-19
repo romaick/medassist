@@ -6,7 +6,7 @@
   "use strict";
 
   const FORMAT = "medassist-demo";
-  const SCHEMA_VERSION = 3;
+  const SCHEMA_VERSION = 4;
   const MAX_ENCOUNTERS = 500;
   const MAX_PATIENTS = 500;
   const MAX_PATIENT_LABEL_LENGTH = 120;
@@ -25,14 +25,16 @@
     draft: ["text", "generatedAt", "sourceFingerprint"]
   };
   const NEW_ASSESSMENT_FIELDS = ["returnVisitDate", "sickLeaveIssued", "sickLeaveNumber", "sickLeaveFrom", "sickLeaveTo"];
-  const GROUPS = {
+  const V2_GROUPS = {
     ...LEGACY_GROUPS,
     assessment: [...LEGACY_GROUPS.assessment, ...NEW_ASSESSMENT_FIELDS],
     examSelections: examCatalog.FIELDS.map(field => field.id)
   };
+  const GROUPS = { ...V2_GROUPS, workflow: ["reviewStatus", "reviewedAt", "returnVisitStatus", "returnVisitEncounterId"] };
   const LEGACY_ROOT_FIELDS = ["id", "createdAt", "updatedAt", "visitDate", "age", "sex", "reason", ...Object.keys(LEGACY_GROUPS)];
-  const V2_ROOT_FIELDS = ["id", "createdAt", "updatedAt", "visitDate", "age", "sex", "reason", ...Object.keys(GROUPS)];
-  const ROOT_FIELDS = ["id", "patientId", ...V2_ROOT_FIELDS.slice(1)];
+  const V2_ROOT_FIELDS = ["id", "createdAt", "updatedAt", "visitDate", "age", "sex", "reason", ...Object.keys(V2_GROUPS)];
+  const V3_ROOT_FIELDS = ["id", "patientId", ...V2_ROOT_FIELDS.slice(1)];
+  const ROOT_FIELDS = [...V3_ROOT_FIELDS, "workflow"];
   const SEXES = { "": "не указано", female: "женский", male: "мужской", unspecified: "не указан" };
 
   function isObject(value) {
@@ -74,6 +76,10 @@
   function newId(prefix = "visit") {
     if (typeof globalThis.crypto?.randomUUID === "function") return prefix + "-" + globalThis.crypto.randomUUID();
     return prefix + "-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 12);
+  }
+
+  function emptyWorkflow() {
+    return { reviewStatus: "draft", reviewedAt: "", returnVisitStatus: "planned", returnVisitEncounterId: "" };
   }
 
   function validatePatient(patient) {
@@ -133,6 +139,7 @@
     for (const [group, fields] of Object.entries(GROUPS)) {
       encounter[group] = Object.fromEntries(fields.map(field => [field, ""]));
     }
+    encounter.workflow = emptyWorkflow();
     assertEncounter(encounter);
     return encounter;
   }
@@ -147,6 +154,62 @@
     if (encounter.id === source.id) throw new Error("У повторного приёма должен быть новый идентификатор.");
     for (const field of fields) encounter.history[field] = source.history[field];
     return encounter;
+  }
+
+  function setReviewStatus(encounter, status, options = {}) {
+    if (!["draft", "reviewed"].includes(status)) throw new Error("Неизвестный статус проверки записи.");
+    let reviewedAt = "";
+    if (status === "reviewed") {
+      const now = options.now === undefined ? new Date() : new Date(options.now);
+      if (!Number.isFinite(now.getTime()) || now.getUTCFullYear() < 1 || now.getUTCFullYear() > 9999) throw new Error("Некорректное время проверки записи.");
+      reviewedAt = now.toISOString();
+    }
+    const result = { ...encounter, workflow: { ...encounter?.workflow, reviewStatus: status, reviewedAt } };
+    assertEncounter(result);
+    return normalizeEncounter(result);
+  }
+
+  function setReturnVisitStatus(encounter, status) {
+    if (!["planned", "completed"].includes(status)) throw new Error("Неизвестная отметка повторного приёма.");
+    const result = { ...encounter, workflow: { ...encounter?.workflow, returnVisitStatus: status } };
+    assertEncounter(result);
+    return normalizeEncounter(result);
+  }
+
+  function linkReturnVisit(source, target) {
+    assertEncounter(source);
+    assertEncounter(target);
+    if (!source.assessment.returnVisitDate) throw new Error("Для связи повторного приёма сначала укажите его дату.");
+    if (source.id === target.id) throw new Error("Повторный приём не может ссылаться на себя.");
+    if (source.patientId !== target.patientId) throw new Error("Повторный приём должен относиться к тому же пациенту.");
+    if (source.workflow.returnVisitEncounterId && source.workflow.returnVisitEncounterId !== target.id) throw new Error("У этой даты уже есть связанный повторный приём.");
+    if (target.workflow.returnVisitEncounterId === source.id) throw new Error("Связи повторных приёмов не должны образовывать цикл.");
+    return normalizeEncounter({ ...source, workflow: { ...source.workflow, returnVisitEncounterId: target.id } });
+  }
+
+  function getReturnVisits(encounters, today) {
+    if (!Array.isArray(encounters)) throw new Error("Список приёмов должен быть массивом.");
+    if (typeof today !== "string" || !validDate(today)) throw new Error("Укажите сегодняшнюю дату в формате ГГГГ-ММ-ДД.");
+    for (const encounter of encounters) {
+      if (!isObject(encounter) || ["id", "patientId"].some(field => typeof encounter[field] !== "string" || !ID_PATTERN.test(encounter[field]))) throw new Error("Для списка повторных приёмов требуется корректный идентификатор приёма и пациента.");
+      const date = encounter.assessment?.returnVisitDate;
+      if (typeof date !== "string" || (date !== "" && !validDate(date))) throw new Error("Укажите существующую дату повторного приёма в формате ГГГГ-ММ-ДД.");
+      const workflow = encounter.workflow;
+      if (!isObject(workflow) || !["planned", "completed"].includes(workflow.returnVisitStatus)) throw new Error("Выберите отметку повторного приёма.");
+      if (typeof workflow.returnVisitEncounterId !== "string" || (workflow.returnVisitEncounterId !== "" && !ID_PATTERN.test(workflow.returnVisitEncounterId))) throw new Error("Некорректная ссылка повторного приёма.");
+      if (workflow.returnVisitEncounterId === encounter.id) throw new Error("Повторный приём не может ссылаться на себя.");
+      if (!date && (workflow.returnVisitStatus === "completed" || workflow.returnVisitEncounterId !== "")) throw new Error("Для отметки или связи повторного приёма укажите дату.");
+    }
+    return encounters.filter(encounter => encounter.assessment.returnVisitDate).map(encounter => {
+      const date = encounter.assessment.returnVisitDate;
+      return {
+        encounterId: encounter.id,
+        patientId: encounter.patientId,
+        date,
+        bucket: encounter.workflow.returnVisitStatus === "completed" ? "completed" : date === today ? "today" : date > today ? "upcoming" : "past",
+        linkedEncounterId: encounter.workflow.returnVisitEncounterId
+      };
+    }).sort((first, second) => first.date < second.date ? -1 : first.date > second.date ? 1 : first.encounterId < second.encounterId ? -1 : first.encounterId > second.encounterId ? 1 : 0);
   }
 
   function createDemoEncounter(options = {}) {
@@ -175,8 +238,8 @@
   }
 
   function validateEncounterVersion(encounter, version) {
-    const groups = version === 1 ? LEGACY_GROUPS : GROUPS;
-    const rootFields = version === 1 ? LEGACY_ROOT_FIELDS : version === 2 ? V2_ROOT_FIELDS : ROOT_FIELDS;
+    const groups = version === 1 ? LEGACY_GROUPS : version < 4 ? V2_GROUPS : GROUPS;
+    const rootFields = version === 1 ? LEGACY_ROOT_FIELDS : version === 2 ? V2_ROOT_FIELDS : version === 3 ? V3_ROOT_FIELDS : ROOT_FIELDS;
     const errors = [];
     function problem(field, message) { errors.push({ field, message }); }
     function shape(value, fields, prefix) {
@@ -263,6 +326,18 @@
     }
     if (isObject(encounter.draft) && typeof encounter.draft.generatedAt === "string" && encounter.draft.generatedAt !== "" && !validTimestamp(encounter.draft.generatedAt)) {
       problem("draft.generatedAt", "Некорректная дата генерации черновика.");
+    }
+    if (version >= 4 && isObject(encounter.workflow)) {
+      const workflow = encounter.workflow;
+      if (!["draft", "reviewed"].includes(workflow.reviewStatus)) problem("workflow.reviewStatus", "Выберите статус проверки записи.");
+      if (workflow.reviewStatus === "reviewed") {
+        if (typeof workflow.reviewedAt !== "string" || !validTimestamp(workflow.reviewedAt)) problem("workflow.reviewedAt", "Для проверенной записи требуется дата и время проверки.");
+        if (typeof encounter.draft?.text !== "string" || !encounter.draft.text.trim()) problem("draft.text", "Для проверки врачом заполните текст записи.");
+      } else if (workflow.reviewedAt !== "") problem("workflow.reviewedAt", "У черновика не должно быть даты проверки.");
+      if (!["planned", "completed"].includes(workflow.returnVisitStatus)) problem("workflow.returnVisitStatus", "Выберите отметку повторного приёма.");
+      if (typeof workflow.returnVisitEncounterId === "string" && workflow.returnVisitEncounterId !== "" && !ID_PATTERN.test(workflow.returnVisitEncounterId)) problem("workflow.returnVisitEncounterId", "Некорректная ссылка повторного приёма.");
+      if (workflow.returnVisitEncounterId === encounter.id) problem("workflow.returnVisitEncounterId", "Повторный приём не может ссылаться на себя.");
+      if (!encounter.assessment?.returnVisitDate && (workflow.returnVisitStatus === "completed" || workflow.returnVisitEncounterId !== "")) problem("assessment.returnVisitDate", "Для отметки или связи повторного приёма укажите дату.");
     }
     return errors;
   }
@@ -362,8 +437,8 @@
   }
 
   function normalizeEncounter(encounter, version = SCHEMA_VERSION) {
-    const groups = version === 1 ? LEGACY_GROUPS : GROUPS;
-    const rootFields = version === 1 ? LEGACY_ROOT_FIELDS : version === 2 ? V2_ROOT_FIELDS : ROOT_FIELDS;
+    const groups = version === 1 ? LEGACY_GROUPS : version < 4 ? V2_GROUPS : GROUPS;
+    const rootFields = version === 1 ? LEGACY_ROOT_FIELDS : version === 2 ? V2_ROOT_FIELDS : version === 3 ? V3_ROOT_FIELDS : ROOT_FIELDS;
     const result = {};
     for (const field of rootFields) {
       result[field] = Object.prototype.hasOwnProperty.call(groups, field)
@@ -384,7 +459,7 @@
       throw new Error("Неверная структура резервной копии: ожидаются " + fields.join(", ") + ".");
     }
     if (value.format !== FORMAT) throw new Error("Этот файл не является резервной копией МедАссистента.");
-    if (value.schemaVersion !== version) throw new Error("Неподдерживаемая версия данных. Поддерживается версия 3 и импорт резервных копий версий 1 и 2.");
+    if (value.schemaVersion !== version) throw new Error("Неподдерживаемая версия данных. Поддерживается версия 4 и импорт резервных копий версий 1, 2 и 3.");
     if (typeof value.exportedAt !== "string" || !validTimestamp(value.exportedAt)) throw new Error("В резервной копии указана некорректная дата экспорта.");
     const patientIds = new Set();
     let patients;
@@ -408,6 +483,28 @@
       if (version >= 3 && !patientIds.has(encounter.patientId)) throw new Error("Для приёма №" + (index + 1) + " отсутствует карточка пациента.");
       return normalizeEncounter(encounter, version);
     });
+    if (version >= 4) {
+      const byId = new Map(encounters.map(encounter => [encounter.id, encounter]));
+      const linkedIds = new Set();
+      for (const encounter of encounters) {
+        const targetId = encounter.workflow.returnVisitEncounterId;
+        if (!targetId) continue;
+        const target = byId.get(targetId);
+        if (!target) throw new Error("Для повторного приёма отсутствует связанная запись.");
+        if (target.patientId !== encounter.patientId) throw new Error("Связанный повторный приём относится к другому пациенту.");
+        if (linkedIds.has(targetId)) throw new Error("Один повторный приём не может быть связан с несколькими датами.");
+        linkedIds.add(targetId);
+      }
+      for (const encounter of encounters) {
+        const visited = new Set();
+        let current = encounter;
+        while (current) {
+          if (visited.has(current.id)) throw new Error("Связи повторных приёмов не должны образовывать цикл.");
+          visited.add(current.id);
+          current = byId.get(current.workflow.returnVisitEncounterId);
+        }
+      }
+    }
     return { format: FORMAT, schemaVersion: version, exportedAt: value.exportedAt, ...(version >= 3 ? { patients } : {}), encounters };
   }
 
@@ -420,21 +517,22 @@
     let parsed;
     try { parsed = JSON.parse(text.replace(/^\uFEFF/, "")); }
     catch { throw new Error("Не удалось прочитать JSON. Файл повреждён или имеет другой формат."); }
-    if (isObject(parsed) && [1, 2].includes(parsed.schemaVersion)) {
+    if (isObject(parsed) && [1, 2, 3].includes(parsed.schemaVersion)) {
       const legacy = validateBundleVersion(parsed, parsed.schemaVersion);
       const encounters = legacy.encounters.map(encounter => ({
         ...encounter,
-        patientId: encounter.id,
+        patientId: legacy.schemaVersion === 3 ? encounter.patientId : encounter.id,
+        workflow: emptyWorkflow(),
         ...(legacy.schemaVersion === 1 ? {
           assessment: { ...encounter.assessment, ...Object.fromEntries(NEW_ASSESSMENT_FIELDS.map(field => [field, ""])) },
           examSelections: Object.fromEntries(GROUPS.examSelections.map(field => [field, ""]))
         } : {})
       }));
-      const patients = legacy.encounters.map(encounter => ({ id: encounter.id, label: "", createdAt: encounter.createdAt, updatedAt: encounter.updatedAt }));
+      const patients = legacy.schemaVersion === 3 ? legacy.patients : legacy.encounters.map(encounter => ({ id: encounter.id, label: "", createdAt: encounter.createdAt, updatedAt: encounter.updatedAt }));
       return validateBundle({ ...legacy, schemaVersion: SCHEMA_VERSION, patients, encounters });
     }
     return validateBundle(parsed);
   }
 
-  return Object.freeze({ createPatient, createEncounter, createRepeatEncounter, createDemoEncounter, calculateBmi, generateDraft, fingerprint, validatePatient, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_PATIENTS, MAX_PATIENT_LABEL_LENGTH, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
+  return Object.freeze({ createPatient, createEncounter, createRepeatEncounter, createDemoEncounter, setReviewStatus, setReturnVisitStatus, linkReturnVisit, getReturnVisits, calculateBmi, generateDraft, fingerprint, validatePatient, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_PATIENTS, MAX_PATIENT_LABEL_LENGTH, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
 });

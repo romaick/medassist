@@ -6,15 +6,15 @@ const path = require("node:path");
 const vm = require("node:vm");
 const core = require("../app/core.js");
 const examCatalog = require("../app/exam-options.js");
-const { createRepository, KEY, PREVIOUS_KEY, LEGACY_KEY } = require("../app/storage.js");
+const { createRepository, KEY, PREVIOUS_KEY, V2_KEY, LEGACY_KEY, WATCHED_KEYS } = require("../app/storage.js");
 const NOW = "2026-10-19T09:30:00.000Z";
 
 function encounter(id = "test-visit-1") { return core.createEncounter({ now: NOW, id }); }
 function patientsFor(encounters) { return [...new Set(encounters.map(data => data.patientId))].map(id => core.createPatient({ id, now: NOW })); }
 function serialize(encounters, patients = patientsFor(encounters)) { return core.serializeBundle(encounters, patients); }
 function bundle(encounters, patients = patientsFor(encounters)) { return JSON.parse(serialize(encounters, patients)); }
-function memoryStorage(initial = null, legacy = null, previous = null) {
-  const values = new Map([[KEY, initial], [PREVIOUS_KEY, previous], [LEGACY_KEY, legacy]]);
+function memoryStorage(initial = null, legacy = null, v2 = null, previous = null) {
+  const values = new Map([[KEY, initial], [PREVIOUS_KEY, previous], [V2_KEY, v2], [LEGACY_KEY, legacy]]);
   let writes = 0;
   const reads = [];
   return {
@@ -23,6 +23,7 @@ function memoryStorage(initial = null, legacy = null, previous = null) {
     get raw() { return values.get(KEY); },
     get legacyRaw() { return values.get(LEGACY_KEY); },
     get previousRaw() { return values.get(PREVIOUS_KEY); },
+    get v2Raw() { return values.get(V2_KEY); },
     get reads() { return reads; },
     get writes() { return writes; }
   };
@@ -33,6 +34,14 @@ function previousBundle(data = encounter()) {
   value.schemaVersion = 2;
   delete value.patients;
   delete value.encounters[0].patientId;
+  delete value.encounters[0].workflow;
+  return value;
+}
+
+function version3Bundle(encounters, patients = patientsFor(encounters)) {
+  const value = bundle(encounters, patients);
+  value.schemaVersion = 3;
+  for (const entry of value.encounters) delete entry.workflow;
   return value;
 }
 
@@ -53,7 +62,7 @@ test("new encounters have independent, valid empty fields and a local visit date
   first.history.complaints = "Changed";
   assert.equal(second.history.complaints, "");
   assert.equal(first.draft.text, "");
-  assert.equal(core.SCHEMA_VERSION, 3);
+  assert.equal(core.SCHEMA_VERSION, 4);
   assert.deepEqual(Object.keys(first.examSelections), examCatalog.FIELDS.map(field => field.id));
   assert.ok(Object.values(first.examSelections).every(value => value === ""));
   assert.equal(core.createDemoEncounter({ now: NOW }).assessment.followUp, "");
@@ -329,7 +338,7 @@ test("version 1 import preserves every original field and manual draft while add
   const oldBefore = JSON.stringify(oldBundle);
   const restoredBundle = core.parseBundle(oldBefore);
   const restored = restoredBundle.encounters[0];
-  assert.equal(restoredBundle.schemaVersion, 3);
+  assert.equal(restoredBundle.schemaVersion, 4);
   assert.equal(restoredBundle.exportedAt, oldBundle.exportedAt);
   for (const [key, value] of Object.entries(oldBundle.encounters[0])) {
     if (key === "assessment") {
@@ -452,7 +461,7 @@ test("BMI is derived after old-schema import without adding fields to stored or 
     assert.equal(core.calculateBmi(restored.vitals.weight, restored.vitals.height), "23,7");
     assert.match(core.generateDraft(restored), /Индекс массы тела: 23,7 кг\/м²\./);
     const exported = bundle([restored]);
-    assert.equal(exported.schemaVersion, 3);
+    assert.equal(exported.schemaVersion, 4);
     assert.deepEqual(exported.encounters[0], restored);
     assert.deepEqual(exported.encounters[0].vitals, data.vitals);
   }
@@ -463,7 +472,7 @@ test("import rejects unsupported format, version, duplicates, malformed JSON and
   assert.throws(() => core.validateBundle([]), /объектом/);
   const valid = bundle([encounter()]);
   assert.throws(() => core.validateBundle({ ...valid, format: "other" }), /не является/);
-  assert.throws(() => core.validateBundle({ ...valid, schemaVersion: 4 }), /версия/);
+  assert.throws(() => core.validateBundle({ ...valid, schemaVersion: 5 }), /версия/);
   assert.throws(() => core.validateBundle({ ...valid, encounters: [encounter(), encounter()] }), /повторяется/);
   assert.throws(() => core.validateBundle({ ...valid, encounters: "wrong" }), /массивом/);
   assert.throws(() => core.validateBundle({ ...valid, exportedAt: "yesterday" }), /дата/);
@@ -518,7 +527,7 @@ test("legacy storage is migrated in memory and kept untouched by read, save and 
   assert.equal(storage.raw, null);
   assert.equal(storage.legacyRaw, legacy);
   assert.equal(repository.save(result.encounters, result.patients).ok, true);
-  assert.equal(JSON.parse(storage.raw).schemaVersion, 3);
+  assert.equal(JSON.parse(storage.raw).schemaVersion, 4);
   assert.equal(storage.legacyRaw, legacy);
   assert.equal(createRepository(storage).load().migrated, undefined);
   assert.equal(repository.reset([]).ok, true);
@@ -526,7 +535,7 @@ test("legacy storage is migrated in memory and kept untouched by read, save and 
   assert.equal(storage.legacyRaw, legacy);
 });
 
-test("version 3 storage takes priority and corrupt version 3 never falls back to older copies", () => {
+test("version 4 storage takes priority and corrupt version 4 never falls back to older copies", () => {
   const legacy = JSON.stringify(legacyBundle());
   const storage = memoryStorage(serialize([]), legacy);
   assert.deepEqual(createRepository(storage).load(), { patients: [], encounters: [], error: null });
@@ -541,7 +550,7 @@ test("version 3 storage takes priority and corrupt version 3 never falls back to
   assert.equal(corrupt.writes, 0);
 });
 
-test("corrupt legacy storage blocks ordinary saves and reset affects only the version 3 key", () => {
+test("corrupt legacy storage blocks ordinary saves and reset affects only the version 4 key", () => {
   const storage = memoryStorage(null, "{broken legacy");
   const repository = createRepository(storage);
   assert.equal(repository.save([encounter()], patientsFor([encounter()])).ok, false);
@@ -680,7 +689,7 @@ test("version 2 migration creates one deterministic unlabelled card per encounte
   old.encounters.push(second);
   const text = JSON.stringify(old);
   const migrated = core.parseBundle(text);
-  assert.equal(migrated.schemaVersion, 3);
+  assert.equal(migrated.schemaVersion, 4);
   assert.equal(migrated.exportedAt, old.exportedAt);
   assert.deepEqual(core.parseBundle(text), migrated);
   assert.equal(migrated.patients.length, 2);
@@ -689,8 +698,9 @@ test("version 2 migration creates one deterministic unlabelled card per encounte
     const restored = migrated.encounters[index];
     assert.equal(restored.patientId, original.id);
     assert.deepEqual(migrated.patients[index], { id: original.id, label: "", createdAt: original.createdAt, updatedAt: original.updatedAt });
-    const { patientId, ...oldFields } = restored;
+    const { patientId, workflow, ...oldFields } = restored;
     assert.deepEqual(oldFields, original);
+    assert.deepEqual(workflow, encounter().workflow);
   }
   assert.equal(core.fingerprint(migrated.encounters[0]), source.draft.sourceFingerprint);
   assert.equal(JSON.stringify(old), text);
@@ -735,7 +745,7 @@ test("bundle normalization detaches patient labels and keeps multiple visits ass
   assert.throws(() => core.validateBundle(poisoned), /Неизвестное поле/);
 });
 
-test("version 2 storage is read-only on migration, takes priority over v1, and remains intact after a v3 save", () => {
+test("version 2 storage is read-only on migration, takes priority over v1, and remains intact after a v4 save", () => {
   const previous = JSON.stringify(previousBundle());
   const legacy = JSON.stringify(legacyBundle(encounter("legacy-only")));
   const storage = memoryStorage(null, legacy, previous);
@@ -745,15 +755,15 @@ test("version 2 storage is read-only on migration, takes priority over v1, and r
   assert.equal(loaded.error, null);
   assert.equal(loaded.patients[0].id, encounter().id);
   assert.equal(storage.writes, 0);
-  assert.deepEqual(storage.reads, [KEY, PREVIOUS_KEY]);
+  assert.deepEqual(storage.reads, [KEY, PREVIOUS_KEY, V2_KEY]);
   assert.equal(repository.save(loaded.encounters, loaded.patients).ok, true);
   assert.equal(storage.writes, 1);
-  assert.equal(storage.previousRaw, previous);
+  assert.equal(storage.v2Raw, previous);
   assert.equal(storage.legacyRaw, legacy);
   assert.deepEqual(JSON.parse(storage.raw).patients, loaded.patients);
   assert.deepEqual(createRepository(storage).load(), { patients: loaded.patients, encounters: loaded.encounters, error: null });
   assert.equal(repository.reset().ok, true);
-  assert.equal(storage.previousRaw, previous);
+  assert.equal(storage.v2Raw, previous);
   assert.equal(storage.legacyRaw, legacy);
 });
 
@@ -765,9 +775,9 @@ test("corrupt version 2 storage blocks writing and never falls back to valid v1"
   assert.match(result.error, /Автоматическая запись остановлена/);
   assert.deepEqual(result.patients, []);
   assert.equal(repository.save([], []).ok, false);
-  assert.deepEqual(storage.reads, [KEY, PREVIOUS_KEY]);
+  assert.deepEqual(storage.reads, [KEY, PREVIOUS_KEY, V2_KEY]);
   assert.equal(storage.writes, 0);
-  assert.equal(storage.previousRaw, "{broken v2");
+  assert.equal(storage.v2Raw, "{broken v2");
   assert.equal(storage.legacyRaw, legacy);
 });
 
@@ -805,4 +815,278 @@ test("classic browser scripts export their APIs without accessing localStorage d
   assert.ok(accessesAfterLoad > 0);
   assert.equal(browser.MedAssistStorage.save([], []).ok, false);
   assert.equal(browser.accesses, accessesAfterLoad);
+});
+
+test("workflow starts unreviewed and unscheduled with independent values, including repeat encounters", () => {
+  const first = encounter();
+  const second = encounter("second");
+  const expected = { reviewStatus: "draft", reviewedAt: "", returnVisitStatus: "planned", returnVisitEncounterId: "" };
+  assert.deepEqual(first.workflow, expected);
+  first.draft.text = "Проверенная вымышленная запись";
+  first.assessment.returnVisitDate = "2026-10-26";
+  const source = core.setReturnVisitStatus(core.setReviewStatus(first, "reviewed", { now: NOW }), "completed");
+  const repeat = core.createRepeatEncounter(source, { id: "repeat-workflow", now: NOW });
+  assert.deepEqual(repeat.workflow, expected);
+  assert.deepEqual(second.workflow, expected);
+  repeat.workflow.reviewStatus = "changed";
+  assert.equal(source.workflow.reviewStatus, "reviewed");
+  assert.equal(second.workflow.reviewStatus, "draft");
+});
+
+test("review requires nonempty valid text and records an explicit time without mutating its source", () => {
+  for (const text of ["", " \t\n "]) {
+    const empty = encounter(); empty.draft.text = text;
+    assert.throws(() => core.setReviewStatus(empty, "reviewed", { now: NOW }), /заполните текст записи/);
+  }
+  const source = encounter(); source.draft.text = "  Вымышленная запись врача\nС ручными правками  ";
+  const before = JSON.stringify(source);
+  const reviewed = core.setReviewStatus(source, "reviewed", { now: NOW });
+  assert.equal(reviewed.workflow.reviewStatus, "reviewed");
+  assert.equal(reviewed.workflow.reviewedAt, NOW);
+  assert.equal(reviewed.draft.text, source.draft.text);
+  assert.equal(JSON.stringify(source), before);
+  assert.deepEqual(core.setReviewStatus(reviewed, "draft"), source);
+  reviewed.history.complaints = "Изменение отдельной копии";
+  assert.equal(source.history.complaints, "");
+  const invalid = encounter(); invalid.draft.text = "Есть текст"; invalid.age = "не число";
+  assert.throws(() => core.setReviewStatus(invalid, "reviewed", { now: NOW }), /age/);
+  for (const now of ["bad-date", "0000-01-01T00:00:00.000Z", "+010000-01-01T00:00:00.000Z"]) assert.throws(() => core.setReviewStatus(source, "reviewed", { now }), /время/);
+  for (const status of ["done", "", null, true]) assert.throws(() => core.setReviewStatus(source, status), /статус/);
+});
+
+test("workflow validation rejects unknown, missing and contradictory metadata", () => {
+  const invalidCases = [
+    ["reviewStatus", "done"], ["reviewStatus", false], ["reviewedAt", NOW], ["reviewedAt", 4],
+    ["returnVisitStatus", "missed"], ["returnVisitStatus", null],
+    ["returnVisitEncounterId", "<unsafe>"], ["returnVisitEncounterId", false],
+    ["returnVisitEncounterId", "x".repeat(81)]
+  ];
+  for (const [field, value] of invalidCases) {
+    const data = encounter(); data.workflow[field] = value;
+    assert.ok(core.validateEncounter(data).some(error => error.field === "workflow." + field), field + ": " + value);
+  }
+  for (const field of Object.keys(encounter().workflow)) {
+    const data = encounter(); delete data.workflow[field];
+    assert.ok(core.validateEncounter(data).some(error => error.field === "workflow." + field), field);
+  }
+  const unknown = encounter(); unknown.workflow.extra = "unknown";
+  assert.ok(core.validateEncounter(unknown).some(error => error.field === "workflow.extra"));
+  const missing = encounter(); delete missing.workflow;
+  assert.ok(core.validateEncounter(missing).some(error => error.field === "workflow"));
+  const reviewed = encounter(); reviewed.workflow.reviewStatus = "reviewed";
+  assert.ok(core.validateEncounter(reviewed).some(error => error.field === "workflow.reviewedAt"));
+  assert.ok(core.validateEncounter(reviewed).some(error => error.field === "draft.text"));
+  reviewed.draft.text = "Вымышленный текст";
+  for (const timestamp of ["2026-02-30T00:00:00.000Z", "2026-10-19", ""]) {
+    reviewed.workflow.reviewedAt = timestamp;
+    assert.ok(core.validateEncounter(reviewed).some(error => error.field === "workflow.reviewedAt"));
+  }
+});
+
+test("return completion is explicit, requires a date and leaves review, draft and fingerprint unchanged", () => {
+  const source = encounter();
+  assert.throws(() => core.setReturnVisitStatus(source, "completed"), /укажите дату/);
+  source.assessment.returnVisitDate = "2026-10-10";
+  source.draft.text = "Вымышленная проверенная запись";
+  const reviewed = core.setReviewStatus(source, "reviewed", { now: NOW });
+  const before = JSON.stringify(reviewed);
+  const completed = core.setReturnVisitStatus(reviewed, "completed");
+  assert.equal(completed.workflow.returnVisitStatus, "completed");
+  assert.equal(completed.workflow.reviewStatus, "reviewed");
+  assert.equal(completed.workflow.reviewedAt, NOW);
+  assert.deepEqual(completed.draft, reviewed.draft);
+  assert.equal(core.fingerprint(completed), core.fingerprint(source));
+  assert.equal(core.generateDraft(completed), core.generateDraft(source));
+  assert.equal(JSON.stringify(reviewed), before);
+  assert.deepEqual(core.setReturnVisitStatus(completed, "planned"), reviewed);
+  completed.history.complaints = "Другая копия";
+  assert.equal(reviewed.history.complaints, "");
+  for (const status of ["missed", "", null, false]) assert.throws(() => core.setReturnVisitStatus(source, status), /отметка/);
+  completed.assessment.returnVisitDate = "";
+  assert.ok(core.validateEncounter(completed).some(error => error.field === "assessment.returnVisitDate"));
+});
+
+test("the return list uses calendar dates, deterministic order and explicit completion without inferring absence", () => {
+  const make = (id, date, completed = false) => {
+    const data = encounter(id); data.assessment.returnVisitDate = date;
+    return completed ? core.setReturnVisitStatus(data, "completed") : data;
+  };
+  const entries = [make("upcoming", "2026-10-20"), make("same-b", "2026-10-19"), make("past", "2026-10-18"), make("completed", "2026-10-21", true), make("same-a", "2026-10-19"), encounter("no-date")];
+  const before = JSON.stringify(entries);
+  const actual = core.getReturnVisits(entries, "2026-10-19");
+  assert.deepEqual(actual.map(item => [item.encounterId, item.date, item.bucket]), [
+    ["past", "2026-10-18", "past"], ["same-a", "2026-10-19", "today"], ["same-b", "2026-10-19", "today"],
+    ["upcoming", "2026-10-20", "upcoming"], ["completed", "2026-10-21", "completed"]
+  ]);
+  assert.deepEqual(actual[0], { encounterId: "past", patientId: "past", date: "2026-10-18", bucket: "past", linkedEncounterId: "" });
+  assert.equal(core.getReturnVisits(entries, "2026-10-20").find(item => item.encounterId === "same-a").bucket, "past");
+  assert.equal(entries[2].workflow.returnVisitStatus, "planned");
+  assert.equal(JSON.stringify(entries), before);
+  for (const date of ["2026-02-29", "2026-1-01", "0000-01-01", "", null]) assert.throws(() => core.getReturnVisits(entries, date), /дату/);
+  assert.throws(() => core.getReturnVisits(null, "2026-10-19"), /массивом/);
+});
+
+test("the return list tolerates unfinished clinical edits but still rejects invalid scheduling data", () => {
+  const entry = encounter("editing-visit");
+  entry.assessment.returnVisitDate = "2026-10-26";
+  entry.draft.text = "Вымышленная запись";
+  entry.age = "abc";
+  const before = JSON.stringify(entry);
+  assert.deepEqual(core.getReturnVisits([entry], "2026-10-19"), [{
+    encounterId: entry.id, patientId: entry.patientId, date: "2026-10-26", bucket: "upcoming", linkedEncounterId: ""
+  }]);
+  assert.equal(JSON.stringify(entry), before);
+  assert.throws(() => core.setReviewStatus(entry, "reviewed", { now: NOW }), /age/);
+  assert.throws(() => serialize([entry]), /age/);
+  const emptyDate = { ...entry, assessment: { ...entry.assessment, returnVisitDate: "" } };
+  assert.deepEqual(core.getReturnVisits([emptyDate], "2026-10-19"), []);
+  for (const date of ["2026-02-29", "2026-1-01", "завтра", 1, null, undefined]) {
+    const invalid = { ...entry, assessment: { ...entry.assessment, returnVisitDate: date } };
+    assert.throws(() => core.getReturnVisits([invalid], "2026-10-19"), /дату повторного приёма/);
+  }
+  for (const field of ["id", "patientId"]) {
+    assert.throws(() => core.getReturnVisits([{ ...entry, [field]: "<invalid>" }], "2026-10-19"), /идентификатор/);
+  }
+  for (const workflow of [null, {}, { ...entry.workflow, returnVisitStatus: "missed" }, { ...entry.workflow, returnVisitEncounterId: "<invalid>" }, { ...entry.workflow, returnVisitEncounterId: entry.id }]) {
+    assert.throws(() => core.getReturnVisits([{ ...entry, workflow }], "2026-10-19"));
+  }
+  for (const workflow of [{ ...entry.workflow, returnVisitStatus: "completed" }, { ...entry.workflow, returnVisitEncounterId: "another-visit" }]) {
+    assert.throws(() => core.getReturnVisits([{ ...emptyDate, workflow }], "2026-10-19"), /укажите дату/);
+  }
+});
+
+test("return links require one distinct encounter of the same patient and keep review and clinical data intact", () => {
+  const source = encounter("source");
+  const target = core.createRepeatEncounter(source, { id: "repeat", now: NOW });
+  assert.throws(() => core.linkReturnVisit(source, target), /укажите его дату/);
+  source.assessment.returnVisitDate = "2026-10-26";
+  source.draft.text = "Проверенный вымышленный текст";
+  const reviewed = core.setReviewStatus(source, "reviewed", { now: NOW });
+  const linked = core.linkReturnVisit(reviewed, target);
+  assert.equal(reviewed.workflow.returnVisitEncounterId, "");
+  assert.equal(linked.workflow.returnVisitEncounterId, target.id);
+  assert.equal(linked.workflow.returnVisitStatus, "planned");
+  assert.equal(linked.workflow.reviewStatus, "reviewed");
+  assert.equal(linked.workflow.reviewedAt, NOW);
+  assert.deepEqual(linked.draft, reviewed.draft);
+  assert.equal(core.fingerprint(linked), core.fingerprint(reviewed));
+  assert.deepEqual(core.linkReturnVisit(linked, target), linked);
+  assert.equal(core.getReturnVisits([linked, target], "2026-10-26")[0].linkedEncounterId, target.id);
+  assert.throws(() => core.linkReturnVisit(source, source), /на себя/);
+  assert.throws(() => core.linkReturnVisit(source, encounter("other-patient")), /тому же пациенту/);
+  assert.throws(() => core.linkReturnVisit(linked, core.createRepeatEncounter(source, { id: "different-repeat", now: NOW })), /уже есть/);
+  const reverse = { ...target, assessment: { ...target.assessment, returnVisitDate: "2026-11-01" }, workflow: { ...target.workflow, returnVisitEncounterId: source.id } };
+  assert.throws(() => core.linkReturnVisit(source, reverse), /цикл/);
+});
+
+test("bundle links reject missing, cross-patient, self, duplicated targets and cycles of any length", () => {
+  const make = id => {
+    const data = core.createEncounter({ id, patientId: "shared-patient", now: NOW });
+    data.assessment.returnVisitDate = "2026-10-26";
+    return data;
+  };
+  const a = make("a"); const b = make("b"); const c = make("c");
+  const linked = core.linkReturnVisit(a, b);
+  const chain = core.linkReturnVisit(b, c);
+  assert.deepEqual(core.parseBundle(serialize([linked, chain, c])).encounters, [linked, chain, c]);
+  assert.throws(() => serialize([linked]), /отсутствует связанная запись/);
+  assert.throws(() => serialize([linked, { ...b, patientId: "other-patient" }]), /другому пациенту/);
+  assert.throws(() => serialize([{ ...a, workflow: { ...a.workflow, returnVisitEncounterId: a.id } }]), /на себя/);
+  assert.throws(() => serialize([linked, b, core.linkReturnVisit(c, b)]), /несколькими датами/);
+  const cyclic = { ...c, workflow: { ...c.workflow, returnVisitEncounterId: a.id } };
+  assert.throws(() => serialize([linked, chain, cyclic]), /цикл/);
+  const noDate = { ...linked, assessment: { ...linked.assessment, returnVisitDate: "" } };
+  assert.throws(() => serialize([noDate, b]), /укажите дату/);
+});
+
+test("workflow round trip detaches nested metadata and preserves reviewed text and explicit links", () => {
+  const source = encounter("source"); source.assessment.returnVisitDate = "2026-10-26"; source.draft.text = "  Вымышленный текст\n  ";
+  const target = core.createRepeatEncounter(source, { id: "target", now: NOW });
+  const reviewed = core.setReviewStatus(core.linkReturnVisit(source, target), "reviewed", { now: NOW });
+  const completed = core.setReturnVisitStatus(reviewed, "completed");
+  const restored = core.parseBundle(serialize([completed, target]));
+  assert.deepEqual(restored.encounters, [completed, target]);
+  restored.encounters[0].workflow.reviewStatus = "draft";
+  assert.equal(completed.workflow.reviewStatus, "reviewed");
+});
+
+test("version 3 migration keeps shared cards and every original value while adding independent draft workflows", () => {
+  const patient = core.createPatient({ id: "patient-with-two-visits", label: "  Тестов Иван Демонстрационный  ", now: NOW });
+  const source = core.createDemoEncounter({ id: "old-first", patientId: patient.id, now: NOW });
+  source.draft = { text: "  Ручная вымышленная запись\n<текст>  ", generatedAt: NOW, sourceFingerprint: core.fingerprint(source) };
+  source.assessment.returnVisitDate = "2026-10-01";
+  const second = core.createRepeatEncounter(source, { id: "old-second", now: NOW });
+  const old = version3Bundle([source, second], [patient]);
+  const original = JSON.stringify(old);
+  const migrated = core.parseBundle(original);
+  assert.equal(migrated.schemaVersion, 4);
+  assert.equal(migrated.exportedAt, old.exportedAt);
+  assert.deepEqual(migrated.patients, [patient]);
+  for (let index = 0; index < old.encounters.length; index += 1) {
+    const { workflow, ...unchanged } = migrated.encounters[index];
+    assert.deepEqual(unchanged, old.encounters[index]);
+    assert.deepEqual(workflow, encounter().workflow);
+  }
+  migrated.encounters[0].workflow.returnVisitStatus = "completed";
+  assert.equal(migrated.encounters[1].workflow.returnVisitStatus, "planned");
+  assert.equal(JSON.stringify(old), original);
+});
+
+test("version 3 import checks fields, card references and workflow absence before migration", () => {
+  const unknown = version3Bundle([encounter()]); unknown.encounters[0].workflow = encounter().workflow;
+  assert.throws(() => core.parseBundle(JSON.stringify(unknown)), /Неизвестное поле/);
+  const invalid = version3Bundle([encounter()]); invalid.encounters[0].draft.text = null;
+  assert.throws(() => core.parseBundle(JSON.stringify(invalid)), /строкой/);
+  const missing = version3Bundle([encounter()]); missing.patients = [];
+  assert.throws(() => core.parseBundle(JSON.stringify(missing)), /отсутствует карточка/);
+});
+
+test("storage watches all four keys in priority order and migrates version 3 without overwriting old copies", () => {
+  assert.deepEqual(WATCHED_KEYS, ["medassist.demo.v4", "medassist.demo.v3", "medassist.demo.v2", "medassist.demo.v1"]);
+  assert.ok(Object.isFrozen(WATCHED_KEYS));
+  const old = JSON.stringify(version3Bundle([encounter()]));
+  const v2 = JSON.stringify(previousBundle(encounter("old-v2")));
+  const legacy = JSON.stringify(legacyBundle(encounter("old-v1")));
+  const storage = memoryStorage(null, legacy, v2, old);
+  const repository = createRepository(storage);
+  const loaded = repository.load();
+  assert.equal(loaded.migrated, true);
+  assert.equal(loaded.error, null);
+  assert.deepEqual(storage.reads, [KEY, PREVIOUS_KEY]);
+  assert.equal(storage.writes, 0);
+  assert.equal(storage.raw, null);
+  assert.equal(loaded.encounters[0].id, encounter().id);
+  assert.equal(repository.save(loaded.encounters, loaded.patients).ok, true);
+  assert.equal(JSON.parse(storage.raw).schemaVersion, 4);
+  assert.equal(storage.previousRaw, old);
+  assert.equal(storage.v2Raw, v2);
+  assert.equal(storage.legacyRaw, legacy);
+  assert.equal(repository.reset().ok, true);
+  assert.equal(storage.previousRaw, old);
+  assert.equal(storage.v2Raw, v2);
+  assert.equal(storage.legacyRaw, legacy);
+  const corrupt = memoryStorage(null, legacy, v2, "{broken v3");
+  const blocked = createRepository(corrupt);
+  assert.match(blocked.load().error, /Автоматическая запись остановлена/);
+  assert.equal(blocked.save([], []).ok, false);
+  assert.deepEqual(corrupt.reads, [KEY, PREVIOUS_KEY]);
+  assert.equal(corrupt.writes, 0);
+});
+
+test("invalid workflow or repeat references cannot replace an existing saved bundle", () => {
+  const source = encounter("source"); source.assessment.returnVisitDate = "2026-10-26";
+  const target = core.createRepeatEncounter(source, { id: "target", now: NOW });
+  const linked = core.linkReturnVisit(source, target);
+  const patients = patientsFor([source]);
+  const original = serialize([linked, target], patients);
+  const storage = memoryStorage(original);
+  const repository = createRepository(storage);
+  assert.equal(repository.load().error, null);
+  for (const method of ["save", "reset"]) {
+    assert.equal(repository[method]([linked], patients).ok, false);
+    const invalid = { ...target, workflow: { ...target.workflow, reviewStatus: "reviewed", reviewedAt: NOW } };
+    assert.equal(repository[method]([linked, invalid], patients).ok, false);
+    assert.equal(storage.raw, original);
+    assert.equal(storage.writes, 0);
+  }
 });

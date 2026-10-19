@@ -7,7 +7,7 @@ const { chromium } = require(process.env.MEDASSIST_PLAYWRIGHT || "playwright");
 
 const appRoot = path.resolve(process.env.MEDASSIST_APP_ROOT || path.join(__dirname, "../app"));
 const url = pathToFileURL(path.join(appRoot, "index.html")).href;
-const key = "medassist.demo.v3";
+const key = "medassist.demo.v4";
 const click = (page, action) => page.locator('[data-action="' + action + '"]').first().click();
 const tab = (page, name) => page.locator('[data-action="tab"][data-tab="' + name + '"]').first().click();
 const saved = page => page.evaluate(key => JSON.parse(localStorage.getItem(key)), key);

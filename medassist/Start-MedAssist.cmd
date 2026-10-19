@@ -6,6 +6,18 @@ set "APP_FILE=%~dp0app\index.html"
 if not exist "%APP_FILE%" goto missing
 set "APP_URL=file:///%APP_FILE:\=/%"
 
+set "UPDATE_LINK_TOKEN="
+for /f "delims=" %%T in ('^""%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -File "%~dp0updater\Register-UpdateLink.ps1" -LaunchToken 2^>nul^"') do set "UPDATE_LINK_TOKEN=%%T"
+if not defined UPDATE_LINK_TOKEN goto update_link_unavailable
+set "APP_URL=%APP_URL%#updates=%UPDATE_LINK_TOKEN%"
+goto find_browser
+
+:update_link_unavailable
+echo Update button setup was unavailable. MedAssist will open normally.
+echo Use MedAssist Update for updates. Read START-HERE.txt for help.
+
+:find_browser
+
 set "BROWSER="
 if exist "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe" set "BROWSER=%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"
 if not defined BROWSER if exist "%ProgramFiles%\Microsoft\Edge\Application\msedge.exe" set "BROWSER=%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"
@@ -24,7 +36,7 @@ echo Edge and Chrome were not found in their standard folders.
 echo Opening MedAssist in your default browser.
 echo If it does not open, open app\index.html manually in a browser.
 echo Read START-HERE.txt for instructions in Russian.
-start "" "%APP_FILE%"
+start "" "%APP_URL%"
 pause
 exit /b 0
 

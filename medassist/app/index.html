@@ -23,5 +23,12 @@
     <div class="dialog-actions"><button id="dialog-cancel" class="button secondary" type="button">Отмена</button><button id="dialog-accept" class="button primary" type="button">Продолжить</button></div>
   </dialog>
   <input type="file" id="import-file" accept="application/json,.json" hidden>
+  <dialog id="update-help" aria-labelledby="update-help-title" aria-describedby="update-help-message">
+    <h2 id="update-help-title">Подключение кнопки обновления</h2>
+    <p id="update-help-message">Закройте это окно программы и запустите МедАссистент через Start-MedAssist.cmd из той же папки. При запуске кнопка подключается автоматически.
+
+Если файлы запуска остались от версии 0.3 или 0.4, им требуется однократное обновление до 0.5. Инструкция находится в START-HERE.txt новой версии. До этого работает Update-MedAssist.cmd из вашей папки программы.</p>
+    <div class="dialog-actions"><button id="update-help-close" class="button primary" type="button">Понятно</button></div>
+  </dialog>
 </body>
 </html>

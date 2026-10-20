@@ -353,7 +353,7 @@ test("main and newly covered filters honor reduced motion without changing recor
   assert.equal(await raw(page), original.value);
 });
 
-test("global menu stays above the workspace and the clock sits left, with usable narrow navigation and fixed visit controls", {timeout: 25000}, async t => {
+test("global menu forms a left rail with top context, usable narrow navigation and fixed visit controls", {timeout: 25000}, async t => {
   const page = await openApp(t, {reducedMotion: "reduce"});
   await page.setViewportSize({width: 1366, height: 768});
   const menu = page.locator('.navigation-header .nav');
@@ -363,12 +363,15 @@ test("global menu stays above the workspace and the clock sits left, with usable
       return {left: box.left, right: box.right, top: box.top, bottom: box.bottom, height: box.height};
     };
     return {header: rect('.navigation-header'), sidebar: rect('.context-sidebar'), main: rect('main'),
-      menuRows: [...document.querySelectorAll('.navigation-header .nav button')].map(node => node.getBoundingClientRect().top)};
+      menuRows: [...document.querySelectorAll('.navigation-header .nav button')].map(node => node.getBoundingClientRect().top),
+      menuColumns: [...document.querySelectorAll('.navigation-header .nav button')].map(node => node.getBoundingClientRect().left)};
   });
-  assert.ok(desktop.header.bottom <= desktop.sidebar.top + 1);
-  assert.ok(desktop.sidebar.right <= desktop.main.left + 1);
-  assert.ok(desktop.header.height <= 80, "the horizontal menu does not add an empty tall header");
-  assert.equal(new Set(desktop.menuRows).size, 1, "all navigation entries occupy one horizontal row");
+  assert.ok(desktop.header.right <= desktop.sidebar.left + 1, "the navigation rail leaves space for top context");
+  assert.ok(desktop.header.right <= desktop.main.left + 1, "the workspace sits beside the rail");
+  assert.ok(desktop.sidebar.bottom <= desktop.main.top + 1, "date and current section sit above the workspace");
+  assert.equal(desktop.header.height, 768, "the navigation rail spans the viewport");
+  assert.equal(new Set(desktop.menuRows).size, desktop.menuRows.length, "navigation entries occupy separate rows");
+  assert.equal(new Set(desktop.menuColumns).size, 1, "navigation entries align in one column");
   assert.equal(await page.locator("#current-date").textContent(), "19 апреля(04) 2032");
   assert.equal(await page.locator("#current-time").textContent(), "11:00");
   for (const name of ["patients", "followups", "modules", "help", "home"]) {
@@ -377,17 +380,17 @@ test("global menu stays above the workspace and the clock sits left, with usable
     assert.equal(await page.locator("#current-time").textContent(), "11:00");
   }
   await menu.locator('[data-action="new"]').click();
-  await page.locator("#patient-label").fill("Тестов Верхнее Меню");
+  await page.locator("#patient-label").fill("ДЕМО Тестов Боковое Меню");
   await choose(visitTab(page, "exam"));
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   const pinned = await page.evaluate(() => {
     const head = document.querySelector(".visit-context").getBoundingClientRect();
     const actions = document.querySelector(".visit-action-bar").getBoundingClientRect();
-    const side = document.querySelector(".context-sidebar").getBoundingClientRect();
+    const side = document.querySelector(".navigation-header").getBoundingClientRect();
     return {headTop: head.top, sideTop: side.top, actionBottom: actions.bottom, actionLeft: actions.left, sideRight: side.right};
   });
   assert.ok(pinned.headTop >= -1 && pinned.headTop <= 1, "visit identity stays at the viewport top");
-  assert.ok(pinned.sideTop >= -1 && pinned.sideTop <= 1, "clock stays visible while scrolling");
+  assert.ok(pinned.sideTop >= -1 && pinned.sideTop <= 1, "navigation stays visible while scrolling");
   assert.equal(pinned.actionBottom, 768);
   assert.equal(pinned.actionLeft, pinned.sideRight);
   await page.setViewportSize({width: 390, height: 844});

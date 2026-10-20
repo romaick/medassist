@@ -1,4 +1,4 @@
-:root{--ink:#203438;--muted:#65777b;--green:#12786d;--green-dark:#0b5e56;--pale:#e8f3ef;--line:#dfe7e5;--paper:#fff;--bg:#f4f7f6;--nav:#142f32;--amber:#8b5a18;--red:#a13d35;--shadow:0 8px 24px #193e3810}
+:root{--ink:#203638;--muted:#607477;--green:#176b60;--green-dark:#12584f;--pale:#e8f3ef;--line:#dce5e5;--paper:#fff;--bg:#f3f6f7;--nav:#142f32;--amber:#8b5a18;--red:#a13d35;--shadow:0 8px 24px #193e3810}
 .sickleave-duration{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:4px 12px;background:var(--pale);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:12px 0 18px}
 .sickleave-duration label{font-size:15px;font-weight:600}
 .sickleave-duration output{font-size:24px;font-weight:650;line-height:1.3;color:var(--green-dark);font-variant-numeric:tabular-nums}
@@ -392,3 +392,297 @@ dialog.restore-preview{width:min(760px,calc(100vw - 32px));max-width:760px;max-h
 .shortcut-preview{font:inherit;font-size:14px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;max-height:280px;overflow-y:auto;background:#f4f8f6;border:1px solid var(--line);border-radius:8px;padding:14px;margin:0 0 12px;min-height:90px}
 #shortcut-editor{border-top:1px solid var(--line);margin-top:18px;padding-top:18px}#shortcut-editor .actions{flex-wrap:wrap}.shortcut-trigger{justify-self:start;margin-top:4px;font-size:12px}
 @media(max-width:700px){.shortcuts-workspace{grid-template-columns:minmax(0,1fr);gap:18px}.shortcuts-list{max-height:180px}.shortcut-preview{max-height:170px}#shortcuts-dialog .dialog-actions .button{min-width:0}#shortcut-editor .actions{display:grid;grid-template-columns:minmax(0,1fr)}}
+
+/* Desktop clinical workspace. Screen scope preserves the document print layout. */
+@media screen {
+  body.design-refresh {
+    --sidebar-width: 232px;
+    --shadow: 0 2px 5px #20363804;
+    font-family: "Segoe UI Variable Text", "Segoe UI", Tahoma, sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .design-refresh .shell {
+    display: grid;
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+    grid-template-rows: 76px minmax(0, 1fr);
+    align-items: start;
+    min-height: 100dvh;
+  }
+  .design-refresh .navigation-header {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    position: sticky;
+    top: 0;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 32px;
+    padding: 25px 14px;
+    background: #fff;
+    border-right: 1px solid var(--line);
+    color: var(--ink);
+    overflow-y: auto;
+  }
+  .design-refresh .navigation-header .brand {
+    flex: 0 0 auto;
+    gap: 10px;
+    padding: 0 8px;
+  }
+  .design-refresh .navigation-header .brand img { width: 34px; height: 34px; }
+  .design-refresh .navigation-header .brand strong { font-size: 18px; font-weight: 650; letter-spacing: -.5px; color: var(--ink); }
+  .design-refresh .navigation-header .brand small { font-size: 11px; letter-spacing: 0; text-transform: none; color: var(--muted); margin-top: 2px; }
+  .design-refresh .navigation-header .nav {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 5px;
+    width: 100%;
+    overflow: visible;
+    flex: 0 0 auto;
+  }
+  .design-refresh .navigation-header .nav button,
+  .design-refresh .navigation-header .nav.pager-tabs .pager-tab {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    min-height: 46px;
+    width: 100%;
+    border: 0;
+    border-radius: 7px;
+    padding: 11px 13px;
+    gap: 11px;
+    color: #53696d;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.4;
+    white-space: normal;
+    text-align: left;
+    background: transparent;
+  }
+  .design-refresh .navigation-header .nav .icon { width: 19px; height: 19px; flex-shrink: 0; }
+  .design-refresh .navigation-header .nav button .icon { color: currentColor; }
+  .design-refresh .navigation-header .nav.pager-tabs .pager-tab:hover,
+  .design-refresh .navigation-header .nav button:hover { background: #f2f6f6; color: var(--ink); }
+  .design-refresh .navigation-header .nav.pager-tabs .pager-tab.active {
+    background: #e7f1ee;
+    color: #135f55;
+    font-weight: 650;
+    box-shadow: inset 3px 0 var(--green);
+  }
+  .design-refresh .navigation-header .nav-command { margin-top: 22px; }
+  .design-refresh .navigation-header .pager-indicator { display: none; }
+  .design-refresh .rail-note { margin-top: auto; padding: 18px 12px 0; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; line-height: 1.8; }
+  .design-refresh .rail-note span { display: block; }
+  .design-refresh .context-sidebar.topbar {
+    grid-column: 2;
+    grid-row: 1;
+    position: static;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    align-self: stretch;
+    min-height: 76px;
+    gap: 22px;
+    padding: 12px 32px;
+    background: #fff;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .design-refresh .context-sidebar .topbar-left { order: 0; gap: 1px; }
+  .design-refresh .context-sidebar .context-mode { font-size: 11px; letter-spacing: 0; text-transform: none; }
+  .design-refresh .context-sidebar .topbar-left strong { font-size: 14px; font-weight: 600; }
+  .design-refresh .search-launch { display: flex; align-items: center; gap: 8px; flex: 0 1 240px; min-width: 175px; min-height: 38px; padding: 7px 10px; border: 1px solid #d6e1e0; border-radius: 6px; background: #f6f9f9; color: #536b6e; font-size: 13px; line-height: 1.4; font-family: inherit; cursor: pointer; }
+  .design-refresh .search-launch:hover { border-color: #91b7ad; background: #edf5f2; }
+  .design-refresh .search-launch .icon { width: 16px; height: 16px; }
+  .design-refresh .search-launch kbd { margin-left: auto; }
+  .design-refresh .context-sidebar .current-datetime { order: 1; margin-left: auto; flex-direction: row; align-items: center; gap: 16px; font-size: 13px; white-space: nowrap; }
+  .design-refresh .context-sidebar #current-date { color: var(--muted); }
+  .design-refresh .context-sidebar #current-time { font-size: 18px; font-weight: 600; letter-spacing: 0; font-variant-numeric: tabular-nums; color: var(--ink); }
+  .design-refresh .context-sidebar .side-bottom { order: 2; margin: 0; padding: 0; }
+  .design-refresh .context-sidebar .version { display: none; }
+  .design-refresh .pill { font-size: 11px; border: 1px solid #cfe3dc; color: #326c60; background: #f5faf7; padding: 5px 9px; }
+  .design-refresh .workspace { grid-column: 2; grid-row: 2; overflow: clip; }
+  .design-refresh .workspace > main { max-width: 1440px; padding: 30px 32px 34px; }
+  .design-refresh.visit-view .workspace > main { padding-bottom: calc(var(--visit-actions-height, 76px) + var(--visit-toast-height, 0px) + 24px); }
+  .design-refresh h1 { font-size: 30px; letter-spacing: -.7px; font-weight: 650; line-height: 1.25; }
+  .design-refresh h2 { font-size: 20px; font-weight: 650; letter-spacing: -.25px; }
+  .design-refresh h3 { font-weight: 600; }
+  .design-refresh .page-heading { margin-bottom: 24px; }
+  .design-refresh .page-heading h1 { margin-bottom: 6px; }
+  .design-refresh .page-heading p { max-width: 75ch; font-size: 14px; }
+  .design-refresh .button { min-height: 40px; border-radius: 6px; font-size: 14px; font-weight: 600; padding: 9px 14px; box-shadow: none; }
+  .design-refresh .button.primary { background: var(--green); border-color: var(--green); color: #fff; }
+  .design-refresh .button.primary:hover { background: var(--green-dark); border-color: var(--green-dark); }
+  .design-refresh .button.secondary { background: #fff; border-color: #cddcdb; color: #28504e; }
+  .design-refresh .button.secondary:hover { background: #f1f7f5; border-color: #91b7ad; }
+  .design-refresh .button.compact { min-height: 34px; padding: 6px 11px; font-size: 13px; }
+  .design-refresh :is(button, input, textarea, select, summary, a):focus-visible { outline: 3px solid #238476; outline-offset: 3px; }
+  .design-refresh .navigation-header .nav button:focus-visible { outline: 2px solid #238476; outline-offset: -3px; }
+  .design-refresh .card { border: 1px solid var(--line); border-radius: 10px; box-shadow: none; }
+  .design-refresh .backup-reminder { padding: 12px 16px; margin-bottom: 22px; border-radius: 8px; background: #f7faf9; font-size: 13px; align-items: center; }
+  .design-refresh .backup-reminder p { font-size: 12px; }
+  .design-refresh .backup-reminder .button { min-height: 34px; font-size: 12px; padding: 6px 10px; }
+  .design-refresh .home-page .home-demo-note { font-size: 14px; color: var(--muted); }
+  .design-refresh .home-page .home-current {
+    padding: 22px 24px;
+    margin-bottom: 24px;
+    border-left: 4px solid var(--green);
+    border-radius: 4px 10px 10px 4px;
+    background: #fff;
+    flex-wrap: nowrap;
+    gap: 24px;
+  }
+  .design-refresh .home-page .home-current h2 { color: var(--muted); font-weight: 500; font-size: 13px; margin-bottom: 9px; letter-spacing: 0; }
+  .design-refresh .home-page .home-current-patient > strong { font-size: 22px; font-weight: 600; line-height: 1.35; }
+  .design-refresh .home-page .home-current-meta { margin-top: 7px; }
+  .design-refresh .home-page .home-current-complaint { margin-top: 8px; max-width: 70ch; }
+  .design-refresh .home-page .home-current-empty { font-size: 16px; max-width: 55ch; color: var(--ink); }
+  .design-refresh .home-page .home-current > .button { margin: 0; }
+  .design-refresh .home-page .home-dashboard { grid-template-columns: minmax(0, 1.4fr) minmax(280px, 1fr); gap: 24px; }
+  .design-refresh .home-page .home-records { order: 0; }
+  .design-refresh .home-page .home-followups { order: 1; }
+  .design-refresh .home-page .card-head { padding: 20px 22px 16px; gap: 8px 12px; }
+  .design-refresh .home-page .card-head h2 { font-size: 18px; }
+  .design-refresh .home-page .workflow-filters { padding: 0 20px; margin-bottom: 16px; gap: 2px; border-bottom: 1px solid var(--line); }
+  .design-refresh .home-page .workflow-filters .button { font-size: 12px; padding: 9px 10px; min-height: 38px; }
+  .design-refresh .home-page .search-wrap { padding: 0 22px 14px; }
+  .design-refresh .home-page .home-search-label { font-size: 12px; font-weight: 500; color: var(--muted); }
+  .design-refresh .home-page .search-field { min-height: 42px; background: #f8fafb; }
+  .design-refresh .home-page .list { padding: 0 22px 8px; }
+  .design-refresh .home-page .visit-row { padding: 16px 0; }
+  .design-refresh .home-page .visit-text strong { font-size: 15px; font-weight: 600; }
+  .design-refresh .home-page .visit-text p { font-size: 13px; }
+  .design-refresh .home-page .visit-row > .button { min-height: 36px; max-width: 134px; font-size: 12px; }
+  .design-refresh .home-page .home-list-empty { padding: 30px 0 34px; }
+  .design-refresh .home-page .empty { padding: 14px 0 28px; }
+  .design-refresh .home-page .empty h3 { font-size: 15px; }
+  .design-refresh .home-page .empty p { font-size: 13px; max-width: 48ch; }
+  .design-refresh .home-page .home-list-empty p { max-width: 55ch; line-height: 1.6; }
+  .design-refresh .demo-notice { background: transparent; border: 0; padding: 0; margin: -7px 0 22px; color: var(--muted); font-size: 13px; }
+  .design-refresh .patients-card { overflow: hidden; }
+  .design-refresh .patients-page .page-heading { margin-bottom: 10px; }
+  .design-refresh .patients-page .demo-notice { margin-bottom: 14px; }
+  .design-refresh .patients-card .search-field { background: #f8fafb; min-height: 46px; }
+  .design-refresh .patient-row { padding-block: 10px; }
+  .design-refresh .patient-row strong { font-size: 17px; font-weight: 600; }
+  .design-refresh .patient-row:hover { background: #f8fbfa; }
+  .design-refresh .patient-card-page .patient-card-header { border-top: 3px solid var(--green); }
+  .design-refresh .patient-card-page #patient-heading { font-size: 26px; }
+  .design-refresh .patient-card-page .patient-card-meta { font-size: 14px; }
+  .design-refresh .visit-context { padding-top: 0; padding-bottom: 0; margin-bottom: 22px; box-shadow: none; }
+  .design-refresh .visit-context .visit-heading h1 { font-size: 24px; font-weight: 600; }
+  .design-refresh .visit-context .visit-meta { margin: 8px 0 14px; }
+  .design-refresh .visit-context .visit-meta p { font-size: 12px; }
+  .design-refresh .visit-context .tab-bar { margin-bottom: 0; }
+  .design-refresh .pager-tabs .pager-tab,
+  .design-refresh .visit-context .pager-tabs .tab { font-weight: 600; letter-spacing: 0; border-radius: 6px 6px 0 0; }
+  .design-refresh .pager-tabs .pager-tab.active,
+  .design-refresh .visit-context .pager-tabs .tab.active { background: #e7f1ee; color: #155f55; }
+  .design-refresh .form-card { padding: 26px; }
+  .design-refresh .form-card h2 { font-size: 20px; }
+  .design-refresh .form-card .section-intro { max-width: 75ch; font-size: 13px; line-height: 1.65; margin-bottom: 23px; }
+  .design-refresh .field > label { font-size: 14px; font-weight: 600; }
+  .design-refresh .field :is(input, textarea, select) { font-size: 15px; border-color: #cbdad9; border-radius: 6px; line-height: 1.5; padding: 10px 12px; background: #fff; }
+  .design-refresh .field :is(input, textarea)::placeholder { color: #738488; opacity: 1; }
+  .design-refresh .field :is(input, textarea, select):focus { border-color: var(--green); }
+  .design-refresh .field :is(input, textarea)[readonly] { background: #f1f5f5; color: #506569; }
+  .design-refresh .field textarea { min-height: 96px; }
+  .design-refresh .field .hint { font-size: 12px; line-height: 1.55; max-width: 75ch; }
+  .design-refresh .note-card { background: #edf3f2; box-shadow: none; }
+  .design-refresh .note-card p { font-size: 13px; line-height: 1.7; }
+  .design-refresh .draft-layout { grid-template-columns: minmax(270px, .85fr) minmax(0, 1.15fr); gap: 22px; }
+  .design-refresh .draft-card { padding: 24px; background: #fff; }
+  .design-refresh .draft-editor { background: #fff; border-color: #d5dfdf; padding: 26px; border-radius: 3px; font: 15px/1.8 "Segoe UI Variable Text", "Segoe UI", sans-serif; min-height: 570px; }
+  .design-refresh .draft-state { font-size: 13px; line-height: 1.6; }
+  .design-refresh .record-status { font-size: 12px; border-radius: 4px; padding: 3px 8px; }
+  .design-refresh .patient-card-page .record-status { font-size: 14px; }
+  .design-refresh .save-indicator { font-size: 12px; }
+  .design-refresh .footer-note { font-size: 11px; color: #617579; gap: 16px; margin-top: 26px; }
+  .design-refresh kbd { display: inline-block; padding: 1px 5px; border: 1px solid #d3dedd; border-bottom-width: 2px; border-radius: 4px; background: #fff; color: #52686b; font: 11px/1.6 "Segoe UI", sans-serif; white-space: nowrap; }
+  .design-refresh .keyboard-guide { font-size: 11px; color: var(--muted); line-height: 2; }
+  .design-refresh .keyboard-hint { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+  .design-refresh .keyboard-shortcuts { display: grid; gap: 0; margin: 20px 0; max-width: 680px; }
+  .design-refresh .keyboard-shortcuts > div { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .design-refresh .keyboard-shortcuts dt { font-weight: 600; }
+  .design-refresh .keyboard-shortcuts dd { margin: 0; font-size: 14px; }
+  .design-refresh .document-review-note { font-size: 13px; line-height: 1.6; color: #66736c; padding-left: 12px; border-left: 2px solid #b1c7bc; }
+  .design-refresh .empty { color: var(--muted); }
+  .design-refresh dialog { border: 1px solid #d2dfdc; border-radius: 12px; box-shadow: 0 20px 80px #183d3930; }
+  .design-refresh dialog::backdrop { background: #17393650; }
+  .design-refresh dialog .dialog-actions { gap: 10px; }
+}
+@media screen and (min-width: 1700px) {
+  .design-refresh .workspace > main { padding-top: 38px; padding-inline: 48px; }
+}
+@media screen and (max-width: 1180px) {
+  body.design-refresh { --sidebar-width: 208px; }
+  .design-refresh .navigation-header { padding-inline: 10px; }
+  .design-refresh .navigation-header .brand { padding-inline: 5px; gap: 8px; }
+  .design-refresh .navigation-header .brand strong { font-size: 16px; }
+  .design-refresh .navigation-header .nav.pager-tabs .pager-tab,
+  .design-refresh .navigation-header .nav button { font-size: 13px; padding-inline: 11px; }
+  .design-refresh .context-sidebar.topbar { padding-inline: 24px; gap: 16px; }
+  .design-refresh .context-sidebar .pill { font-size: 10px; }
+  .design-refresh .workspace > main { padding-inline: 24px; }
+  .design-refresh .home-page .home-dashboard { grid-template-columns: minmax(0, 1.25fr) minmax(260px, 1fr); gap: 18px; }
+  .design-refresh .home-page .home-current { padding: 20px; }
+  .design-refresh .draft-layout { grid-template-columns: minmax(240px, .9fr) minmax(0, 1.1fr); gap: 16px; }
+  .design-refresh .draft-card, .design-refresh .draft-controls { padding: 20px; }
+}
+@media screen and (max-width: 1000px) {
+  .design-refresh .context-sidebar .context-mode { display: none; }
+  .design-refresh .context-sidebar .side-bottom { display: none; }
+  .design-refresh .home-page .home-dashboard { grid-template-columns: minmax(0, 1fr); }
+  .design-refresh .home-page .home-current { flex-wrap: wrap; gap: 16px; }
+  .design-refresh .draft-layout { grid-template-columns: minmax(0, 1fr); }
+}
+@media screen and (max-width: 760px) {
+  body.design-refresh { --sidebar-width: 0px; }
+  .design-refresh .shell { display: block; }
+  .design-refresh .navigation-header { position: static; height: auto; display: block; padding: 16px 16px 0; border-right: 0; border-bottom: 1px solid var(--line); overflow: visible; }
+  .design-refresh .navigation-header .brand { padding: 0 2px 16px; }
+  .design-refresh .rail-note { display: none; }
+  .design-refresh .navigation-header .brand strong { font-size: 18px; }
+  .design-refresh .navigation-header .nav { flex-direction: row; overflow-x: auto; overflow-y: hidden; gap: 4px; padding-bottom: 8px; }
+  .design-refresh .navigation-header .nav.pager-tabs .pager-tab,
+  .design-refresh .navigation-header .nav button { width: auto; flex: 0 0 auto; white-space: nowrap; min-height: 42px; padding: 10px 12px; }
+  .design-refresh .navigation-header .nav-command { margin-top: 0; }
+  .design-refresh .navigation-header .nav.pager-tabs .pager-tab.active { box-shadow: none; }
+  .design-refresh .context-sidebar.topbar { min-height: 52px; padding: 11px 18px; gap: 12px; }
+  .design-refresh .context-sidebar .topbar-left strong { font-size: 12px; }
+  .design-refresh .context-sidebar .current-datetime { gap: 10px; font-size: 11px; }
+  .design-refresh .context-sidebar .search-launch { min-width: 36px; flex: 0 0 auto; padding: 8px; }
+  .design-refresh .context-sidebar .search-launch span, .design-refresh .context-sidebar .search-launch kbd { display: none; }
+  .design-refresh .context-sidebar #current-time { font-size: 14px; }
+  .design-refresh .workspace > main { padding: 22px 18px 28px; }
+  .design-refresh h1, .design-refresh .page-heading h1 { font-size: 27px; }
+  .design-refresh .page-heading { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 14px; }
+  .design-refresh .page-heading .button { min-height: 38px; font-size: 13px; }
+  .design-refresh .home-page .home-current { padding: 18px; margin-bottom: 18px; }
+  .design-refresh .home-page .home-current-patient > strong { font-size: 20px; }
+  .design-refresh .home-page .home-current-empty { font-size: 15px; }
+  .design-refresh .home-page .card-head { padding: 18px 18px 14px; }
+  .design-refresh .home-page .workflow-filters { padding-inline: 14px; }
+  .design-refresh .home-page .search-wrap, .design-refresh .home-page .list { padding-inline: 18px; }
+  .design-refresh .home-page .home-records .visit-row { flex-wrap: wrap; }
+  .design-refresh .home-page .home-records .visit-row > .button { max-width: none; }
+  .design-refresh .home-page .home-records .visit-identity { flex-basis: 100%; }
+  .design-refresh .backup-reminder { flex-wrap: wrap; padding: 12px 14px; gap: 10px; }
+  .design-refresh .backup-reminder-actions { flex-wrap: wrap; }
+  .design-refresh .visit-context .visit-heading h1 { font-size: 20px; }
+  .design-refresh .visit-context .visit-meta { margin-bottom: 10px; }
+  .design-refresh .visit-context .pager-tabs .tab { padding: 10px 12px; font-size: 13px; }
+  .design-refresh .form-card, .design-refresh .draft-card, .design-refresh .draft-controls { padding: 18px; }
+  .design-refresh .draft-editor { padding: 16px; min-height: 450px; }
+  .design-refresh .field-grid { gap: 18px; }
+  .design-refresh .footer-note { flex-wrap: wrap; gap: 8px; }
+  .design-refresh .patient-card-page #patient-heading { font-size: 22px; }
+}
+@media screen and (prefers-reduced-motion: reduce) {
+  .design-refresh *, .design-refresh *::before, .design-refresh *::after { scroll-behavior: auto; transition-duration: 0s; }
+}

@@ -18,11 +18,11 @@
   const updateScheme = /^#updates=(medassist-update-[a-f0-9]{32})$/.exec(window.location.hash);
   const updateUrl = window.location.protocol === 'file:' && updateScheme ? updateScheme[1] + '://check' : '';
   const state = {
-    encounters: loaded.encounters, patients: loaded.patients, view: 'home', activeId: null, patientId: null, tab: 'basic', patientSearch: '',
+    encounters: loaded.encounters, patients: loaded.patients, templates: loaded.templates || [], view: 'home', activeId: null, patientId: null, tab: 'basic', patientSearch: '',
     error: loaded.error, saved: !loaded.error, externalChange: false, search: '', migrated: Boolean(loaded.migrated),
     recordFilter: 'draft', followupFilter: 'today', followupDay: '', repeatPlanId: null, patientListDay: '', homeDay: '',
     patientCategory: 'all', patientFilters: defaultPatientFilters(), patientFiltersOpen: false, pendingNew: null,
-    patientEditOpen: false, patientCardDay: ''
+    patientEditOpen: false, patientCardDay: '', previousOpen: false, previousId: '', previousForId: ''
   };
   const icons = {
     home: '<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>',
@@ -57,6 +57,7 @@
   const examCatalog = window.MedAssistExam;
   let diagnosisSuggestions = null;
   let sickLeaveForm = null;
+  let templateForm = null;
   const vitalFields = [
     ['systolic', 'АД систолическое', 'мм рт. ст.'], ['diastolic', 'АД диастолическое', 'мм рт. ст.'],
     ['pulse', 'Пульс', 'уд/мин'], ['temperature', 'Температура', '°C'],
@@ -126,10 +127,10 @@
     app.innerHTML = '<div class="shell"><aside class="sidebar" aria-label="Главная навигация"><div class="brand"><img src="icon.svg" alt=""><div><strong>МедАссистент</strong><small>ПОЛИКЛИНИЧЕСКИЙ РЕЖИМ</small></div></div><p class="nav-caption">РАБОЧЕЕ ПРОСТРАНСТВО</p><nav class="nav">' +
       navButton('home', 'Обзор', 'home') + navButton('patients', 'Пациенты', 'user') + navButton('new', 'Новый пациент', 'plus') +
       (current ? navButton('visit', 'Текущий приём', 'document') : '') + navButton('followups', 'Повторные приёмы', 'calendar') + navButton('modules', 'Модули', 'grid') + navButton('help', 'Помощь и данные', 'help') + navButton('check-updates', 'Проверить обновления', 'download') +
-      '</nav><div class="side-bottom"><div class="local-indicator"><span class="dot"></span>Работает локально</div><div class="version">Прототип 0.11.1 · Демонстрация</div></div></aside><div class="workspace"><header class="topbar"><div class="topbar-left">Поликлиника <span aria-hidden="true">/</span> <span>' + sectionName + '</span></div><div class="topbar-right"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><span class="avatar" aria-hidden="true">МА</span></div></header><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
+      '</nav><div class="side-bottom"><div class="local-indicator"><span class="dot"></span>Работает локально</div><div class="version">Прототип 0.12.0 · Демонстрация</div></div></aside><div class="workspace"><header class="topbar"><div class="topbar-left">Поликлиника <span aria-hidden="true">/</span> <span>' + sectionName + '</span></div><div class="topbar-right"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><span class="avatar" aria-hidden="true">МА</span></div></header><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
       (state.migrated ? '<div class="migration-notice">Прежние записи доступны со статусом «Черновик». Карточки, данные и ручные тексты сохранены. Исходное сохранение предыдущей версии не изменяется.</div>' : '') +
       ({home: renderHome, patients: renderPatients, followups: renderFollowups, patient: renderPatient, visit: renderVisit, modules: renderModules, help: renderHelp}[state.view])() +
-      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.11.1</span></footer></main></div></div>';
+      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.12.0</span></footer></main></div></div>';
     updateClock();
     updateSaveStatus();
     if (state.view === 'visit') { updateValidation(); updateDraftState(); updateReviewState(); }
@@ -200,7 +201,7 @@
   }
   function commitEncounters(encounters, patients = state.patients) {
     if (!requireFreshState()) return false;
-    const result = repository.save(encounters, patients);
+    const result = repository.save(encounters, patients, state.templates);
     state.saved = result.ok; state.error = result.error;
     if (result.ok) { state.encounters = encounters; state.patients = patients; }
     updateSaveStatus();
@@ -493,7 +494,8 @@
           (leave.status === 'open' && leave.periods.at(-1).to < localDate() ? '<p class="sick-leave-warning">Указанный период прошёл. Закрытие не отмечено.</p>' : '') +
           (source ? '<p class="hint">Перенесён из приёма от ' + escape(dateText(source.visitDate)) + '. Журнал ведётся отдельно; исходная запись сохраняется.' + (changedSource ? ' Сведения в исходном приёме отличаются от журнала.' : '') + '</p>' : '') +
           '<details class="sick-leave-events"><summary>История действий · ' + leave.events.length + '</summary><ol>' + leave.events.map(event => '<li><strong>' + {issue: 'Выдача', extend: 'Продление', close: 'Закрытие'}[event.type] + '</strong> · ' + (event.type === 'close' ? escape(dateText(event.to)) : escape(dateText(event.from)) + ' — ' + escape(dateText(event.to))) + '<span>Внесено ' + escape(new Date(event.recordedAt).toLocaleString('ru-RU')) + '</span></li>').join('') + '</ol></details>' +
-          '<div class="sick-leave-actions">' + (leave.status === 'open' ? button('sick-extend', 'Продлить', null, 'secondary compact', 'data-leave-id="' + escape(leave.id) + '"') + button('sick-close', 'Закрыть', 'check', 'secondary compact', 'data-leave-id="' + escape(leave.id) + '"') : '') + button('sick-number', 'Изменить номер', null, 'ghost compact', 'data-leave-id="' + escape(leave.id) + '"') + button('sick-undo', 'Отменить последнее действие', null, 'ghost compact', 'data-leave-id="' + escape(leave.id) + '"') + '</div></article>';
+          '<div class="sick-leave-actions">' + (leave.status === 'open' ? button('sick-extend', 'Продлить', null, 'secondary compact', 'data-leave-id="' + escape(leave.id) + '"') + button('sick-close', 'Закрыть', 'check', 'secondary compact', 'data-leave-id="' + escape(leave.id) + '"') : '') + (leave.events.some(event => event.encounterId) ? '' : button('sick-number', 'Изменить номер', null, 'ghost compact', 'data-leave-id="' + escape(leave.id) + '"')) + (leave.events.at(-1).encounterId ? button('open', 'Открыть связанный приём', null, 'ghost compact', 'data-id="' + escape(leave.events.at(-1).encounterId) + '" data-tab="draft"') : button('sick-undo', 'Отменить последнее действие', null, 'ghost compact', 'data-leave-id="' + escape(leave.id) + '"')) + '</div>' +
+          (leave.events.some(event => event.encounterId) ? '<p class="hint">Действия связаны с приёмами. Для исправления откройте связанный приём и отмените его действие, если оно последнее в журнале.</p>' : '') + '</article>';
       }).join('') + (!leaves.length ? '<p class="muted">В журнале пока нет больничных. Внесите выдачу или перенесите отметку из приёма ниже.</p>' : '') + '</div>' +
       (journal.legacy.length ? '<div class="sick-leave-legacy-list"><h3>Отметки из приёмов</h3><p class="hint">Даты уже входят в общий счётчик. Статус закрытия неизвестен. Для продления или закрытия сначала перенесите отметку в журнал.</p>' + journal.legacy.map(leave => '<div class="sick-leave-legacy" data-encounter-id="' + escape(leave.encounterId) + '"><div><strong>' + numberText(leave.number) + '</strong><p>' + (leave.from ? escape(dateText(leave.from)) : 'Начало не указано') + ' — ' + (leave.to ? escape(dateText(leave.to)) : 'Окончание не указано') + (leave.days !== null ? ' · ' + leave.days + ' календ. дн.' : ' · период требует уточнения') + '</p></div><div class="sick-leave-actions">' + (leave.days !== null ? button('sick-adopt', 'Перенести в журнал', null, 'secondary compact', 'data-id="' + escape(leave.encounterId) + '"') : '') + button('open', 'Открыть приём', null, 'ghost compact', 'data-id="' + escape(leave.encounterId) + '" data-tab="draft"') + '</div></div>').join('') + '</div>' : '') +
       '<p class="sick-leave-footnote">Это учёт введённых сведений. Он не оформляет документ и не рассчитывает оплату больничного. Сохранённые тексты приёмов не меняются.</p></section>';
@@ -516,7 +518,10 @@
     if (['extend', 'close', 'number'].includes(mode) && !leave) return;
     if (mode === 'adopt' && (!source || source.days === null)) return;
     if (['extend', 'close'].includes(mode) && leave.status !== 'open') return;
+    if (mode === 'number' && leave.events.some(event => event.encounterId)) { toast('Номер связан с приёмом. Откройте связанный приём и отмените его последнее действие перед исправлением.', true); return; }
     sickLeaveForm = {mode, patientId: patient.id, leaveId: leave?.id || '', sourceEncounterId: source?.encounterId || ''};
+    document.getElementById('sick-leave-select-field').hidden = true;
+    document.getElementById('sick-leave-save').disabled = false;
     document.getElementById('sick-leave-title').textContent = {issue: 'Выдача больничного', extend: 'Продление больничного', close: 'Закрытие больничного', adopt: 'Перенести больничный в журнал', number: 'Номер больничного'}[mode];
     document.getElementById('sick-leave-patient').textContent = patientName(patient);
     document.getElementById('sick-leave-description').textContent = {
@@ -539,21 +544,118 @@
     document.getElementById('sick-leave-dialog').showModal();
     (mode === 'close' ? document.getElementById('sick-leave-close-date') : mode === 'extend' ? from : mode === 'adopt' ? document.getElementById('sick-leave-save') : number).focus();
   }
+  function encounterSickLeaveChoices(patient, entry) {
+    const journal = core.getSickLeaveJournal(patient, state.encounters);
+    const previousVisit = id => {
+      const source = state.encounters.find(item => item.id === id);
+      return source && core.calculateSickLeaveDays(source.visitDate, source.visitDate) !== null && source.visitDate <= entry.visitDate;
+    };
+    return [
+      ...journal.leaves.filter(leave => leave.status === 'open' && leave.events.every(event => !event.encounterId || previousVisit(event.encounterId))).map(leave => ({value: 'journal:' + leave.id, leaveId: leave.id, number: leave.number, from: leave.events[0].from, to: leave.periods.at(-1).to, periods: leave.periods})),
+      ...journal.legacy.filter(leave => leave.days !== null && leave.encounterId !== entry.id && previousVisit(leave.encounterId)).map(leave => ({value: 'legacy:' + leave.encounterId, sourceEncounterId: leave.encounterId, number: leave.number, from: leave.from, to: leave.to, periods: [{from: leave.from, to: leave.to}]}))
+    ];
+  }
+  function openEncounterSickLeaveForm(mode) {
+    const entry = active();
+    if (!requireFreshState() || state.view !== 'visit' || !entry) return;
+    const patient = patientFor(entry);
+    if (core.getEncounterSickLeaveAction(patient, entry)) { toast('В этом приёме уже сохранено действие с больничным. Сначала отмените его, если нужно исправить.', true); return; }
+    if (core.calculateSickLeaveDays(entry.visitDate, entry.visitDate) === null) { toast('Укажите дату приёма перед действием с больничным.', true); return; }
+    const choices = encounterSickLeaveChoices(patient, entry);
+    sickLeaveForm = {mode, patientId: patient.id, encounterId: entry.id, choices, leaveId: '', sourceEncounterId: ''};
+    document.getElementById('sick-leave-title').textContent = {issue: 'Выдать новый больничный', extend: 'Продлить существующий больничный', close: 'Закрыть больничный'}[mode];
+    document.getElementById('sick-leave-patient').textContent = patientName(patient) + ' · приём ' + dateText(entry.visitDate);
+    document.getElementById('sick-leave-description').textContent = {
+      issue: 'Укажите номер и период. «Сохранить» внесёт выдачу одновременно в приём и журнал. Введённая ранее отметка в этом приёме будет заменена; текст черновика сохранится.',
+      extend: 'Выберите больничный и укажите период продления. «Сохранить» внесёт действие одновременно в приём и журнал. Пересекающиеся дни считаются один раз.',
+      close: 'Выберите больничный и его последний день в пределах внесённых периодов. Действие сохранится одновременно в приёме и журнале; дни после закрытия не учитываются.'
+    }[mode];
+    const selecting = mode !== 'issue';
+    document.getElementById('sick-leave-select-field').hidden = !selecting;
+    document.getElementById('sick-leave-select').innerHTML = '<option value="">Выберите больничный</option>' + choices.map(choice => '<option value="' + escape(choice.value) + '">' + escape((choice.number ? 'ЛН № ' + choice.number : 'ЛН без номера') + ' · ' + dateText(choice.from) + ' — ' + dateText(choice.to) + (choice.sourceEncounterId ? ' · отметка из приёма' : ' · открыт')) + '</option>').join('');
+    document.getElementById('sick-leave-selection-hint').textContent = choices.length ? 'Выберите конкретный больничный. Связь не определяется автоматически по номеру.' : 'Подходящих открытых больничных и прежних отметок с полными датами нет. Можно выдать новый больничный.';
+    const number = document.getElementById('sick-leave-number');
+    number.value = mode === 'issue' ? entry.assessment.sickLeaveNumber : '';
+    number.readOnly = selecting;
+    const from = document.getElementById('sick-leave-from'), to = document.getElementById('sick-leave-to');
+    from.readOnly = to.readOnly = false;
+    from.value = mode === 'issue' ? entry.assessment.sickLeaveFrom || entry.visitDate : '';
+    to.value = mode === 'issue' ? entry.assessment.sickLeaveTo : '';
+    document.getElementById('sick-leave-close-date').value = '';
+    document.getElementById('sick-leave-period-fields').hidden = mode === 'close';
+    document.getElementById('sick-leave-close-field').hidden = mode !== 'close';
+    document.getElementById('sick-leave-save').disabled = selecting;
+    sickLeaveError(''); updateSickLeavePreview();
+    document.getElementById('sick-leave-dialog').showModal();
+    (selecting ? document.getElementById('sick-leave-select') : number).focus();
+  }
+  function selectEncounterSickLeave() {
+    if (!sickLeaveForm?.encounterId) return;
+    const choice = sickLeaveForm.choices.find(item => item.value === document.getElementById('sick-leave-select').value);
+    sickLeaveForm.leaveId = choice?.leaveId || '';
+    sickLeaveForm.sourceEncounterId = choice?.sourceEncounterId || '';
+    document.getElementById('sick-leave-number').value = choice?.number || '';
+    document.getElementById('sick-leave-from').value = choice ? calendarOffset(choice.to, 1) : '';
+    document.getElementById('sick-leave-to').value = '';
+    document.getElementById('sick-leave-close-date').value = choice?.to || '';
+    document.getElementById('sick-leave-selection-hint').textContent = choice?.sourceEncounterId ? 'При сохранении эта прежняя отметка будет перенесена в журнал, затем добавится выбранное действие. Исходный приём сохранится; дни не дублируются.' : choice ? 'Номер подставлен из выбранного больничного. Действие будет связано с ним и текущим приёмом.' : 'Выберите конкретный больничный. Связь не определяется автоматически по номеру.';
+    document.getElementById('sick-leave-save').disabled = !choice;
+    sickLeaveError(''); updateSickLeavePreview();
+  }
   function updateSickLeavePreview() {
     if (!sickLeaveForm) return;
     const from = document.getElementById('sick-leave-from').value, to = document.getElementById('sick-leave-to').value;
     const days = core.calculateSickLeaveDays(from, to);
     let text = ['close', 'number'].includes(sickLeaveForm.mode) ? '' : days === null ? 'Укажите обе даты в правильном порядке.' : 'В этом периоде: ' + days + ' календ. дн. Пересечения будут исключены из общего подсчёта.';
-    if (sickLeaveForm.mode === 'extend' && days !== null) {
+    if (sickLeaveForm.encounterId && ['extend', 'close'].includes(sickLeaveForm.mode)) {
+      const choice = sickLeaveForm.choices.find(item => item.value === document.getElementById('sick-leave-select').value);
+      if (!choice) text = 'Сначала выберите больничный пациента.';
+      else if (sickLeaveForm.mode === 'extend' && days !== null && from >= choice.from && to > choice.to) text = 'После продления — всего ' + core.calculateSickLeaveTotalDays([...choice.periods, {from, to}]) + ' календ. дн. В текущем периоде: ' + days + '. Пересекающиеся дни учитываются один раз.';
+      else if (sickLeaveForm.mode === 'close') {
+        const date = document.getElementById('sick-leave-close-date').value;
+        text = choice.periods.some(period => period.from <= date && period.to >= date) ? 'После закрытия — всего ' + core.calculateSickLeaveTotalDays(choice.periods.filter(period => period.from <= date).map(period => ({from: period.from, to: period.to > date ? date : period.to}))) + ' календ. дн. Последний день: ' + dateText(date) + '.' : 'Дата закрытия должна входить в один из внесённых периодов.';
+      }
+    } else if (sickLeaveForm.mode === 'extend' && days !== null) {
       const patient = state.patients.find(item => item.id === sickLeaveForm.patientId);
       const leave = core.getSickLeaveJournal(patient, state.encounters).leaves.find(item => item.id === sickLeaveForm.leaveId);
-      if (from >= leave.events[0].from && to > leave.periods.at(-1).to) text = 'После продления — всего ' + core.calculateSickLeaveTotalDays([...leave.periods, {from, to}]) + ' календ. дн. В текущем периоде: ' + days + '. Пересекающиеся дни учитываются один раз.';
+      if (leave && from >= leave.events[0].from && to > leave.periods.at(-1).to) text = 'После продления — всего ' + core.calculateSickLeaveTotalDays([...leave.periods, {from, to}]) + ' календ. дн. В текущем периоде: ' + days + '. Пересекающиеся дни учитываются один раз.';
     }
     document.getElementById('sick-leave-preview').textContent = text;
+  }
+  function commitEncounterSickLeave(pair) {
+    const pending = state.pendingNew?.entry.id === pair.encounter.id;
+    const encounters = pending ? state.encounters.concat(pair.encounter) : state.encounters.map(entry => entry.id === pair.encounter.id ? pair.encounter : entry);
+    const patients = pending ? state.patients.concat(pair.patient) : state.patients.map(patient => patient.id === pair.patient.id ? pair.patient : patient);
+    if (!commitEncounters(encounters, patients)) return false;
+    if (pending) state.pendingNew = null;
+    return true;
+  }
+  function saveEncounterSickLeave() {
+    const entry = active();
+    if (!entry || entry.id !== sickLeaveForm.encounterId || state.view !== 'visit') { sickLeaveError('Этот приём уже не открыт. Закройте форму и откройте нужный приём.'); return; }
+    if (sickLeaveForm.mode !== 'issue' && !sickLeaveForm.leaveId && !sickLeaveForm.sourceEncounterId) { sickLeaveError('Выберите больничный пациента.'); return; }
+    const options = {type: sickLeaveForm.mode};
+    if (options.type === 'issue') options.number = document.getElementById('sick-leave-number').value;
+    if (options.type === 'close') options.date = document.getElementById('sick-leave-close-date').value;
+    else {
+      options.from = document.getElementById('sick-leave-from').value;
+      options.to = document.getElementById('sick-leave-to').value;
+    }
+    if (sickLeaveForm.leaveId) options.leaveId = sickLeaveForm.leaveId;
+    if (sickLeaveForm.sourceEncounterId) options.sourceEncounterId = sickLeaveForm.sourceEncounterId;
+    try {
+      const pair = core.applyEncounterSickLeave(patientFor(entry), entry, options, state.encounters);
+      if (!commitEncounterSickLeave(pair)) { sickLeaveError(state.error || 'Не удалось сохранить приём и журнал. Повторите сохранение.'); return; }
+      document.getElementById('sick-leave-dialog').close(); sickLeaveForm = null;
+      render();
+      document.getElementById('visit-sick-heading').focus({preventScroll: true});
+      toast('Действие сохранено в приёме и журнале. Проверьте черновик перед его обновлением.');
+    } catch (error) { sickLeaveError(error.message); }
   }
   function saveSickLeave() {
     if (!sickLeaveForm) return;
     if (!requireFreshState()) { sickLeaveError('Данные изменены в другом окне. Закройте форму и загрузите сохранённую версию.'); return; }
+    if (sickLeaveForm.encounterId) { saveEncounterSickLeave(); return; }
     const {mode, patientId, leaveId, sourceEncounterId} = sickLeaveForm;
     const patient = state.patients.find(item => item.id === patientId);
     const number = document.getElementById('sick-leave-number').value;
@@ -649,10 +751,130 @@
     state.activeId = entry.id; state.repeatPlanId = null; navigate('visit', 'basic');
     toast(fields.length ? 'Приём создан. Перенесены только отмеченные сведения анамнеза; проверьте их актуальность.' : 'Приём создан с пустыми полями. Сведения из прошлых приёмов не перенесены.');
   }
+  function precedingVisits() {
+    const entry = active();
+    const order = (a, b) => a.visitDate.localeCompare(b.visitDate) || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
+    return entry ? state.encounters.filter(item => item.patientId === entry.patientId && item.id !== entry.id && order(item, entry) < 0).sort((a, b) => order(b, a)) : [];
+  }
+  function historicalField(title, value) {
+    return '<div class="historical-field"><dt>' + escape(title) + '</dt><dd>' + escape(value.trim() || 'Не указано') + '</dd></div>';
+  }
+  function examDescription(exam, selections) {
+    return examCatalog.SECTIONS.map(section => {
+      const selected = examCatalog.FIELDS.filter(item => item.section === section.id).map(item => item.options.find(option => option.value === selections[item.id])?.text).filter(Boolean);
+      if (exam[section.id].trim()) selected.push(exam[section.id].trim());
+      return {title: section.title, text: selected.join('; ')};
+    }).concat({title: 'Другие данные осмотра', text: exam.other.trim()});
+  }
+  function renderPreviousVisit() {
+    const visits = precedingVisits();
+    if (!visits.some(item => item.id === state.previousId)) state.previousId = visits[0]?.id || '';
+    const source = visits.find(item => item.id === state.previousId);
+    if (!source) return '<p class="muted">Предыдущих приёмов пока нет.</p>';
+    return '<div class="previous-visit-title"><h2 id="previous-visit-title">Предыдущий приём</h2>' + button('previous-visit', 'Скрыть', null, 'ghost compact') + '</div><p class="historical-notice">Сведения из истории · только просмотр. В текущий приём ничего не переносится.</p>' +
+      '<div class="field"><label for="previous-visit-select">Запись из истории</label><select id="previous-visit-select">' + visits.map(item => '<option value="' + escape(item.id) + '"' + (item.id === source.id ? ' selected' : '') + '>' + escape(dateText(item.visitDate) + ' · ' + shortId(item)) + '</option>').join('') + '</select></div>' +
+      '<p class="previous-visit-date"><strong>' + escape(dateText(source.visitDate)) + '</strong> ' + recordStatus(source) + '</p><dl class="historical-fields">' +
+      historyFields.map(([key, title]) => historicalField(title, source.history[key])).join('') +
+      vitalFields.map(([key, title, unit]) => source.vitals[key].trim() ? historicalField(title, source.vitals[key] + ' ' + unit) : '').join('') +
+      examDescription(source.exam, source.examSelections).filter(item => item.text).map(item => historicalField(item.title, item.text)).join('') +
+      historicalField('Диагноз', source.assessment.summary) + historicalField('Рекомендации', source.assessment.plan) + '</dl>';
+  }
+  function refreshPreviousVisit() {
+    const available = precedingVisits().length > 0;
+    const toggle = app.querySelector('.visit-heading [data-action="previous-visit"]');
+    if (toggle) { toggle.disabled = !available; toggle.setAttribute('aria-expanded', String(state.previousOpen && available)); }
+    const panel = document.getElementById('previous-visit-panel');
+    if (!panel) return;
+    panel.hidden = !state.previousOpen || !available;
+    panel.innerHTML = panel.hidden ? '' : renderPreviousVisit();
+    panel.closest('.visit-comparison').classList.toggle('has-previous', !panel.hidden);
+  }
+  function templateError(message) {
+    const target = document.getElementById('template-error');
+    target.textContent = message; target.hidden = !message;
+  }
+  function selectedTemplate() {
+    return state.templates.find(item => item.id === document.getElementById('template-select').value && item.kind === templateForm?.kind);
+  }
+  function updateTemplatePreview() {
+    const template = selectedTemplate();
+    const preview = document.getElementById('template-preview');
+    preview.textContent = template ? (template.kind === 'exam' ? examDescription(template.content.exam, template.content.examSelections).filter(item => item.text).map(item => item.title + ': ' + item.text).join('\n\n') : template.content.plan) : 'Выберите сохранённый шаблон, чтобы увидеть его текст.';
+    ['apply', 'update', 'delete'].forEach(action => { document.getElementById('template-' + action).disabled = !template; });
+    document.getElementById('template-name').value = template?.name || '';
+  }
+  function refreshTemplateList(selectedId = '') {
+    const items = state.templates.filter(item => item.kind === templateForm.kind);
+    document.getElementById('template-select').innerHTML = '<option value="">Выберите шаблон</option>' + items.map(item => '<option value="' + escape(item.id) + '"' + (item.id === selectedId ? ' selected' : '') + '>' + escape(item.name) + '</option>').join('');
+    document.getElementById('template-empty').hidden = items.length > 0;
+    updateTemplatePreview();
+  }
+  function openVisitTemplates(kind) {
+    if (!active() || !['exam', 'recommendations'].includes(kind)) return;
+    templateForm = {kind, encounterId: active().id};
+    document.getElementById('template-title').textContent = kind === 'exam' ? 'Мои шаблоны осмотра' : 'Мои шаблоны рекомендаций';
+    document.getElementById('template-scope').textContent = kind === 'exam' ? 'Сохраняются выбранные признаки и текстовые уточнения осмотра. Измеренные показатели, ФИО и анамнез не входят в шаблон. Проверьте, что в уточнениях нет личных данных.' : 'Сохраняется только текст поля «Рекомендации». Проверьте, что в нём нет личных данных и сведений конкретного пациента.';
+    templateError(''); refreshTemplateList();
+    document.getElementById('template-dialog').showModal();
+    document.getElementById(state.templates.some(item => item.kind === kind) ? 'template-select' : 'template-name').focus();
+  }
+  function saveTemplates(templates) {
+    if (!requireFreshState()) { templateError('Данные изменены в другом окне. Закройте шаблоны и загрузите сохранённую версию.'); return false; }
+    const includePending = state.pendingNew && pendingHasContent();
+    const encounters = includePending ? state.encounters.concat(state.pendingNew.entry) : state.encounters;
+    const patients = includePending ? state.patients.concat(state.pendingNew.patient) : state.patients;
+    const result = repository.save(encounters, patients, templates);
+    state.saved = result.ok; state.error = result.error;
+    if (result.ok) {
+      state.templates = templates;
+      if (includePending) { state.encounters = encounters; state.patients = patients; state.pendingNew = null; }
+    }
+    updateSaveStatus();
+    if (!result.ok) templateError(result.error);
+    return result.ok;
+  }
+  async function templateAction(action) {
+    if (!templateForm || active()?.id !== templateForm.encounterId) return;
+    if (!requireFreshState()) { templateError('Данные изменены в другом окне. Закройте шаблоны и загрузите сохранённую версию.'); return; }
+    const template = selectedTemplate();
+    templateError('');
+    try {
+      if (action === 'save' || action === 'update') {
+        if (action === 'update' && !template) return;
+        const next = core.createVisitTemplate(active(), {kind: templateForm.kind, name: document.getElementById('template-name').value, ...(action === 'update' ? {id: template.id} : {})});
+        if (action === 'update') {
+          next.createdAt = template.createdAt;
+          if (!await confirmAction('Обновить выбранный шаблон?', 'Название и содержимое шаблона «' + template.name + '» будут заменены текущим разделом приёма. Другие записи не изменятся.', 'Обновить шаблон')) return;
+        }
+        const templates = action === 'update' ? state.templates.map(item => item.id === template.id ? next : item) : state.templates.concat(next);
+        if (!saveTemplates(templates)) return;
+        refreshTemplateList(next.id); toast(action === 'update' ? 'Шаблон обновлён.' : 'Шаблон сохранён.');
+      } else if (action === 'delete' && template) {
+        if (!await confirmAction('Удалить шаблон?', 'Шаблон «' + template.name + '» будет удалён. Текущий приём и сохранённые записи останутся без изменений.', 'Удалить шаблон')) return;
+        if (!saveTemplates(state.templates.filter(item => item.id !== template.id))) return;
+        refreshTemplateList(); toast('Шаблон удалён.');
+      } else if (action === 'apply' && template) {
+        const entry = active();
+        const meaningful = template.kind === 'exam' ? [entry.exam, entry.examSelections].some(group => Object.values(group).some(value => value.trim())) : Boolean(entry.assessment.plan.trim());
+        if (meaningful && !await confirmAction('Заменить текущий раздел шаблоном?', (template.kind === 'exam' ? 'Выбранные признаки и уточнения осмотра' : 'Рекомендации') + ' будут заменены содержимым шаблона «' + template.name + '». Существующий текст черновика сохранится; после применения проверьте актуальность всех формулировок.', 'Применить шаблон')) return;
+        if (!requireFreshState()) { templateError('Данные изменены в другом окне. Закройте шаблоны и загрузите сохранённую версию.'); return; }
+        const updated = core.applyVisitTemplate(entry, template);
+        if (state.pendingNew?.entry.id === entry.id) state.pendingNew.entry = updated;
+        else state.encounters = state.encounters.map(item => item.id === entry.id ? updated : item);
+        persist(); render();
+        if (!state.saved) { templateError(state.error || 'Изменения не сохранены. Сведения остаются в форме этого окна.'); return; }
+        document.getElementById('template-dialog').close();
+        app.querySelector('[data-action="visit-templates"][data-template-kind="' + template.kind + '"]')?.focus({preventScroll: true});
+        toast('Шаблон применён. Проверьте сведения и измените отдельные пункты при необходимости. Текст черновика сохранён.');
+      }
+    } catch (error) { templateError(error.message); }
+  }
   function renderVisit() {
-    return '<section class="visit-context" aria-label="Пациент и приём"><div class="visit-heading"><h1 id="visit-patient-heading">' + escape(patientLabel(active())) + '</h1>' + button('patient', 'Карточка и история', 'user', 'secondary compact', 'data-patient-id="' + escape(active().patientId) + '"') + '</div><div class="visit-meta"><p id="visit-date-summary">Демонстрационный приём · ' + escape(dateText(active().visitDate)) + '</p><div id="visit-record-status">' + recordStatus(active()) + '</div><div id="save-status" class="save-indicator" role="status"></div></div>' +
+    if (state.previousForId !== active().id) { state.previousOpen = false; state.previousId = ''; state.previousForId = active().id; }
+    const previous = state.previousOpen && precedingVisits().length > 0;
+    return '<section class="visit-context" aria-label="Пациент и приём"><div class="visit-heading"><h1 id="visit-patient-heading">' + escape(patientLabel(active())) + '</h1><div class="actions">' + button('previous-visit', 'Предыдущий приём', 'clock', 'secondary compact', 'aria-controls="previous-visit-panel" aria-expanded="' + previous + '"' + (precedingVisits().length ? '' : ' disabled')) + button('patient', 'Карточка и история', 'user', 'secondary compact', 'data-patient-id="' + escape(active().patientId) + '"') + '</div></div><div class="visit-meta"><p id="visit-date-summary">Демонстрационный приём · ' + escape(dateText(active().visitDate)) + '</p><div id="visit-record-status">' + recordStatus(active()) + '</div><div id="save-status" class="save-indicator" role="status"></div></div>' +
       '<nav class="tab-bar" aria-label="Разделы приёма">' + tabs.map(([key, label], i) => '<button type="button" class="tab' + (state.tab === key ? ' active' : '') + '" data-action="tab" data-tab="' + key + '"' + (state.tab === key ? ' aria-current="step"' : '') + '><span class="step-number">' + (i + 1) + '</span>' + label + '</button>').join('') + '</nav></section>' +
-      ({basic: renderBasic, history: renderHistory, exam: renderExam, draft: renderDraft}[state.tab])() + renderVisitActions();
+      '<div class="visit-comparison' + (previous ? ' has-previous' : '') + '"><div class="current-visit-form">' + ({basic: renderBasic, history: renderHistory, exam: renderExam, draft: renderDraft}[state.tab])() + '</div><aside id="previous-visit-panel" class="card previous-visit-panel" aria-labelledby="previous-visit-title"' + (previous ? '' : ' hidden') + '>' + (previous ? renderPreviousVisit() : '') + '</aside></div>' + renderVisitActions();
   }
   function renderVisitActions() {
     const controls = state.tab === 'draft' ? button('generate', 'Сформировать черновик', 'document', 'primary') + button('copy', 'Копировать', 'copy') + button('download-text', 'Скачать .txt', 'download') + '<div id="record-review-actions"></div>' :
@@ -717,7 +939,7 @@
     document.getElementById('bmi-hint').textContent = bmiHint(value);
   }
   function renderExam() {
-    return '<div class="exam-workspace"><section class="card form-card"><h2>Осмотр</h2><p class="section-intro">Выберите только оценённые признаки. Пустой раздел не означает норму.</p><section class="exam-measurements" aria-labelledby="exam-measurements-heading"><h3 id="exam-measurements-heading">Измеренные показатели</h3><div class="field-grid exam-vitals-grid">' + vitalFields.map(([key, title, unit]) => field('vitals.' + key, title, 'Не указано', {type: 'text', numeric: true, hint: unit})).join('') + renderBmi() + '</div></section><div class="exam-toolbar"><h3>Описание осмотра</h3><div class="actions">' + button('normal-exam', 'Осмотр без особенностей', 'check') + button('expand-exam', 'Раскрыть все', null, 'ghost') + button('collapse-exam', 'Свернуть все', null, 'ghost') + '</div></div><p class="exam-normal-hint">Кнопка у раздела заполняет его признаки; общая — весь осмотр. Уточнения и показатели сохраняются.</p>' + examCatalog.SECTIONS.map(renderExamGroup).join('') + '<div class="form-section">' + field('exam.other', 'Другие данные осмотра', 'Необязательно. Пустое поле не попадёт в черновик') + '</div></section></div>';
+    return '<div class="exam-workspace"><section class="card form-card"><div class="visit-tools-heading"><h2>Осмотр</h2>' + button('visit-templates', 'Мои шаблоны', 'document', 'secondary compact', 'data-template-kind="exam"') + '</div><p class="section-intro">Выберите только оценённые признаки. Пустой раздел не означает норму.</p><section class="exam-measurements" aria-labelledby="exam-measurements-heading"><h3 id="exam-measurements-heading">Измеренные показатели</h3><div class="field-grid exam-vitals-grid">' + vitalFields.map(([key, title, unit]) => field('vitals.' + key, title, 'Не указано', {type: 'text', numeric: true, hint: unit})).join('') + renderBmi() + '</div></section><div class="exam-toolbar"><h3>Описание осмотра</h3><div class="actions">' + button('normal-exam', 'Осмотр без особенностей', 'check') + button('expand-exam', 'Раскрыть все', null, 'ghost') + button('collapse-exam', 'Свернуть все', null, 'ghost') + '</div></div><p class="exam-normal-hint">Кнопка у раздела заполняет его признаки; общая — весь осмотр. Уточнения и показатели сохраняются.</p>' + examCatalog.SECTIONS.map(renderExamGroup).join('') + '<div class="form-section">' + field('exam.other', 'Другие данные осмотра', 'Необязательно. Пустое поле не попадёт в черновик') + '</div></section></div>';
   }
   function renderDiagnosis() {
     const id = 'field-assessment-summary';
@@ -782,27 +1004,44 @@
   }
   function renderDraft() {
     return '<div class="draft-layout"><section class="card draft-controls"><h2>Диагноз и рекомендации</h2><p class="section-intro">Заполняет врач. Рекомендации, повторный приём и больничный включаются в текст только при заполнении или явной отметке.</p>' +
-      renderDiagnosis() + field('assessment.plan', 'Рекомендации', 'Необязательно. Пустое поле не попадёт в черновик') +
+      renderDiagnosis() + '<div class="recommendation-templates">' + button('visit-templates', 'Мои шаблоны рекомендаций', 'document', 'secondary compact', 'data-template-kind="recommendations"') + '</div>' + field('assessment.plan', 'Рекомендации', 'Необязательно. Пустое поле не попадёт в черновик') +
       (active().assessment.followUp.trim() ? '<div class="legacy-note"><p>Сохранено из предыдущей версии. Перенесите нужное в рекомендации или выберите дату, затем очистите старый текст, если он больше не нужен.</p>' + field('assessment.followUp', 'Наблюдение из предыдущей версии', '') + '</div>' : '') +
-      field('assessment.sickLeaveIssued', 'Листок нетрудоспособности', '', {select: [['', 'Не отмечено — не включать'], ['no', 'Не выдавался — не включать'], ['yes', 'Выдан']], hint: 'Это только отметка в черновике, не оформление документа.'}) +
-      '<div id="sickleave-period"' + (active().assessment.sickLeaveIssued === 'yes' ? '' : ' hidden') + '>' + field('assessment.sickLeaveNumber', 'Номер листка нетрудоспособности', 'При продлении укажите прежний номер', {type: 'text'}) + '<div class="field-grid">' + field('assessment.sickLeaveFrom', 'Период: с', '', {type: 'date'}) + field('assessment.sickLeaveTo', 'По', '', {type: 'date'}) + '</div>' + renderEncounterSickLeaveDuration() + '</div>' +
+      renderEncounterSickLeave() +
       field('assessment.returnVisitDate', 'Повторный приём', '', {type: 'date', hint: 'Оставьте дату пустой, чтобы не включать повторный приём в запись.'}) +
       '</section><section class="card draft-card"><div class="card-head"><h2>Текст записи</h2><span class="pill neutral">Редактируемый текст</span></div><div id="draft-state" class="draft-state" role="status"></div><label class="small muted" for="draft-text">Текст записи · свободное редактирование</label><textarea class="draft-editor" id="draft-text" data-field="draft.text" maxlength="100000" aria-describedby="draft-state field-draft-text-error" placeholder="Нажмите «Сформировать черновик» или начните писать здесь.">' + escape(active().draft.text) + '</textarea><p class="field-error" id="field-draft-text-error" hidden></p><div id="record-review-state" class="record-review-state"></div><p class="small muted">Это свободный демонстрационный черновик, не нормативная форма Беларуси.</p></section></div>';
   }
   function encounterContext(entry = active()) {
     return {patient: patientFor(entry), encounters: state.encounters};
   }
+  function renderEncounterSickLeave() {
+    const entry = active();
+    const linked = core.getEncounterSickLeaveAction(patientFor(entry), entry);
+    const heading = '<h3 id="visit-sick-heading" tabindex="-1">Листок нетрудоспособности</h3>';
+    if (linked) {
+      const {leave, event} = linked;
+      const last = leave.events.at(-1).id === event.id;
+      return '<section class="visit-sick-leave" aria-labelledby="visit-sick-heading">' + heading + '<div id="visit-sick-linked"><p class="visit-sick-action"><strong>' + {issue: 'Выдан', extend: 'Продлён', close: 'Закрыт'}[event.type] + '</strong> · ' + (leave.number ? 'ЛН № ' + escape(leave.number) : 'номер не указан') + '</p><p>' + (event.type === 'close' ? 'Последний день: ' + escape(dateText(event.to)) : 'Период: ' + escape(dateText(event.from)) + ' — ' + escape(dateText(event.to))) + '</p>' + renderEncounterSickLeaveDuration() +
+        '<p class="hint">Сохранено вместе с журналом. Текст черновика меняется только после вашего действия.</p>' + (last ? button('visit-sick-undo', 'Отменить действие', null, 'secondary compact') : '<p class="hint">В журнале уже есть последующие действия. Для исправления сначала отмените их в обратном порядке.</p>') + '</div></section>';
+    }
+    return '<section class="visit-sick-leave" aria-labelledby="visit-sick-heading">' + heading + '<div class="visit-sick-actions">' +
+      button('visit-sick-issue', 'Выдать новый', 'plus', 'secondary compact') + button('visit-sick-extend', 'Продлить существующий', null, 'secondary compact') + button('visit-sick-close', 'Закрыть', 'check', 'secondary compact') +
+      '</div><p class="hint">Выберите действие, чтобы сохранить его сразу в приёме и журнале. Программа не оформляет официальный документ.</p>' +
+      field('assessment.sickLeaveIssued', 'Отметка в приёме', '', {select: [['', 'Не отмечено — не включать'], ['no', 'Не выдавался — не включать'], ['yes', 'Выдан']], hint: 'Ручная отметка сохраняется без связи с действием в журнале. Прежние сведения доступны для переноса.'}) +
+      '<div id="sickleave-period"' + (entry.assessment.sickLeaveIssued === 'yes' ? '' : ' hidden') + '>' + field('assessment.sickLeaveNumber', 'Номер листка нетрудоспособности', 'При продлении укажите прежний номер', {type: 'text'}) + '<div class="field-grid">' + field('assessment.sickLeaveFrom', 'Период: с', '', {type: 'date'}) + field('assessment.sickLeaveTo', 'По', '', {type: 'date'}) + '</div>' + renderEncounterSickLeaveDuration() + '</div></section>';
+  }
   function encounterSickLeaveSummary() {
     return core.getEncounterSickLeaveSummary(active(), patientFor(active()), state.encounters);
   }
   function encounterSickLeaveHint(summary) {
     if (summary.totalDays === null) return 'Для расчёта нужны корректные начало и окончание. В расчёт обе даты и выходные включены.';
+    if (core.getEncounterSickLeaveAction(patientFor(active()), active())) return 'Учтены периоды выбранного больничного по это действие включительно. Обе даты и выходные включены; пересечения считаются один раз.';
     return 'Непрерывный период: с ' + dateText(summary.from) + ' по ' + dateText(summary.to) + '. В расчёт обе даты и выходные включены; пересечения учитываются один раз. ' +
       (summary.unnumbered ? 'Без номера объединяются непрерывные периоды без номера. Укажите номер, чтобы различать больничные.' : 'Учтены непрерывные периоды с этим номером из истории пациента.');
   }
   function renderEncounterSickLeaveDuration() {
     const summary = encounterSickLeaveSummary();
-    return '<div class="sickleave-duration"><label for="sickleave-days">Всего календарных дней</label><output id="sickleave-days" for="field-assessment-sickLeaveNumber field-assessment-sickLeaveFrom field-assessment-sickLeaveTo" aria-live="polite" aria-describedby="sickleave-current-period sickleave-days-hint">' + (summary.totalDays ?? '—') + '</output><p id="sickleave-current-period">В текущем периоде: <strong>' + (summary.periodDays ?? '—') + '</strong> календ. дн.</p><p id="sickleave-days-hint">' + escape(encounterSickLeaveHint(summary)) + '</p></div>';
+    const closed = core.getEncounterSickLeaveAction(patientFor(active()), active())?.event.type === 'close';
+    return '<div class="sickleave-duration"><label for="sickleave-days">Всего календарных дней</label><output id="sickleave-days" for="field-assessment-sickLeaveNumber field-assessment-sickLeaveFrom field-assessment-sickLeaveTo" aria-live="polite" aria-describedby="sickleave-current-period sickleave-days-hint">' + (summary.totalDays ?? '—') + '</output><p id="sickleave-current-period"' + (closed ? ' hidden' : '') + '>В текущем периоде: <strong>' + (summary.periodDays ?? '—') + '</strong> календ. дн.</p><p id="sickleave-days-hint">' + escape(encounterSickLeaveHint(summary)) + '</p></div>';
   }
   function updateSickLeaveDays() {
     const output = document.getElementById('sickleave-days');
@@ -817,7 +1056,7 @@
       '<p class="section-intro">Сейчас работает модуль приёма и черновика. Карточки ниже описывают будущие возможности; отдельные калькуляторы, анализы, расписания и официальные формы ещё не подключены. ИМТ уже рассчитывается в разделе «Осмотр».</p><div class="module-grid">' + window.MedAssistModules.map((module) => '<section class="card module-card"><div class="module-head"><div class="icon-tile">' + icon(module.icon) + '</div><span class="pill neutral">' + (module.status === 'verification' ? 'После проверки источников' : 'Запланировано') + '</span></div><h2>' + escape(module.title) + '</h2><p>' + escape(module.description) + '</p><details><summary>Что потребуется для добавления</summary><p>' + escape(module.requirements) + '</p></details></section>').join('') + '</div>';
   }
   function renderHelp() {
-    return '<div class="page-heading"><div><h1>Помощь и данные</h1><p>Первый запуск, сохранение и границы прототипа.</p></div></div><div class="help-layout"><section class="card help-card"><h2>Как пройти демонстрационный приём</h2><ol><li>Нажмите «Начать приём» и найдите пациента либо выберите «Новый пациент». Пустая новая форма не сохраняется; карточка появляется после первого ввода сведений. На главной также доступен вымышленный пример.</li><li>Заполните сведения о приёме, анамнез и осмотр. Вводите только вымышленные данные.</li><li>В разделе «Запись» заполните диагноз, при необходимости рекомендации, дату повторного приёма и отметку о больничном. Нажмите «Сформировать черновик».</li><li>Проверьте и отредактируйте текст. Скачайте .txt или скопируйте его.</li></ol><h2>Карточка и повторный приём</h2><p>Раздел «Пациенты» содержит карточки с историей по датам. В списке видны последний приём и ближайшая предстоящая повторная явка. Пациенты с явкой сегодня или позже идут первыми, от ближайшей даты к дальней; только с прошедшей незакрытой датой — следом, без назначений — в конце. Состоявшиеся приёмы не участвуют в этом порядке. ФИО пациента можно ввести в начале вкладки «Приём» или изменить в карточке. Это одно общее поле; используйте только вымышленные фамилию, имя и отчество. Кнопка «Повторный приём» создаёт отдельную запись того же пациента. Выберите исходный приём и отметьте нужные препараты, аллергии и заболевания; нажмите «Создать приём» для подтверждения. Без отметок перенос не выполняется. При смене источника отметки сбрасываются. Возраст, пол, жалобы, осмотр, показатели и заключение заполните заново.</p><h2>Журнал больничных</h2><p>В карточке пациента нажмите «Больничные». Выдача, продление и закрытие сохраняются явно; автоматически по прошедшей дате больничный не закрывается. Можно изменить номер или отменить последнее действие. Общий счётчик объединяет все внесённые календарные периоды пациента: обе даты включены, пересечения учитываются один раз. Закрытие исключает дни после выбранной даты; для более позднего закрытия сначала внесите продление.</p><p>Прежние отметки видны под журналом и уже входят в общий подсчёт. Перенесите отметку в журнал, чтобы продлевать или закрывать её. Исходный приём и текст сохраняются; дальнейшие изменения ведутся отдельно. Неполные даты исключены из счётчика с предупреждением. Журнал входит в резервную копию; для её открытия нужна версия 0.11.0 или новее.</p><h2>Повторные даты и проверка записи</h2><p>Дата в конце раздела «Запись» появляется в списке «Повторные приёмы». Там доступны сегодняшние, все будущие и прошедшие даты. Прошедшая дата не означает неявку. «Начать повторный приём» создаёт связанную запись после подтверждения переноса; повторное нажатие открывает её. Отдельно отметьте «Состоялся» после фактического приёма. Изменение назначенной даты сбрасывает отметку и связь, но сохраняет запись в истории.</p><p>На вкладке «Запись» нажмите «Отметить: проверено врачом» после проверки непустого текста. Это личная отметка, не электронная подпись. Правки сведений, текста или ФИО снимают её. На главной фильтр «Черновики» показывает незавершённые записи. Статус записи и факт состоявшегося приёма независимы.</p><h2>Режимы работы</h2><p>Сейчас доступен поликлинический режим. Стационарный режим запланирован отдельно; его формы и функции будут определены на следующем этапе.</p><h2>Что делает прототип</h2><p>Собирает введённые сведения в свободный текст. Работает из локальных файлов, без аккаунта, сервера, МИС и внешних запросов приложения.</p><p>Диагноз и рекомендации вводит врач. Программа не назначает лечение и не оформляет больничные документы. Варианты осмотра — вспомогательные формулировки; источники и ограничения перечислены в EXAM-SOURCES.md. Нормативные формы Беларуси не реализованы.</p><h2>Запуск в Windows</h2><p>Распакуйте архив в постоянную папку и откройте <span class="code-path">Start-MedAssist.cmd</span>. Приложение использует установленный Edge или Chrome. Также можно открыть <span class="code-path">app/index.html</span>.</p></section><section class="card help-card"><h2>Сохранение на этом компьютере</h2><p>Изменения автоматически сохраняются в локальном хранилище текущего браузера. Статус сохранения показан в приёме. При ошибке вы увидите сообщение.</p><p>Хранение локальных HTML-файлов зависит от браузера. Перемещение папки, другой профиль или очистка данных браузера могут сделать записи недоступными. Перед этим скачайте резервную копию.</p><p>Резервная копия содержит карточки, связанные приёмы и отредактированные черновики. Восстановление заменит все карточки и приёмы после подтверждения.</p><div class="backup-actions">' + button('backup', 'Резервная копия', 'download', 'primary') + button('import', 'Восстановить', 'upload') + button('reset', 'Очистить демонстрационные записи', null, 'secondary') + '</div><h2>Обновление программы через интернет</h2><p>Нажмите «Проверить обновления» в левом меню. Откроется окно проверки; браузер может попросить разрешить его запуск. Если доступна новая версия, сохраните резервную копию, закройте окна МедАссистента и подтвердите установку в окне обновления.</p><p>Для работы кнопки запускайте программу через <span class="code-path">Start-MedAssist.cmd</span> или обычный ярлык <span class="code-path">MedAssist</span>. При открытии файла index.html напрямую потребуется повторный запуск через ярлык. Отдельный <span class="code-path">Update-MedAssist.cmd</span> остаётся запасным способом.</p><p>Обновления загружаются из публичного проекта romaick/medassist на GitHub. Скачивать и распаковывать архивы вручную не понадобится. Без интернета приёмы работают как раньше.</p><h2>Перенос записей из прежней папки</h2><p>Сначала скачайте резервную копию в старой версии. Новая версия принимает её через «Восстановить» и сохраняет старые тексты. Если файлы обновлены в той же папке и браузере, доступные старые записи загрузятся автоматически. Новые копии со статусами и планом повторных приёмов открываются в версии 0.7 и новее. Из копий версий 1 и 2 каждый приём получает отдельную карточку; карточки версии 3 сохраняются. Автоматического объединения пациентов нет.</p><h2>Только демонстрация</h2><p>Данные сохраняются без шифрования. Прототип не подготовлен для реальных медицинских записей. Используйте только вымышленные сведения.</p></section></div>';
+    return '<div class="page-heading"><div><h1>Помощь и данные</h1><p>Первый запуск, сохранение и границы прототипа.</p></div></div><div class="help-layout"><section class="card help-card"><h2>Новые возможности приёма</h2><p>В разделе «Запись» больничный можно выдать, продлить или закрыть с одновременным сохранением в журнале. При продлении и закрытии выберите конкретный листок. Чтобы исправить последнее связанное действие, отмените его в этом приёме и внесите заново.</p><p>«Предыдущий приём» открывает сведения из истории только для просмотра. «Мои шаблоны» возле осмотра и рекомендаций сохраняют ваши формулировки и применяются по нажатию. Шаблоны входят в резервную копию; копии с шаблонами или связанными действиями больничного требуют версии 0.12.0 или новее.</p><h2>Как пройти демонстрационный приём</h2><ol><li>Нажмите «Начать приём» и найдите пациента либо выберите «Новый пациент». Пустая новая форма не сохраняется; карточка появляется после первого ввода сведений. На главной также доступен вымышленный пример.</li><li>Заполните сведения о приёме, анамнез и осмотр. Вводите только вымышленные данные.</li><li>В разделе «Запись» заполните диагноз, при необходимости рекомендации, дату повторного приёма и отметку о больничном. Нажмите «Сформировать черновик».</li><li>Проверьте и отредактируйте текст. Скачайте .txt или скопируйте его.</li></ol><h2>Карточка и повторный приём</h2><p>Раздел «Пациенты» содержит карточки с историей по датам. В списке видны последний приём и ближайшая предстоящая повторная явка. Пациенты с явкой сегодня или позже идут первыми, от ближайшей даты к дальней; только с прошедшей незакрытой датой — следом, без назначений — в конце. Состоявшиеся приёмы не участвуют в этом порядке. ФИО пациента можно ввести в начале вкладки «Приём» или изменить в карточке. Это одно общее поле; используйте только вымышленные фамилию, имя и отчество. Кнопка «Повторный приём» создаёт отдельную запись того же пациента. Выберите исходный приём и отметьте нужные препараты, аллергии и заболевания; нажмите «Создать приём» для подтверждения. Без отметок перенос не выполняется. При смене источника отметки сбрасываются. Возраст, пол, жалобы, осмотр, показатели и заключение заполните заново.</p><h2>Журнал больничных</h2><p>В карточке пациента нажмите «Больничные». Выдача, продление и закрытие сохраняются явно; автоматически по прошедшей дате больничный не закрывается. Можно изменить номер или отменить последнее действие. Общий счётчик объединяет все внесённые календарные периоды пациента: обе даты включены, пересечения учитываются один раз. Закрытие исключает дни после выбранной даты; для более позднего закрытия сначала внесите продление.</p><p>Прежние отметки видны под журналом и уже входят в общий подсчёт. Перенесите отметку в журнал, чтобы продлевать или закрывать её. Исходный приём и текст сохраняются; дальнейшие изменения ведутся отдельно. Неполные даты исключены из счётчика с предупреждением. Журнал входит в резервную копию; для её открытия нужна версия 0.11.0 или новее.</p><h2>Повторные даты и проверка записи</h2><p>Дата в конце раздела «Запись» появляется в списке «Повторные приёмы». Там доступны сегодняшние, все будущие и прошедшие даты. Прошедшая дата не означает неявку. «Начать повторный приём» создаёт связанную запись после подтверждения переноса; повторное нажатие открывает её. Отдельно отметьте «Состоялся» после фактического приёма. Изменение назначенной даты сбрасывает отметку и связь, но сохраняет запись в истории.</p><p>На вкладке «Запись» нажмите «Отметить: проверено врачом» после проверки непустого текста. Это личная отметка, не электронная подпись. Правки сведений, текста или ФИО снимают её. На главной фильтр «Черновики» показывает незавершённые записи. Статус записи и факт состоявшегося приёма независимы.</p><h2>Режимы работы</h2><p>Сейчас доступен поликлинический режим. Стационарный режим запланирован отдельно; его формы и функции будут определены на следующем этапе.</p><h2>Что делает прототип</h2><p>Собирает введённые сведения в свободный текст. Работает из локальных файлов, без аккаунта, сервера, МИС и внешних запросов приложения.</p><p>Диагноз и рекомендации вводит врач. Программа не назначает лечение и не оформляет больничные документы. Варианты осмотра — вспомогательные формулировки; источники и ограничения перечислены в EXAM-SOURCES.md. Нормативные формы Беларуси не реализованы.</p><h2>Запуск в Windows</h2><p>Распакуйте архив в постоянную папку и откройте <span class="code-path">Start-MedAssist.cmd</span>. Приложение использует установленный Edge или Chrome. Также можно открыть <span class="code-path">app/index.html</span>.</p></section><section class="card help-card"><h2>Сохранение на этом компьютере</h2><p>Изменения автоматически сохраняются в локальном хранилище текущего браузера. Статус сохранения показан в приёме. При ошибке вы увидите сообщение.</p><p>Хранение локальных HTML-файлов зависит от браузера. Перемещение папки, другой профиль или очистка данных браузера могут сделать записи недоступными. Перед этим скачайте резервную копию.</p><p>Резервная копия содержит карточки, связанные приёмы и отредактированные черновики. Восстановление заменит все карточки и приёмы после подтверждения.</p><div class="backup-actions">' + button('backup', 'Резервная копия', 'download', 'primary') + button('import', 'Восстановить', 'upload') + button('reset', 'Очистить демонстрационные записи', null, 'secondary') + '</div><h2>Обновление программы через интернет</h2><p>Нажмите «Проверить обновления» в левом меню. Откроется окно проверки; браузер может попросить разрешить его запуск. Если доступна новая версия, сохраните резервную копию, закройте окна МедАссистента и подтвердите установку в окне обновления.</p><p>Для работы кнопки запускайте программу через <span class="code-path">Start-MedAssist.cmd</span> или обычный ярлык <span class="code-path">MedAssist</span>. При открытии файла index.html напрямую потребуется повторный запуск через ярлык. Отдельный <span class="code-path">Update-MedAssist.cmd</span> остаётся запасным способом.</p><p>Обновления загружаются из публичного проекта romaick/medassist на GitHub. Скачивать и распаковывать архивы вручную не понадобится. Без интернета приёмы работают как раньше.</p><h2>Перенос записей из прежней папки</h2><p>Сначала скачайте резервную копию в старой версии. Новая версия принимает её через «Восстановить» и сохраняет старые тексты. Если файлы обновлены в той же папке и браузере, доступные старые записи загрузятся автоматически. Новые копии со статусами и планом повторных приёмов открываются в версии 0.7 и новее. Из копий версий 1 и 2 каждый приём получает отдельную карточку; карточки версии 3 сохраняются. Автоматического объединения пациентов нет.</p><h2>Только демонстрация</h2><p>Данные сохраняются без шифрования. Прототип не подготовлен для реальных медицинских записей. Используйте только вымышленные сведения.</p></section></div>';
   }
 
   function updateValidation() {
@@ -884,7 +1123,7 @@
     if (state.pendingNew && !pendingHasContent()) { updateSaveStatus(); return; }
     const encounters = state.pendingNew ? state.encounters.concat(state.pendingNew.entry) : state.encounters;
     const patients = state.pendingNew ? state.patients.concat(state.pendingNew.patient) : state.patients;
-    const result = repository.save(encounters, patients);
+    const result = repository.save(encounters, patients, state.templates);
     state.saved = result.ok;
     state.error = result.error;
     if (result.ok && state.pendingNew) { state.encounters = encounters; state.patients = patients; state.pendingNew = null; }
@@ -935,6 +1174,31 @@
     window.scrollTo({top: 0});
   }
   async function handleAction(action, target) {
+    if (action === 'visit-templates') { openVisitTemplates(target.dataset.templateKind); return; }
+    if (action === 'previous-visit') {
+      state.previousOpen = !state.previousOpen; refreshPreviousVisit();
+      if (state.previousOpen) {
+        document.getElementById('previous-visit-select')?.focus({preventScroll: true});
+        if (window.matchMedia('(max-width:1150px)').matches) document.getElementById('previous-visit-panel').scrollIntoView({block: 'start'});
+      }
+      else app.querySelector('.visit-heading [data-action="previous-visit"]')?.focus({preventScroll: true});
+      return;
+    }
+    if (['visit-sick-issue', 'visit-sick-extend', 'visit-sick-close'].includes(action)) { openEncounterSickLeaveForm(action.slice(11)); return; }
+    if (action === 'visit-sick-undo') {
+      const entry = active();
+      if (!requireFreshState() || state.view !== 'visit' || !entry) return;
+      const linked = core.getEncounterSickLeaveAction(patientFor(entry), entry);
+      if (!linked || linked.leave.events.at(-1).id !== linked.event.id) { toast('Можно отменить только последнее действие больничного.', true); return; }
+      if (!await confirmAction('Отменить действие с больничным?', 'Действие будет удалено из журнала и полей этого приёма. Сохранённый текст останется для вашей проверки. Остальные периоды сохранятся.', 'Отменить действие') || !requireFreshState()) return;
+      try {
+        const pair = core.undoEncounterSickLeave(patientFor(entry), entry, state.encounters);
+        if (!commitEncounterSickLeave(pair)) return;
+        render(); document.getElementById('visit-sick-heading').focus({preventScroll: true});
+        toast('Действие отменено. Проверьте сохранённый текст записи.');
+      } catch (error) { toast(error.message, true); }
+      return;
+    }
     if (action === 'sick-journal') { focusSickLeaveJournal(); return; }
     if (['sick-issue', 'sick-extend', 'sick-close', 'sick-adopt', 'sick-number'].includes(action)) { openSickLeaveForm(action.slice(5), target); return; }
     if (action === 'sick-undo') {
@@ -943,6 +1207,7 @@
       const patient = selectedPatient();
       const leave = patient.sickLeaves?.find(item => item.id === target.dataset.leaveId);
       if (!leave) return;
+      if (leave.events.at(-1).encounterId) { toast('Откройте связанный приём, чтобы отменить действие одновременно в записи и журнале.', true); return; }
       const message = leave.events.length === 1 ? 'Выдача будет удалена из журнала. Исходная отметка в приёме, если она есть, снова будет учитываться отдельно.' : 'Последнее действие будет удалено из журнала. Статус и число дней пересчитаются по оставшимся действиям.';
       if (!await confirmAction('Отменить последнее действие с больничным?', message + ' Сохранённые приёмы и их тексты не меняются.', 'Отменить действие') || !requireFreshState()) return;
       const updated = core.undoSickLeaveAction(patient, leave.id);
@@ -1103,21 +1368,21 @@
       return;
     }
     if (action === 'backup') {
-      download(core.serializeBundle(pendingHasContent() ? state.encounters.concat(state.pendingNew.entry) : state.encounters, pendingHasContent() ? state.patients.concat(state.pendingNew.patient) : state.patients), 'MedAssist-backup-' + localDate() + '.json', 'application/json');
+      download(core.serializeBundle(pendingHasContent() ? state.encounters.concat(state.pendingNew.entry) : state.encounters, pendingHasContent() ? state.patients.concat(state.pendingNew.patient) : state.patients, state.templates), 'MedAssist-backup-' + localDate() + '.json', 'application/json');
       toast('Резервная копия передана браузеру для сохранения.'); return;
     }
     if (action === 'import') { document.getElementById('import-file').click(); return; }
     if (action === 'reset') {
-      if (!await confirmAction('Очистить демонстрационные записи?', 'Будут удалены все сохранённые в этом браузере приёмы и ручные черновики МедАссистента. Скачанные файлы останутся. При необходимости сначала сделайте резервную копию.', 'Очистить записи')) return;
+      if (!await confirmAction('Очистить демонстрационные записи?', 'Будут удалены все сохранённые в этом браузере карточки, приёмы, ручные черновики и личные шаблоны МедАссистента. Скачанные файлы останутся. При необходимости сначала сделайте резервную копию.', 'Очистить записи')) return;
       const result = repository.reset([]);
       if (!result.ok) { state.error = result.error; state.saved = false; updateSaveStatus(); toast(result.error, true); return; }
-      state.encounters = []; state.patients = []; state.activeId = null; state.patientId = null; state.pendingNew = null; state.externalChange = false; state.saved = true; state.error = null; state.migrated = false; navigate('home'); toast('Демонстрационные записи очищены.'); return;
+      state.encounters = []; state.patients = []; state.templates = []; state.activeId = null; state.patientId = null; state.pendingNew = null; state.externalChange = false; state.saved = true; state.error = null; state.migrated = false; navigate('home'); toast('Демонстрационные записи и шаблоны очищены.'); return;
     }
     if (action === 'reload') {
       if (!await confirmAction('Загрузить сохранённую версию?', 'Текущие изменения в этом окне будут заменены данными из локального хранилища. При необходимости сначала скачайте резервную копию.', 'Загрузить')) return;
       const result = repository.load();
       if (result.error) { toast(result.error, true); return; }
-      state.encounters = result.encounters; state.patients = result.patients; state.activeId = null; state.patientId = null; state.pendingNew = null; state.externalChange = false; state.error = null; state.saved = true; state.migrated = Boolean(result.migrated); navigate('home');
+      state.encounters = result.encounters; state.patients = result.patients; state.templates = result.templates || []; state.activeId = null; state.patientId = null; state.pendingNew = null; state.externalChange = false; state.error = null; state.saved = true; state.migrated = Boolean(result.migrated); navigate('home');
     }
     if (action === 'normal-exam' || action === 'normal-exam-section') {
       const entry = active();
@@ -1152,6 +1417,10 @@
   });
   function handleInput(event) {
     const control = event.target;
+    if (control.id === 'previous-visit-select') {
+      state.previousId = control.value; refreshPreviousVisit();
+      document.getElementById('previous-visit-select')?.focus({preventScroll: true}); return;
+    }
     if (control.id === 'patient-search') {
       state.patientSearch = control.value; refreshPatients(); return;
     }
@@ -1182,7 +1451,7 @@
     }
     set(active(), control.dataset.field, control.value);
     active().updatedAt = new Date().toISOString();
-    if (control.dataset.field === 'visitDate') document.getElementById('visit-date-summary').textContent = 'Демонстрационный приём · ' + dateText(active().visitDate);
+    if (control.dataset.field === 'visitDate') { document.getElementById('visit-date-summary').textContent = 'Демонстрационный приём · ' + dateText(active().visitDate); refreshPreviousVisit(); }
     app.querySelectorAll('[data-summary]').forEach((element) => {
       const fields = active()[element.dataset.summary];
       element.textContent = filledCount(fields) + ' из ' + Object.keys(fields).length + ' полей';
@@ -1241,24 +1510,30 @@
     try {
       if (file.size > 20 * 1024 * 1024) throw new Error('Файл слишком большой. Максимум для импорта — 20 МБ.');
       const bundle = core.parseBundle((await file.text()).replace(/^\uFEFF/, ''));
-      if (!await confirmAction('Восстановить резервную копию?', 'В файле приёмов: ' + bundle.encounters.length + '. Текущих приёмов: ' + state.encounters.length + '.\nВсе текущие карточки, приёмы и черновики будут заменены данными из файла.', 'Восстановить')) return;
-      const result = repository.reset(bundle.encounters, bundle.patients);
+      if (!await confirmAction('Восстановить резервную копию?', 'В файле приёмов: ' + bundle.encounters.length + ', личных шаблонов: ' + (bundle.templates || []).length + '. Текущих приёмов: ' + state.encounters.length + ', шаблонов: ' + state.templates.length + '.\nВсе текущие карточки, приёмы, черновики и шаблоны будут заменены данными из файла.', 'Восстановить')) return;
+      const result = repository.reset(bundle.encounters, bundle.patients, bundle.templates || []);
       if (!result.ok) throw new Error(result.error);
-      state.encounters = bundle.encounters; state.patients = bundle.patients; state.activeId = null; state.patientId = null; state.pendingNew = null; state.externalChange = false; state.saved = true; state.error = null; state.migrated = false;
+      state.encounters = bundle.encounters; state.patients = bundle.patients; state.templates = bundle.templates || []; state.activeId = null; state.patientId = null; state.pendingNew = null; state.externalChange = false; state.saved = true; state.error = null; state.migrated = false;
       navigate('home'); toast('Резервная копия восстановлена.');
     } catch (error) { toast('Восстановление не выполнено: ' + error.message, true); }
   });
-  window.addEventListener('beforeunload', (event) => { if (!state.saved && (state.encounters.length || state.patients.length || pendingHasContent())) { event.preventDefault(); event.returnValue = ''; } });
+  window.addEventListener('beforeunload', (event) => { if (!state.saved && (state.encounters.length || state.patients.length || state.templates.length || pendingHasContent())) { event.preventDefault(); event.returnValue = ''; } });
   window.addEventListener('storage', (event) => {
     if (!repository.WATCHED_KEYS.includes(event.key) && event.key !== null) return;
     state.externalChange = true; state.saved = false;
     state.error = 'Данные изменены в другом окне. Автосохранение приостановлено, чтобы не перезаписать их. Скачайте нужные изменения или загрузите сохранённую версию.';
     updateSaveStatus();
+    if (templateForm) templateError('Данные изменены в другом окне. Закройте шаблоны и загрузите сохранённую версию перед сохранением.');
     if (sickLeaveForm) sickLeaveError('Данные изменены в другом окне. Закройте форму и загрузите сохранённую версию перед сохранением.');
   });
   render();
+  document.getElementById('template-select').addEventListener('change', () => { templateError(''); updateTemplatePreview(); });
+  ['save', 'apply', 'update', 'delete'].forEach(action => document.getElementById('template-' + action).addEventListener('click', () => templateAction(action)));
+  document.getElementById('template-close').addEventListener('click', () => document.getElementById('template-dialog').close());
+  document.getElementById('template-dialog').addEventListener('close', event => { if (!event.target.open) templateForm = null; });
   document.getElementById('sick-leave-form').addEventListener('submit', event => { event.preventDefault(); saveSickLeave(); });
   document.getElementById('sick-leave-form').addEventListener('input', updateSickLeavePreview);
+  document.getElementById('sick-leave-select').addEventListener('change', selectEncounterSickLeave);
   document.getElementById('sick-leave-cancel').addEventListener('click', () => document.getElementById('sick-leave-dialog').close());
   document.getElementById('sick-leave-dialog').addEventListener('close', event => { if (!event.target.open) sickLeaveForm = null; });
   document.getElementById('repeat-source').addEventListener('change', updateCarryPreview);

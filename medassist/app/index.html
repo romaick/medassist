@@ -28,6 +28,7 @@
     <p id="sick-leave-patient"></p>
     <p id="sick-leave-description"></p>
     <form id="sick-leave-form" novalidate>
+      <div id="sick-leave-select-field" class="field" hidden><label for="sick-leave-select">Больничный пациента</label><select id="sick-leave-select"></select><p id="sick-leave-selection-hint" class="hint"></p></div>
       <div class="field"><label for="sick-leave-number">Номер листка нетрудоспособности</label><input id="sick-leave-number" type="text" maxlength="120" autocomplete="off" placeholder="Впишите номер вручную; можно уточнить позднее"></div>
       <div id="sick-leave-period-fields" class="field-grid">
         <div class="field"><label for="sick-leave-from">Период с</label><input id="sick-leave-from" type="date" required></div>
@@ -38,6 +39,18 @@
       <p id="sick-leave-error" class="field-error" role="alert" hidden></p>
       <div class="dialog-actions"><button id="sick-leave-cancel" class="button secondary" type="button">Отмена</button><button id="sick-leave-save" class="button primary" type="submit">Сохранить</button></div>
     </form>
+  </dialog>
+  <dialog id="template-dialog" aria-labelledby="template-title" aria-describedby="template-scope">
+    <h2 id="template-title">Мои шаблоны</h2>
+    <p id="template-scope"></p>
+    <div class="field"><label for="template-select">Сохранённый шаблон</label><select id="template-select"></select></div>
+    <p id="template-empty" class="hint">Своих шаблонов в этом разделе пока нет. Заполните раздел приёма и сохраните его под понятным названием.</p>
+    <p class="template-preview-label">Содержимое выбранного шаблона</p>
+    <div id="template-preview" class="template-preview" aria-live="polite"></div>
+    <div class="template-apply-actions"><button id="template-apply" class="button primary" type="button" disabled>Применить к текущему приёму</button><button id="template-delete" class="button secondary" type="button" disabled>Удалить шаблон</button></div>
+    <div class="template-save-area"><h3>Сохранить текущий раздел</h3><div class="field"><label for="template-name">Название шаблона</label><input id="template-name" type="text" maxlength="120" autocomplete="off" placeholder="Например, мой обычный осмотр"></div><p class="hint">Новый шаблон создаётся из текущих полей приёма. Чтобы изменить сохранённый, отредактируйте эти поля, выберите шаблон и нажмите «Обновить выбранный».</p><div class="template-apply-actions"><button id="template-save" class="button secondary" type="button">Сохранить как новый</button><button id="template-update" class="button secondary" type="button" disabled>Обновить выбранный</button></div></div>
+    <p id="template-error" class="field-error" role="alert" hidden></p>
+    <div class="dialog-actions"><button id="template-close" class="button secondary" type="button">Закрыть</button></div>
   </dialog>
   <dialog id="repeat-dialog" aria-labelledby="repeat-title" aria-describedby="repeat-description">
     <h2 id="repeat-title">Повторный приём</h2>

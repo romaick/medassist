@@ -17,6 +17,7 @@
   function createRepository(storage) {
     let checked = false;
     let blocked = null;
+    let storedTemplates = [];
 
     function target() {
       const result = typeof storage === "function" ? storage() : storage;
@@ -38,10 +39,11 @@
             break;
           }
         }
-        const { patients, encounters } = raw === null ? { patients: [], encounters: [] } : core.parseBundle(raw);
+        const { patients, encounters, templates = [] } = raw === null ? { patients: [], encounters: [] } : core.parseBundle(raw);
+        storedTemplates = core.validateTemplates(templates);
         checked = true;
         blocked = null;
-        return migrated ? { patients, encounters, error: null, migrated: true } : { patients, encounters, error: null };
+        return { patients, encounters, ...(templates.length ? { templates } : {}), error: null, ...(migrated ? { migrated: true } : {}) };
       } catch (error) {
         checked = true;
         blocked = "Не удалось прочитать локальное сохранение. Автоматическая запись остановлена, исходные данные не изменены. " + describe(error);
@@ -49,20 +51,24 @@
       }
     }
 
-    function save(encounters, patients) {
+    function save(encounters, patients, templates) {
       if (!checked) load();
       if (blocked) return { ok: false, error: blocked };
       try {
-        target().setItem(KEY, core.serializeBundle(encounters, patients));
+        const nextTemplates = templates === undefined ? storedTemplates : core.validateTemplates(templates);
+        target().setItem(KEY, core.serializeBundle(encounters, patients, nextTemplates));
+        storedTemplates = core.validateTemplates(nextTemplates);
         return { ok: true, error: null };
       } catch (error) {
         return { ok: false, error: "Не удалось сохранить данные в браузере. " + describe(error) };
       }
     }
 
-    function reset(encounters = [], patients = []) {
+    function reset(encounters = [], patients = [], templates = []) {
       try {
-        target().setItem(KEY, core.serializeBundle(encounters, patients));
+        const nextTemplates = core.validateTemplates(templates);
+        target().setItem(KEY, core.serializeBundle(encounters, patients, nextTemplates));
+        storedTemplates = nextTemplates;
         checked = true;
         blocked = null;
         return { ok: true, error: null };

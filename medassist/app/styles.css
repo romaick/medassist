@@ -102,4 +102,51 @@ body{--sidebar-width:236px}
 .diagnosis-field{position:relative;min-width:0}.diagnosis-field .diagnosis-suggestions{border:1px solid #a9c5b9;border-radius:8px;overflow:hidden;background:#fff;box-shadow:0 4px 12px #183c2710}.diagnosis-suggestions>p{margin:0;padding:9px 12px;background:var(--pale);font-size:12px;line-height:1.45;color:var(--green)}#diagnosis-options{position:relative;max-height:280px;overflow-y:auto;overscroll-behavior:contain}.diagnosis-option{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:10px 12px;border-top:1px solid var(--line);cursor:pointer;font-size:14px;line-height:1.45}.diagnosis-option>span:first-child{min-width:0;overflow-wrap:anywhere}.diagnosis-option strong{font-weight:550}.diagnosis-option small{display:block;color:var(--muted);font-size:11px;margin-top:2px}.diagnosis-option:hover,.diagnosis-option[aria-selected=true]{background:#e7f1eb}.diagnosis-option[aria-selected=true]{box-shadow:inset 3px 0 var(--green)}.diagnosis-code{flex-shrink:0;font-weight:650;color:var(--green);font-variant-numeric:tabular-nums}.icd-source{font-size:12px;color:var(--muted);overflow-wrap:anywhere}.icd-source summary{cursor:pointer;width:fit-content;color:var(--green)}.icd-source p{margin:8px 0}.diagnosis-field .hint{line-height:1.5}
 .sick-leave-journal{scroll-margin-top:24px}.sick-leave-journal .card-head{flex-wrap:wrap;gap:12px}.sick-leave-summary{margin:0 24px 20px;padding:16px;background:var(--pale);border-radius:10px}.sick-leave-summary>div{display:flex;align-items:center;gap:20px;font-weight:600}.sick-leave-summary output{font-size:30px;font-variant-numeric:tabular-nums;color:var(--green)}.sick-leave-summary p{font-size:13px;line-height:1.55;margin:8px 0 0;color:var(--muted)}.sick-leave-list,.sick-leave-legacy-list{padding:0 24px}.sick-leave-entry{padding:18px 0;border-top:1px solid var(--line);overflow-wrap:anywhere}.sick-leave-entry-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.sick-leave-entry h3{margin:0;font-size:16px}.sick-leave-entry p{margin:8px 0;font-size:14px;line-height:1.5}.sick-leave-days strong{font-size:18px}.sick-leave-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.sick-leave-events{font-size:13px;margin:12px 0}.sick-leave-events summary{cursor:pointer;color:var(--green);width:fit-content}.sick-leave-events ol{padding-left:22px;margin-bottom:0}.sick-leave-events li{padding:4px 0}.sick-leave-events li span{display:block;color:var(--muted);font-size:12px;margin-top:3px}.sick-leave-legacy-list{border-top:1px solid var(--line);padding-top:18px}.sick-leave-legacy-list h3{font-size:16px;margin:0 0 8px}.sick-leave-legacy{padding:14px 0;border-top:1px solid var(--line);overflow-wrap:anywhere}.sick-leave-legacy p{font-size:13px;margin:6px 0}.sick-leave-footnote{padding:16px 24px;margin:0;font-size:12px;line-height:1.5;color:var(--muted)}.sick-leave-warning,.sick-leave-summary .sick-leave-warning{color:#855218;font-weight:500}#sick-leave-dialog{width:min(560px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow-y:auto;box-sizing:border-box}#sick-leave-dialog input{min-width:0;width:100%;box-sizing:border-box}#sick-leave-dialog input[readonly]{background:#f1f4f2;color:#526258}#sick-leave-dialog .field-grid{margin:16px 0}#sick-leave-dialog p{overflow-wrap:anywhere;line-height:1.55}#sick-leave-dialog .field-error{color:#a12929;background:#fff0ee;padding:10px;border-radius:6px}#sick-leave-close-field{margin-top:16px}#sick-leave-dialog [hidden]{display:none!important}
 .sick-leave-journal{margin-top:18px}
+/* Linked sick leave actions within a visit. */
+.visit-sick-leave{margin:20px 0;padding:18px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);min-width:0}
+.visit-sick-leave h3{font-size:16px;margin:0 0 12px}
+.visit-sick-actions{display:flex;flex-wrap:wrap;gap:8px}
+.visit-sick-actions .button{white-space:normal;text-align:left}
+.visit-sick-leave>.hint{font-size:12px;line-height:1.5;margin:10px 0 16px}
+#visit-sick-linked{padding:14px;background:var(--pale);border:1px solid #c9dcd0;border-radius:8px;overflow-wrap:anywhere}
+#visit-sick-linked>p{font-size:14px;margin:0 0 10px;line-height:1.5}
+#visit-sick-linked .visit-sick-action strong{color:var(--green);font-size:16px}
+#visit-sick-linked .sickleave-duration{margin:12px 0}
+#visit-sick-linked [hidden]{display:none!important}
+#sick-leave-select-field{margin-bottom:16px}
+#sick-leave-select{width:100%;min-width:0;max-width:100%;font-size:14px}
+/* Previous visit and personal templates */
+.visit-tools-heading,.previous-visit-title{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.visit-tools-heading{margin-bottom:8px}.visit-tools-heading h2,.previous-visit-title h2{margin:0}
+.visit-comparison{min-width:0}.current-visit-form{min-width:0}
+.visit-comparison.has-previous{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,330px);gap:18px;align-items:start}
+.has-previous .form-layout,.has-previous .draft-layout{grid-template-columns:minmax(0,1fr)}
+.has-previous .form-layout>.side-card{display:none}
+.has-previous .exam-vitals-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.has-previous .exam-group-content .field-grid,.has-previous .field-grid.three{grid-template-columns:repeat(2,minmax(0,1fr))}
+.previous-visit-panel{padding:20px;position:sticky;top:calc(var(--visit-context-height,140px) + 16px);max-height:calc(100dvh - var(--visit-context-height,140px) - var(--visit-actions-height,76px) - 40px);overflow:auto;overscroll-behavior:contain;min-width:0;border-color:#b6c5bb;background:#f7faf8}
+.previous-visit-panel{scroll-margin-top:calc(var(--visit-context-height,140px) + 16px)}
+.previous-visit-panel[hidden]{display:none!important}
+.previous-visit-panel h2{font-size:17px}.previous-visit-panel .field{margin:14px 0}
+.previous-visit-panel select{max-width:100%;min-width:0;font-size:14px}
+.historical-notice{font-size:13px;color:#52675a;margin:10px 0;line-height:1.5}
+.previous-visit-date{display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:14px;margin:16px 0}
+.historical-fields{margin:0}.historical-field{border-top:1px solid #dbe4df;padding:12px 0}
+.historical-field dt{font-size:12px;font-weight:600;color:#52675a;margin:0 0 4px}
+.historical-field dd{font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere;margin:0}
+.recommendation-templates{margin:14px 0 10px}
+#template-dialog{width:min(650px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow-y:auto}
+#template-dialog [hidden]{display:none!important}
+#template-dialog input,#template-dialog select{width:100%;min-width:0;max-width:100%}
+#template-scope,#template-empty{font-size:13px;line-height:1.55}
+.template-preview-label{font-size:13px;font-weight:600;margin:16px 0 6px}
+.template-preview{min-height:70px;max-height:200px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:#f4f7f5;border:1px solid var(--line);border-radius:8px;padding:12px;font-size:14px}
+.template-apply-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.template-save-area{border-top:1px solid var(--line);margin-top:20px;padding-top:16px}
+#template-dialog .button{white-space:normal;text-align:left}
+#template-error{margin:16px 0 0;background:#fff0ee;padding:10px;border-radius:6px}
+@media(max-width:1150px){.visit-comparison.has-previous{grid-template-columns:minmax(0,1fr)}.previous-visit-panel{position:static;max-height:420px}.has-previous .exam-vitals-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:940px){.has-previous .exam-vitals-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:650px){.visit-heading>.actions{flex-wrap:wrap;gap:6px}.visit-comparison.has-previous{gap:12px}.previous-visit-panel{padding:16px;max-height:360px}.has-previous .exam-vitals-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.has-previous .exam-group-content .field-grid,.has-previous .field-grid.three{grid-template-columns:minmax(0,1fr)}#template-dialog{padding:20px}.template-apply-actions .button{font-size:13px}.visit-tools-heading .button{font-size:12px}}
+@media print{.previous-visit-panel{display:none!important}.visit-comparison.has-previous{display:block}}
 @media(max-width:650px){.sick-leave-summary{margin:0 14px 14px}.sick-leave-summary>div{align-items:flex-start}.sick-leave-list,.sick-leave-legacy-list{padding-left:14px;padding-right:14px}.sick-leave-footnote{padding:14px}.sick-leave-entry-head{align-items:flex-start}.sick-leave-journal .card-head{padding:14px}#sick-leave-dialog{padding:20px}#sick-leave-dialog .field-grid{grid-template-columns:minmax(0,1fr)}#sick-leave-dialog .dialog-actions{flex-wrap:wrap}.sick-leave-actions .button{white-space:normal;text-align:left}}

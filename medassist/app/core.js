@@ -10,6 +10,7 @@
   const MAX_ENCOUNTERS = 500;
   const MAX_PATIENTS = 500;
   const MAX_PATIENT_LABEL_LENGTH = 120;
+  const MAX_PERSONAL_NOTE_LENGTH = 5000;
   const MAX_SICK_LEAVES = 100;
   const MAX_SICK_LEAVE_EVENTS = 100;
   const MAX_SICK_LEAVE_NUMBER_LENGTH = 120;
@@ -58,9 +59,35 @@
   const V3_ROOT_FIELDS = ["id", "patientId", ...V2_ROOT_FIELDS.slice(1)];
   const ROOT_FIELDS = [...V3_ROOT_FIELDS, "workflow"];
   const SEXES = { "": "не указано", female: "женский", male: "мужской", unspecified: "не указан" };
+  const RECORD_SECTIONS = Object.freeze(["history", "exam", "investigations", "diagnosis", "recommendations", "sickLeave"]);
+  const DEFAULT_RECORD_FORMAT = Object.freeze({
+    order: RECORD_SECTIONS,
+    titles: Object.freeze({ history: "АНАМНЕЗ", exam: "ОСМОТР", investigations: "ИССЛЕДОВАНИЯ", diagnosis: "Диагноз", recommendations: "Рекомендации", sickLeave: "Листок нетрудоспособности", returnVisit: "Повторный приём" }),
+    headings: true,
+    examStyle: "lines",
+    recommendationsStyle: "paragraph",
+    shortLabels: false
+  });
 
   function isObject(value) {
     return value !== null && typeof value === "object" && !Array.isArray(value);
+  }
+
+  function validateRecordFormat(value) {
+    const fields = Object.keys(DEFAULT_RECORD_FORMAT);
+    const titleFields = Object.keys(DEFAULT_RECORD_FORMAT.titles);
+    if (!isObject(value) || Object.keys(value).some(field => !fields.includes(field)) || fields.some(field => !Object.prototype.hasOwnProperty.call(value, field))) throw new Error("Неверная структура настроек врачебной записи.");
+    if (!Array.isArray(value.order) || value.order.length !== RECORD_SECTIONS.length || new Set(value.order).size !== RECORD_SECTIONS.length || RECORD_SECTIONS.some(section => !value.order.includes(section))) throw new Error("В порядке разделов должны быть все разделы без повторений. Повторный приём всегда находится в конце.");
+    if (!isObject(value.titles) || Object.keys(value.titles).some(field => !titleFields.includes(field)) || titleFields.some(field => !Object.prototype.hasOwnProperty.call(value.titles, field) || typeof value.titles[field] !== "string" || !value.titles[field].trim() || value.titles[field].length > 80 || /[\r\n\u2028\u2029]/.test(value.titles[field]))) throw new Error("Название каждого раздела должно содержать от 1 до 80 символов без переноса строки.");
+    if (typeof value.headings !== "boolean" || typeof value.shortLabels !== "boolean" || !["lines", "paragraph"].includes(value.examStyle) || !["paragraph", "list"].includes(value.recommendationsStyle)) throw new Error("Некорректные варианты оформления врачебной записи.");
+    return {
+      order: [...value.order],
+      titles: Object.fromEntries(titleFields.map(field => [field, value.titles[field].trim()])),
+      headings: value.headings,
+      examStyle: value.examStyle,
+      recommendationsStyle: value.recommendationsStyle,
+      shortLabels: value.shortLabels
+    };
   }
 
   function validDate(value) {
@@ -212,6 +239,7 @@
     return {
       ...Object.fromEntries(PATIENT_FIELDS.map(field => [field, patient[field]])),
       ...(Object.prototype.hasOwnProperty.call(patient, "birthDate") ? { birthDate: patient.birthDate } : {}),
+      ...(Object.prototype.hasOwnProperty.call(patient, "personalNote") ? { personalNote: patient.personalNote } : {}),
       ...(Object.prototype.hasOwnProperty.call(patient, "sickLeaves") ? {
         sickLeaves: patient.sickLeaves.map(leave => ({ ...leave, events: leave.events.map(event => ({ ...event })) }))
       } : {}),
@@ -503,11 +531,12 @@
       else if (typeof patient[field] !== "string") errors.push({ field, message: "Значение должно быть строкой." });
     }
     for (const field of Object.keys(patient)) {
-      if (!PATIENT_FIELDS.includes(field) && !["birthDate", "sickLeaves", "investigations"].includes(field)) errors.push({ field, message: "Неизвестное поле карточки пациента." });
+      if (!PATIENT_FIELDS.includes(field) && !["birthDate", "personalNote", "sickLeaves", "investigations"].includes(field)) errors.push({ field, message: "Неизвестное поле карточки пациента." });
     }
     if (typeof patient.id === "string" && !ID_PATTERN.test(patient.id)) errors.push({ field: "id", message: "Некорректный идентификатор карточки пациента." });
     if (typeof patient.label === "string" && patient.label.length > MAX_PATIENT_LABEL_LENGTH) errors.push({ field: "label", message: "Условное имя не должно превышать 120 символов." });
     if (Object.prototype.hasOwnProperty.call(patient, "birthDate") && (typeof patient.birthDate !== "string" || (patient.birthDate !== "" && !validDate(patient.birthDate)))) errors.push({ field: "birthDate", message: "Укажите существующую дату рождения в формате ГГГГ-ММ-ДД или оставьте поле пустым." });
+    if (Object.prototype.hasOwnProperty.call(patient, "personalNote") && (typeof patient.personalNote !== "string" || patient.personalNote.length > MAX_PERSONAL_NOTE_LENGTH)) errors.push({ field: "personalNote", message: "Личная заметка должна быть строкой не длиннее 5000 символов." });
     for (const field of ["createdAt", "updatedAt"]) {
       if (typeof patient[field] === "string" && !validTimestamp(patient[field])) errors.push({ field, message: "Некорректная дата и время; ожидается формат ISO UTC." });
     }
@@ -530,11 +559,26 @@
       id: options.id === undefined ? newId("patient") : options.id,
       label: options.label === undefined ? "" : options.label,
       ...(options.birthDate === undefined ? {} : { birthDate: options.birthDate }),
+      ...(options.personalNote === undefined ? {} : { personalNote: options.personalNote }),
       createdAt: now.toISOString(),
       updatedAt: now.toISOString()
     };
     assertPatient(patient);
     return patient;
+  }
+
+  function setPatientNote(patient, text, options = {}) {
+    assertPatient(patient);
+    if (!isObject(options) || Object.keys(options).some(field => field !== "now")) throw new Error("Некорректные параметры изменения личной заметки.");
+    if (typeof text !== "string" || text.length > MAX_PERSONAL_NOTE_LENGTH) throw new Error("Личная заметка должна быть строкой не длиннее 5000 символов.");
+    const now = options.now === undefined ? new Date() : new Date(options.now);
+    if (!Number.isFinite(now.getTime()) || now.getUTCFullYear() < 1 || now.getUTCFullYear() > 9999) throw new Error("Некорректное время изменения личной заметки.");
+    const result = normalizePatient(patient);
+    if ((patient.personalNote || "") === text) return result;
+    if (text) result.personalNote = text;
+    else delete result.personalNote;
+    result.updatedAt = now.toISOString();
+    return result;
   }
 
   function validateInvestigations(investigations) {
@@ -1281,7 +1325,7 @@
     return encounterInvestigations(encounter, context.patient);
   }
 
-  function investigationDraftLines(results) {
+  function investigationDraftLines(results, format) {
     if (!results.length) return [];
     const reports = new Map();
     for (const item of results) {
@@ -1289,7 +1333,7 @@
       if (!reports.has(key)) reports.set(key, { id: key, title: item.reportTitle || "", date: item.date, results: [] });
       reports.get(key).results.push(item);
     }
-    const lines = ["ИССЛЕДОВАНИЯ"];
+    const lines = format.headings ? [format.titles.investigations] : [];
     for (const report of [...reports.values()].sort((first, second) => second.date.localeCompare(first.date) || first.id.localeCompare(second.id))) {
       const date = report.date.split("-").reverse().join(".");
       if (report.title) lines.push(report.title.trim() + " от " + date + ":");
@@ -1321,8 +1365,9 @@
     return result;
   }
 
-  function generateDraft(encounter, context) {
+  function generateDraft(encounter, context, recordFormat = DEFAULT_RECORD_FORMAT) {
     assertEncounter(encounter);
+    const format = validateRecordFormat(recordFormat);
     const investigations = selectedInvestigationData(encounter, context);
     function text(value) { return value.trim() || "не заполнено"; }
     function line(label, value, unit = "") { return label + ": " + (value.trim() ? value.trim() + unit : "не заполнено") + "."; }
@@ -1348,7 +1393,7 @@
       const action = context === undefined ? null : getEncounterSickLeaveAction(context.patient, encounter);
       if (action) {
         const wording = { issue: "выдан", extend: "продлён", close: "закрыт" };
-        return ["Листок нетрудоспособности: " + wording[action.event.type] + "."
+        return [format.titles.sickLeave + ": " + wording[action.event.type] + "."
           + (action.leave.number.trim() ? " № " + action.leave.number.trim() + "." : "")
           + (action.event.type === "close" ? " Дата закрытия: " + formatDate(action.event.to) + "." : " Период: " + period.join(" ") + ". Календарных дней за текущий период: " + summary.periodDays + ".")
           + " Всего по этому больничному: " + summary.totalDays + " календарных дней."];
@@ -1356,13 +1401,71 @@
       const count = summary?.hasPrevious
         ? " Календарных дней за текущий период: " + days + ". Всего за непрерывный период с " + formatDate(summary.from) + " по " + formatDate(summary.to) + ": " + summary.totalDays + "."
         : days !== null ? " Календарных дней: " + days + "." : "";
-      return ["Листок нетрудоспособности: выдан."
+      return [format.titles.sickLeave + ": выдан."
         + (assessment.sickLeaveNumber.trim() ? " № " + assessment.sickLeaveNumber.trim() + "." : "")
         + (period.length ? " Период: " + period.join(" ") + "." : "")
         + count];
     }
     const date = encounter.visitDate ? formatDate(encounter.visitDate) : "не указана";
     const bmi = calculateBmi(encounter.vitals.weight, encounter.vitals.height);
+    const examLines = [
+      "Общий осмотр: " + examText("general"),
+      "Сердечно-сосудистая система: " + examText("cardiovascular"),
+      "Дыхательная система: " + examText("respiratory"),
+      "Живот: " + examText("abdomen"),
+      "Неврологический статус: " + examText("neurological"),
+      ...optional("Другие данные осмотра", encounter.exam.other)
+    ];
+    const vitalLines = [
+      line(format.shortLabels ? "САД" : "Систолическое АД", encounter.vitals.systolic, " мм рт. ст."),
+      line(format.shortLabels ? "ДАД" : "Диастолическое АД", encounter.vitals.diastolic, " мм рт. ст."),
+      line("Пульс", encounter.vitals.pulse, " уд/мин"),
+      line(format.shortLabels ? "Т" : "Температура", encounter.vitals.temperature, " °C"),
+      line(format.shortLabels ? "ЧДД" : "Частота дыхания", encounter.vitals.respiratoryRate, " в мин"),
+      line("SpO₂", encounter.vitals.spo2, " %"),
+      line(format.shortLabels ? "Масса" : "Масса тела", encounter.vitals.weight, " кг"),
+      line("Рост", encounter.vitals.height, " см"),
+      ...(bmi ? [(format.shortLabels ? "ИМТ" : "Индекс массы тела") + ": " + bmi + " кг/м²."] : [])
+    ];
+    const recommendations = format.recommendationsStyle === "list" && encounter.assessment.plan.trim()
+      ? [format.titles.recommendations + ":", ...encounter.assessment.plan.split(/\r\n|\r|\n/).map(value => value.trim()).filter(Boolean).map(value => "• " + value)]
+      : optional(format.titles.recommendations, encounter.assessment.plan);
+    const sections = {
+      history: [
+        ...(format.headings ? [format.titles.history] : []),
+        "Жалобы: " + text(encounter.history.complaints),
+        "Начало симптомов: " + text(encounter.history.onset),
+        "Течение: " + text(encounter.history.course),
+        "Известные заболевания: " + text(encounter.history.conditions),
+        "Принимаемые препараты на постоянной основе: " + text(encounter.history.medications),
+        "Аллергии и реакции: " + text(encounter.history.allergies),
+        ...optional("Дополнительный анамнез", encounter.history.context),
+        ""
+      ],
+      exam: [
+        ...(format.headings ? [format.titles.exam] : []),
+        ...(format.examStyle === "paragraph"
+          ? [[...examLines, ...vitalLines].map(value => {
+            const sentence = value.replace(/\s*[\r\n]+\s*/g, " ").trim();
+            return /[.!?;]$/.test(sentence) ? sentence : sentence + ".";
+          }).join(" ")]
+          : [...examLines, "", ...(format.headings ? ["ПОКАЗАТЕЛИ"] : []), ...vitalLines]),
+        ""
+      ],
+      investigations: investigationDraftLines(investigations, format),
+      diagnosis: [
+        ...(format.headings ? ["ЗАКЛЮЧЕНИЕ"] : []),
+        ...(encounter.diagnoses?.length
+          ? [(format.titles.diagnosis === DEFAULT_RECORD_FORMAT.titles.diagnosis ? "Диагнозы" : format.titles.diagnosis) + ":", ...formatDiagnoses(encounter.diagnoses).split("\n")]
+          : [format.titles.diagnosis + ": " + text(encounter.assessment.summary)])
+      ],
+      recommendations: [
+        ...recommendations,
+        ...optional("Наблюдение (из предыдущей версии)", encounter.assessment.followUp),
+        ...(encounter.prescriptions?.length ? ["Назначения препаратов:", ...encounter.prescriptions.map((item, index) => (index + 1) + ". " + formatPrescription(item))] : [])
+      ],
+      sickLeave: sickLeave()
+    };
     const draft = [
       "МЕДАССИСТЕНТ · ДЕМОНСТРАЦИОННЫЙ ЧЕРНОВИК",
       "Только вымышленные данные. Неофициальный шаблон; не является нормативной формой Республики Беларусь.",
@@ -1372,42 +1475,8 @@
       line("Возраст (полных лет)", encounterAge(encounter, context?.patient)),
       "Пол: " + SEXES[encounter.sex] + ".",
       "",
-      "АНАМНЕЗ",
-      "Жалобы: " + text(encounter.history.complaints),
-      "Начало симптомов: " + text(encounter.history.onset),
-      "Течение: " + text(encounter.history.course),
-      "Известные заболевания: " + text(encounter.history.conditions),
-      "Принимаемые препараты на постоянной основе: " + text(encounter.history.medications),
-      "Аллергии и реакции: " + text(encounter.history.allergies),
-      ...optional("Дополнительный анамнез", encounter.history.context),
-      "",
-      "ОСМОТР",
-      "Общий осмотр: " + examText("general"),
-      "Сердечно-сосудистая система: " + examText("cardiovascular"),
-      "Дыхательная система: " + examText("respiratory"),
-      "Живот: " + examText("abdomen"),
-      "Неврологический статус: " + examText("neurological"),
-      ...optional("Другие данные осмотра", encounter.exam.other),
-      "",
-      "ПОКАЗАТЕЛИ",
-      line("Систолическое АД", encounter.vitals.systolic, " мм рт. ст."),
-      line("Диастолическое АД", encounter.vitals.diastolic, " мм рт. ст."),
-      line("Пульс", encounter.vitals.pulse, " уд/мин"),
-      line("Температура", encounter.vitals.temperature, " °C"),
-      line("Частота дыхания", encounter.vitals.respiratoryRate, " в мин"),
-      line("SpO₂", encounter.vitals.spo2, " %"),
-      line("Масса тела", encounter.vitals.weight, " кг"),
-      line("Рост", encounter.vitals.height, " см"),
-      ...(bmi ? ["Индекс массы тела: " + bmi + " кг/м²."] : []),
-      "",
-      ...investigationDraftLines(investigations),
-      "ЗАКЛЮЧЕНИЕ",
-      ...(encounter.diagnoses?.length ? ["Диагнозы:", ...formatDiagnoses(encounter.diagnoses).split("\n")] : ["Диагноз: " + text(encounter.assessment.summary)]),
-      ...optional("Рекомендации", encounter.assessment.plan),
-      ...optional("Наблюдение (из предыдущей версии)", encounter.assessment.followUp),
-      ...(encounter.prescriptions?.length ? ["Назначения препаратов:", ...encounter.prescriptions.map((item, index) => (index + 1) + ". " + formatPrescription(item))] : []),
-      ...sickLeave(),
-      ...optional("Повторный приём", encounter.assessment.returnVisitDate ? formatDate(encounter.assessment.returnVisitDate) : "")
+      ...format.order.flatMap(section => sections[section]),
+      ...optional(format.titles.returnVisit, encounter.assessment.returnVisitDate ? formatDate(encounter.assessment.returnVisitDate) : "")
     ].join("\n");
     if (draft.length > MAX_DRAFT_LENGTH) throw new Error("Черновик превышает 100000 символов. Сократите текст в полях приёма и повторите генерацию.");
     return draft;
@@ -1452,6 +1521,7 @@
         if (version < 4 && Object.prototype.hasOwnProperty.call(patient, "sickLeaves")) throw new Error("Журнал больничных не поддерживается в резервной копии версии " + version + ".");
         if (version < 4 && Object.prototype.hasOwnProperty.call(patient, "investigations")) throw new Error("Анализы и исследования не поддерживаются в резервной копии версии " + version + ".");
         if (version < 4 && Object.prototype.hasOwnProperty.call(patient, "birthDate")) throw new Error("Дата рождения не поддерживается в резервной копии версии " + version + ".");
+        if (version < 4 && Object.prototype.hasOwnProperty.call(patient, "personalNote")) throw new Error("Личная заметка не поддерживается в резервной копии версии " + version + ".");
         if (patientIds.has(patient.id)) throw new Error("В резервной копии повторяется идентификатор карточки пациента №" + (index + 1) + ".");
         patientIds.add(patient.id);
         return normalizePatient(patient);
@@ -1527,5 +1597,5 @@
     return validateBundle(parsed);
   }
 
-  return Object.freeze({ calculateAge, encounterAge, getDiagnoses, formatDiagnoses, upsertDiagnosis, removeDiagnosis, moveDiagnosis, validateDiagnoses, MAX_DIAGNOSES, MAX_DIAGNOSIS_TEXT_LENGTH, MAX_DIAGNOSIS_SUMMARY_LENGTH, DIAGNOSIS_LABELS, createPatient, createEncounter, createRepeatEncounter, createDemoEncounter, upsertInvestigation, removeInvestigation, validateInvestigations, getInvestigationSeries, getInvestigationReports, upsertInvestigationReport, removeInvestigationReport, setEncounterInvestigations, reconcileInvestigationReferences, upsertPrescription, removePrescription, formatPrescription, validatePrescriptions, setReviewStatus, setReturnVisitStatus, linkReturnVisit, getReturnVisits, getPatientBriefing, calculateBmi, calculateSickLeaveDays, calculateSickLeaveTotalDays, getSickLeaveJournal, getEncounterSickLeaveSummary, getEncounterSickLeaveAction, applyEncounterSickLeave, undoEncounterSickLeave, issueSickLeave, extendSickLeave, closeSickLeave, undoSickLeaveAction, createVisitTemplate, applyVisitTemplate, validateTemplates, generateDraft, fingerprint, validatePatient, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_PATIENTS, MAX_PATIENT_LABEL_LENGTH, MAX_SICK_LEAVES, MAX_SICK_LEAVE_EVENTS, MAX_SICK_LEAVE_NUMBER_LENGTH, MAX_TEMPLATES, MAX_TEMPLATE_NAME_LENGTH, MAX_PRESCRIPTIONS, MAX_PRESCRIPTION_FIELD_LENGTH, MAX_PRESCRIPTION_NOTE_LENGTH, MAX_INVESTIGATIONS, MAX_INVESTIGATION_REPORT_FIELDS, INVESTIGATION_FIELD_LIMITS, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
+  return Object.freeze({ DEFAULT_RECORD_FORMAT, RECORD_SECTIONS, validateRecordFormat, setPatientNote, MAX_PERSONAL_NOTE_LENGTH, calculateAge, encounterAge, getDiagnoses, formatDiagnoses, upsertDiagnosis, removeDiagnosis, moveDiagnosis, validateDiagnoses, MAX_DIAGNOSES, MAX_DIAGNOSIS_TEXT_LENGTH, MAX_DIAGNOSIS_SUMMARY_LENGTH, DIAGNOSIS_LABELS, createPatient, createEncounter, createRepeatEncounter, createDemoEncounter, upsertInvestigation, removeInvestigation, validateInvestigations, getInvestigationSeries, getInvestigationReports, upsertInvestigationReport, removeInvestigationReport, setEncounterInvestigations, reconcileInvestigationReferences, upsertPrescription, removePrescription, formatPrescription, validatePrescriptions, setReviewStatus, setReturnVisitStatus, linkReturnVisit, getReturnVisits, getPatientBriefing, calculateBmi, calculateSickLeaveDays, calculateSickLeaveTotalDays, getSickLeaveJournal, getEncounterSickLeaveSummary, getEncounterSickLeaveAction, applyEncounterSickLeave, undoEncounterSickLeave, issueSickLeave, extendSickLeave, closeSickLeave, undoSickLeaveAction, createVisitTemplate, applyVisitTemplate, validateTemplates, generateDraft, fingerprint, validatePatient, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_PATIENTS, MAX_PATIENT_LABEL_LENGTH, MAX_SICK_LEAVES, MAX_SICK_LEAVE_EVENTS, MAX_SICK_LEAVE_NUMBER_LENGTH, MAX_TEMPLATES, MAX_TEMPLATE_NAME_LENGTH, MAX_PRESCRIPTIONS, MAX_PRESCRIPTION_FIELD_LENGTH, MAX_PRESCRIPTION_NOTE_LENGTH, MAX_INVESTIGATIONS, MAX_INVESTIGATION_REPORT_FIELDS, INVESTIGATION_FIELD_LIMITS, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
 });

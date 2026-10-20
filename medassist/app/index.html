@@ -148,10 +148,47 @@
     <p id="template-error" class="field-error" role="alert" hidden></p>
     <div class="dialog-actions"><button id="template-close" class="button secondary" type="button">Закрыть</button></div>
   </dialog>
+  <dialog id="record-format-dialog" class="workflow-dialog" aria-labelledby="record-format-title">
+    <form id="record-format-form">
+      <h2 id="record-format-title">Формат записи</h2>
+      <p class="hint">Настройте следующий черновик. Уже написанный текст останется прежним. Настройки сохраняются в этом браузере и не входят в резервную копию карточек.</p>
+      <div class="format-workspace"><div>
+        <h3>Порядок разделов и подписи</h3><div id="record-format-order"></div>
+        <div class="field"><label for="format-return-title">Подпись повторного приёма</label><input id="format-return-title" maxlength="80"><p class="hint">Повторный приём всегда остаётся в конце, после больничного.</p></div>
+        <label class="check-row"><input id="format-headings" type="checkbox"> Показывать отдельные заголовки разделов</label>
+        <div class="field"><label for="format-exam-style">Осмотр</label><select id="format-exam-style"><option value="lines">Каждая система с новой строки</option><option value="paragraph">Компактным абзацем</option></select></div>
+        <div class="field"><label for="format-recommendations-style">Рекомендации</label><select id="format-recommendations-style"><option value="paragraph">Как введены</option><option value="list">Списком — каждый пункт с новой строки</option></select><p class="hint">Программа использует ваши переносы строк, не разделяет предложения самостоятельно.</p></div>
+        <label class="check-row"><input id="format-short-labels" type="checkbox"> Сокращённые подписи показателей: САД, ДАД, ЧДД, Т</label>
+      </div><div class="format-preview"><label for="record-format-preview">Предпросмотр по текущему приёму</label><textarea id="record-format-preview" readonly></textarea><p class="hint">Предпросмотр не меняет сохранённую запись.</p></div></div>
+      <p id="record-format-error" class="field-error" role="alert" hidden></p>
+      <div class="dialog-actions"><button id="record-format-reset" class="button ghost" type="button">Стандартный формат</button><button id="record-format-cancel" class="button secondary" type="button">Отмена</button><button id="record-format-save" class="button primary" type="submit">Сохранить формат</button></div>
+    </form>
+  </dialog>
+  <dialog id="personal-note-dialog" class="workflow-dialog" aria-labelledby="personal-note-title">
+    <form id="personal-note-form"><h2 id="personal-note-title">Личная заметка</h2><p id="personal-note-patient"></p>
+      <p class="hint">Видна в карточке и перед повторным приёмом. Не включается во врачебную запись. Сохраняется в резервной копии карточек.</p>
+      <div class="field"><label for="personal-note-text">Заметка для себя</label><textarea id="personal-note-text" maxlength="5000" rows="6" placeholder="Например, уточнить название препарата на следующем приёме"></textarea><p class="hint">Чтобы удалить заметку, очистите поле и сохраните.</p></div>
+      <p id="personal-note-error" class="field-error" role="alert" hidden></p><div class="dialog-actions"><button id="personal-note-cancel" class="button secondary" type="button">Отмена</button><button id="personal-note-save" class="button primary" type="submit">Сохранить заметку</button></div>
+    </form>
+  </dialog>
+  <dialog id="lab-paste-dialog" class="workflow-dialog" aria-labelledby="lab-paste-title">
+    <form id="lab-paste-form"><h2 id="lab-paste-title">Анализы из текста</h2><p id="lab-paste-patient"></p>
+      <p class="hint">Вставьте результаты одного бланка и одной даты. Поддерживаются строки таблицы с табуляцией, точкой с запятой или разделителем |, а также строки вида «Гемоглобин: 130 г/л». Всё обрабатывается на этом компьютере.</p>
+      <div class="field"><label for="lab-paste-source">Текст из документа</label><textarea id="lab-paste-source" rows="4" aria-describedby="lab-paste-limits"></textarea><p id="lab-paste-limits" class="hint">До 20 000 символов и 100 строк. Единицы и нормы берутся только из вашего текста.</p></div>
+      <button id="lab-paste-parse" class="button secondary" type="button">Разобрать текст</button>
+      <div id="lab-paste-review" hidden><div class="field"><label for="lab-paste-date">Дата результатов из бланка</label><input id="lab-paste-date" type="date"></div>
+        <p id="lab-paste-notices" class="hint"></p>
+        <div class="paste-workspace"><div class="paste-original"><label for="lab-paste-original">Исходный текст для сверки</label><textarea id="lab-paste-original" readonly rows="12"></textarea></div><div><h3>Проверьте и выберите строки</h3><p class="hint">Исправьте название, результат, единицы и нормы. Неразобранные строки можно заполнить вручную или оставить без отметки.</p><button id="lab-paste-select-all" type="button" class="button ghost compact">Выбрать все строки</button><div id="lab-paste-rows"></div></div></div>
+        <label class="check-row paste-confirm"><input id="lab-paste-confirm" type="checkbox"> Я сверил выбранные результаты, единицы, нормы и дату с исходным бланком</label>
+      </div>
+      <p id="lab-paste-error" class="field-error" role="alert" hidden></p><div class="dialog-actions"><button id="lab-paste-cancel" class="button secondary" type="button">Отмена</button><button id="lab-paste-save" class="button primary" type="submit">Сохранить выбранные результаты</button></div>
+    </form>
+  </dialog>
   <dialog id="repeat-dialog" aria-labelledby="repeat-title" aria-describedby="repeat-description">
     <h2 id="repeat-title" tabindex="-1">Повторный приём</h2>
     <p id="repeat-patient"></p>
     <p id="repeat-description">Сводка собрана из сохранённых записей разных дат. Проверьте актуальность сведений. Просмотр источника ничего не переносит.</p>
+    <section id="repeat-personal-note-wrap" class="patient-personal-note" hidden><strong>Личная заметка · только для вас</strong><p id="repeat-personal-note" class="personal-note-text"></p><p class="hint">Не переносится во врачебную запись.</p></section>
     <div id="repeat-briefing" class="patient-briefing"></div>
     <section class="repeat-transfer" aria-labelledby="repeat-transfer-title">
     <h3 id="repeat-transfer-title">Что перенести в новый приём</h3>
@@ -183,3 +220,4 @@
   </dialog>
 </body>
 </html>
+

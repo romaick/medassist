@@ -1,6 +1,10 @@
 # МедАссистент
 
-Поликлинический офлайн-прототип для Windows: структурированный приём, анамнез, осмотр и редактируемый черновик врачебной записи. Версия 0.20.0.
+Поликлинический офлайн-прототип для Windows: структурированный приём, анамнез, осмотр и редактируемый черновик врачебной записи. Версия 0.21.0.
+
+В 0.21.0 появились настройки формата нового черновика с предпросмотром, личная заметка пациента вне врачебной записи и вставка лабораторных результатов из текста. Во вкладке «Запись» откройте «Формат записи»; в карточке — «Личная заметка»; в исследованиях приёма или карточки — «Из текста». Результаты сохраняются только после выбора строк, сверки и подтверждения. Единицы, нормы и даты не придумываются. Ручной черновик сохраняется до явной перегенерации.
+
+Настройки формата локальны этому браузеру и не входят в резервную копию карточек. Личные заметки входят в копию, но не в черновик, медицинский поиск и перенос анамнеза; такие копии требуют 0.21.0+. Разбор текста ограничен20000символами и100строками, неоднозначные строки исправляются вручную. Распознавание фото остаётся отложенным.
 
 В 0.20.0 на вкладке «Запись» можно добавить отдельные основной диагноз, сопутствующие заболевания и осложнения. Для каждого доступны МКБ-10, свободное уточнение, изменение и удаление; стрелки меняют порядок в новом черновике. Прежний текст при первом добавлении сохраняется отдельным основным диагнозом. Изменения снимают отметку проверки, сохраняя ручной текст; повторный приём диагнозы не копирует.
 
@@ -169,7 +173,7 @@
 
 ```powershell
 $env:MEDASSIST_PLAYWRIGHT = 'C:\tools\node_modules\playwright'
-node --test --test-concurrency=2 medassist/tests/core.test.cjs medassist/tests/icd.test.cjs medassist/tests/icd-catalog.test.cjs medassist/tests/ui-patient.test.cjs medassist/tests/ui-workflow.test.cjs medassist/tests/ui-icd.test.cjs medassist/tests/sick-leave.test.cjs medassist/tests/ui-sick-leave.test.cjs medassist/tests/workflow-tools.test.cjs medassist/tests/ui-visit-tools.test.cjs medassist/tests/prescriptions.test.cjs medassist/tests/ui-prescriptions.test.cjs medassist/tests/investigations.test.cjs medassist/tests/ui-investigations.test.cjs medassist/tests/investigation-reports.test.cjs medassist/tests/investigation-catalog.test.cjs medassist/tests/ui-investigation-reports.test.cjs medassist/tests/ui-navigation.test.cjs medassist/tests/backup.test.cjs medassist/tests/ui-backup.test.cjs medassist/tests/ui-finish-review.test.cjs medassist/tests/patient-briefing.test.cjs medassist/tests/ui-patient-briefing.test.cjs medassist/tests/clinical-fields.test.cjs medassist/tests/ui-patient-birthdate.test.cjs medassist/tests/ui-diagnoses.test.cjs
+node --test --test-concurrency=2 medassist/tests/core.test.cjs medassist/tests/icd.test.cjs medassist/tests/icd-catalog.test.cjs medassist/tests/ui-patient.test.cjs medassist/tests/ui-workflow.test.cjs medassist/tests/ui-icd.test.cjs medassist/tests/sick-leave.test.cjs medassist/tests/ui-sick-leave.test.cjs medassist/tests/workflow-tools.test.cjs medassist/tests/ui-visit-tools.test.cjs medassist/tests/prescriptions.test.cjs medassist/tests/ui-prescriptions.test.cjs medassist/tests/investigations.test.cjs medassist/tests/ui-investigations.test.cjs medassist/tests/investigation-reports.test.cjs medassist/tests/investigation-catalog.test.cjs medassist/tests/ui-investigation-reports.test.cjs medassist/tests/ui-navigation.test.cjs medassist/tests/backup.test.cjs medassist/tests/ui-backup.test.cjs medassist/tests/ui-finish-review.test.cjs medassist/tests/patient-briefing.test.cjs medassist/tests/ui-patient-briefing.test.cjs medassist/tests/clinical-fields.test.cjs medassist/tests/ui-patient-birthdate.test.cjs medassist/tests/ui-diagnoses.test.cjs medassist/tests/record-format.test.cjs medassist/tests/lab-paste.test.cjs medassist/tests/ui-record-workflow.test.cjs
 powershell.exe -NoProfile -File medassist/tests/update.test.ps1
 powershell.exe -NoProfile -File medassist/tests/update-link.test.ps1
 ```

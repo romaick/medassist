@@ -77,6 +77,10 @@
   let restorePreview = null;
   let restoreReadToken = 0;
   let repeatPreparation = null;
+  let recordFormatForm = null;
+  let personalNoteForm = null;
+  let labPasteForm = null;
+  const recordFormatKey = 'medassist.record-format.v1';
   const investigationFields = ['kind', 'date', 'name', 'result', 'unit', 'reference', 'note'];
   const prescriptionFields = [
     ['name', 'Название препарата'], ['dose', 'Дозировка / доза на приём'],
@@ -189,10 +193,10 @@
     app.innerHTML = '<div class="shell"><header class="navigation-header"><div class="brand"><img src="icon.svg" alt=""><div><strong>МедАссистент</strong><small>ПОЛИКЛИНИЧЕСКИЙ РЕЖИМ</small></div></div><nav id="main-navigation" class="nav pager-tabs" aria-label="Главная навигация">' +
       navButton('home', 'Обзор', 'home') + navButton('patients', 'Пациенты', 'user') +
       (current ? navButton('visit', 'Текущий приём', 'document') : navButton('new', 'Новый пациент', 'plus')) + navButton('followups', 'Повторные приёмы', 'calendar') + navButton('modules', 'Модули', 'grid') + navButton('help', 'Помощь и данные', 'help') + navButton('check-updates', 'Проверить обновления', 'download') +
-      '</nav></header><aside class="topbar context-sidebar" aria-label="Дата, время и текущий раздел"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><div class="topbar-left"><span class="context-mode">Поликлиника</span><strong>' + sectionName + '</strong></div><div class="side-bottom"><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><div class="version">Прототип 0.20.0 · Демонстрация</div></div></aside><div class="workspace"><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
+      '</nav></header><aside class="topbar context-sidebar" aria-label="Дата, время и текущий раздел"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><div class="topbar-left"><span class="context-mode">Поликлиника</span><strong>' + sectionName + '</strong></div><div class="side-bottom"><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><div class="version">Прототип 0.21.0 · Демонстрация</div></div></aside><div class="workspace"><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
       (state.migrated ? '<div class="migration-notice">Прежние записи доступны со статусом «Черновик». Карточки, данные и ручные тексты сохранены. Исходное сохранение предыдущей версии не изменяется.</div>' : '') +
       ({home: renderHome, patients: renderPatients, followups: renderFollowups, patient: renderPatient, visit: renderVisit, modules: renderModules, help: renderHelp}[state.view])() +
-      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.20.0</span></footer></main></div></div>';
+      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.21.0</span></footer></main></div></div>';
     const reminder = document.createElement('section');
     reminder.id = 'backup-reminder'; reminder.className = 'backup-reminder'; reminder.hidden = true;
     document.getElementById('storage-banner').after(reminder);
@@ -580,8 +584,8 @@
     const visits = patientHistory(patient.id);
     state.patientCardDay = localDate();
     return '<div class="patient-card-page"><div class="patient-card-nav">' + button('patients', 'Все пациенты', 'user', 'ghost') + '<span class="small muted">Только вымышленные данные</span></div>' +
-      '<section class="card patient-card-header" aria-labelledby="patient-heading"><div class="patient-card-identity"><div class="patient-card-name"><h1 id="patient-heading">' + escape(patientName(patient)) + '</h1>' + button('edit-patient', 'Изменить', 'edit', 'secondary compact', 'aria-controls="patient-edit-panel" aria-expanded="' + state.patientEditOpen + '" aria-label="Изменить сведения пациента"') + '</div><div class="patient-card-meta"><span data-patient-age-summary>' + escape(patientIdentityDetails(patient)) + '</span><span>Код пациента: ' + escape(shortId(patient)) + '</span><div id="save-status" class="save-indicator" role="status"></div></div></div>' +
-      '<div class="patient-card-actions"><div id="patient-next-return" class="patient-next-return">' + renderPatientReturn() + '</div>' + button('repeat', visits.length ? 'Повторный приём' : 'Первый приём', 'plus', 'primary') + '</div>' + renderPatientInformation(visits[0]) +
+      '<section class="card patient-card-header" aria-labelledby="patient-heading"><div class="patient-card-identity"><div class="patient-card-name"><h1 id="patient-heading">' + escape(patientName(patient)) + '</h1>' + button('edit-patient', 'Изменить', 'edit', 'secondary compact', 'aria-controls="patient-edit-panel" aria-expanded="' + state.patientEditOpen + '" aria-label="Изменить сведения пациента"') + (patient.personalNote?.trim() ? '' : button('patient-note', 'Личная заметка', 'edit', 'ghost compact')) + '</div><div class="patient-card-meta"><span data-patient-age-summary>' + escape(patientIdentityDetails(patient)) + '</span><span>Код пациента: ' + escape(shortId(patient)) + '</span><div id="save-status" class="save-indicator" role="status"></div></div></div>' +
+      '<div class="patient-card-actions"><div id="patient-next-return" class="patient-next-return">' + renderPatientReturn() + '</div>' + button('repeat', visits.length ? 'Повторный приём' : 'Первый приём', 'plus', 'primary') + '</div>' + renderPatientInformation(visits[0]) + renderPersonalNote(patient) +
       '<div id="patient-edit-panel" class="patient-edit-panel"' + (state.patientEditOpen ? '' : ' hidden') + '>' + patientNameField(patient) + patientBirthDateField(patient) + '<div class="patient-edit-actions"><span class="small muted">Изменения сохраняются при вводе.</span>' + button('finish-patient-edit', 'Готово', 'check', 'secondary compact') + '</div></div></section>' +
       '<nav class="patient-tabs pager-tabs" role="tablist" aria-label="Разделы карточки пациента">' + patientModules.map(module => '<button type="button" id="patient-tab-' + module.id + '" class="tab pager-tab' + (state.patientTab === module.id ? ' active' : '') + '" role="tab" data-action="' + module.action + '" data-card-tab="' + module.id + '" aria-controls="patient-panel-' + module.id + '" aria-selected="' + (state.patientTab === module.id) + '" tabindex="' + (state.patientTab === module.id ? '0' : '-1') + '">' + module.title + '</button>').join('') + '</nav>' +
       '<div id="patient-module-panel" class="pager-viewport">' + patientModules.map(module => '<div id="patient-panel-' + module.id + '" role="tabpanel" aria-labelledby="patient-tab-' + module.id + '" data-card-panel="' + module.id + '" tabindex="0"' + (state.patientTab === module.id ? '' : ' hidden') + '>' + module.render(patient, visits) + '</div>').join('') + '</div></div>';
@@ -668,7 +672,7 @@
     const reports = core.getInvestigationReports(patient).map(report => ({...report, results: report.results.filter(item => selected.has(item.id))})).filter(report => report.results.length);
     const individual = results.filter(item => !item.reportId).sort((a, b) => b.date.localeCompare(a.date) || a.name.localeCompare(b.name, 'ru'));
     return '<section id="visit-investigations" class="card form-card"><h2 id="visit-investigations-heading" tabindex="-1">Исследования в этом приёме</h2><p class="section-intro">Добавьте имеющиеся результаты первичного или повторного приёма. Они сохранятся в карточке пациента и войдут в новый черновик этой записи. Результаты прежних приёмов выбираются отдельно.</p><div class="actions investigation-add-actions">' +
-      button('investigation-add', 'Добавить результат', 'plus', 'primary') + button('investigation-report-add', 'Бланки анализов', 'flask', 'secondary') +
+      button('investigation-add', 'Добавить результат', 'plus', 'primary') + button('investigation-report-add', 'Бланки анализов', 'flask', 'secondary') + button('lab-paste', 'Из текста', 'document', 'secondary') +
       button('investigation-attach', 'Выбрать из карточки', 'document', 'secondary', patient.investigations?.length ? '' : 'disabled') + '</div><div id="visit-investigation-list">' +
       reports.map(report => renderInvestigationReport(report, true)).join('') +
       individual.map(item => '<article class="investigation-report investigation-individual" data-investigation-id="' + escape(item.id) + '"><div class="investigation-report-head"><div><h3>' + escape(item.name) + '</h3><p>' + escape(dateText(item.date)) + '</p></div><div class="actions">' +
@@ -685,7 +689,7 @@
     const chosen = series.find(item => item.key === state.investigationSeriesKey);
     return '<section id="patient-investigations" class="card patient-investigations" aria-labelledby="investigations-heading"><div class="card-head"><h2 id="investigations-heading" tabindex="-1">Анализы и исследования</h2>' +
       '<div class="actions">' + button('investigation-add', 'Добавить результат', 'plus', 'primary compact', (patient.investigations?.length || 0) >= core.MAX_INVESTIGATIONS ? 'disabled' : '') +
-      button('investigation-report-add', 'Бланки анализов', 'flask', 'secondary compact', (patient.investigations?.length || 0) >= core.MAX_INVESTIGATIONS ? 'disabled' : '') + '</div>' +
+      button('investigation-report-add', 'Бланки анализов', 'flask', 'secondary compact', (patient.investigations?.length || 0) >= core.MAX_INVESTIGATIONS ? 'disabled' : '') + button('lab-paste', 'Из текста', 'document', 'secondary compact') + '</div>' +
       '</div><div class="investigations-content"><p class="hint">Выберите готовый набор показателей или введите другое исследование вручную. Нормы переписывайте из конкретного бланка.</p>' +
       '<div id="patient-investigation-reports">' + core.getInvestigationReports(patient).map(report => renderInvestigationReport(report)).join('') + '</div>' +
       (chosen ? '<div class="field investigation-series-field"><label for="investigation-series">Показатель или исследование</label><select id="investigation-series">' + series.map(item => '<option value="' + escape(item.key) + '"' + (item.key === chosen.key ? ' selected' : '') + '>' + escape(item.name + (item.kind === 'lab' ? ' · ' + (item.unit || 'единицы не указаны') : '') + ' · ' + (item.kind === 'lab' ? 'анализ' : 'исследование') + ' · ' + item.results.length + ' рез.') + '</option>').join('') + '</select></div>' + renderInvestigationDynamics(chosen) +
@@ -1360,6 +1364,8 @@
     repeatPreparation = {patientId: patient.id, snapshot, today: brief.today};
     const visits = patientHistory(patient.id);
     document.getElementById('repeat-patient').textContent = patientName(patient);
+    document.getElementById('repeat-personal-note').textContent = patient.personalNote || '';
+    document.getElementById('repeat-personal-note-wrap').hidden = !patient.personalNote?.trim();
     document.getElementById('repeat-title').textContent = visits.length ? 'Повторный приём' : 'Первый приём';
     const select = document.getElementById('repeat-source');
     select.innerHTML = visits.map((entry) => '<option value="' + escape(entry.id) + '">' + escape(dateText(entry.visitDate)) + ' · ' + escape(shortId(entry)) + ' · ' + escape(entry.history.complaints.trim().slice(0, 100) || 'Жалобы не указаны') + '</option>').join('');
@@ -1821,13 +1827,180 @@
     } catch (error) { toast(error.message, true); }
     finally { prescriptionDeletePending = false; }
   }
+  function formMessage(id, message) {
+    const target = document.getElementById(id);
+    target.textContent = message; target.hidden = !message;
+  }
+  function readRecordFormat() {
+    const raw = localStorage.getItem(recordFormatKey);
+    return {raw, value: core.validateRecordFormat(raw === null ? core.DEFAULT_RECORD_FORMAT : JSON.parse(raw))};
+  }
+  function renderRecordFormatControls(value) {
+    document.getElementById('record-format-order').innerHTML = value.order.map((section, index) => '<div class="record-format-row" data-format-section="' + section + '"><label>' + escape(core.DEFAULT_RECORD_FORMAT.titles[section]) + '<input data-format-title maxlength="80" value="' + escape(value.titles[section]) + '"></label><div class="actions"><button type="button" class="button secondary compact" data-format-move="up" aria-label="Выше: ' + escape(core.DEFAULT_RECORD_FORMAT.titles[section]) + '"' + (index === 0 ? ' disabled' : '') + '>↑</button><button type="button" class="button secondary compact" data-format-move="down" aria-label="Ниже: ' + escape(core.DEFAULT_RECORD_FORMAT.titles[section]) + '"' + (index === value.order.length - 1 ? ' disabled' : '') + '>↓</button></div></div>').join('');
+    document.getElementById('format-headings').checked = value.headings;
+    document.getElementById('format-exam-style').value = value.examStyle;
+    document.getElementById('format-recommendations-style').value = value.recommendationsStyle;
+    document.getElementById('format-short-labels').checked = value.shortLabels;
+    document.getElementById('format-return-title').value = value.titles.returnVisit;
+  }
+  function readRecordFormatControls() {
+    const rows = Array.from(document.querySelectorAll('#record-format-order [data-format-section]'));
+    return core.validateRecordFormat({order: rows.map(row => row.dataset.formatSection),
+      titles: {...Object.fromEntries(rows.map(row => [row.dataset.formatSection, row.querySelector('[data-format-title]').value])), returnVisit: document.getElementById('format-return-title').value},
+      headings: document.getElementById('format-headings').checked,
+      examStyle: document.getElementById('format-exam-style').value,
+      recommendationsStyle: document.getElementById('format-recommendations-style').value,
+      shortLabels: document.getElementById('format-short-labels').checked});
+  }
+  function updateRecordFormatPreview() {
+    if (!recordFormatForm?.valid) return;
+    try {
+      const value = readRecordFormatControls();
+      document.getElementById('record-format-preview').value = core.generateDraft(recordFormatForm.entry, recordFormatForm.context, value);
+      formMessage('record-format-error', '');
+    } catch (error) {
+      document.getElementById('record-format-preview').value = '';
+      formMessage('record-format-error', 'Предпросмотр недоступен: ' + error.message);
+    }
+  }
+  function openRecordFormat() {
+    const entry = active();
+    if (!entry || !requireFreshState()) return;
+    let value = core.DEFAULT_RECORD_FORMAT, raw = null, error = '';
+    try { ({value, raw} = readRecordFormat()); }
+    catch (problem) {
+      error = 'Не удалось прочитать настройки формата. ' + problem.message + ' Нажмите «Стандартный формат», чтобы задать их заново.';
+      try { raw = localStorage.getItem(recordFormatKey); } catch (readError) { error += ' ' + readError.message; }
+    }
+    recordFormatForm = {raw, valid: !error, entry: structuredClone(entry), context: structuredClone(encounterContext(entry))};
+    renderRecordFormatControls(value);
+    document.getElementById('record-format-preview').value = '';
+    document.getElementById('record-format-save').disabled = Boolean(error);
+    formMessage('record-format-error', error);
+    if (!error) updateRecordFormatPreview();
+    document.getElementById('record-format-dialog').showModal();
+  }
+  function saveRecordFormat() {
+    if (!recordFormatForm?.valid) return;
+    try {
+      const value = readRecordFormatControls();
+      if (localStorage.getItem(recordFormatKey) !== recordFormatForm.raw) throw new Error('Формат изменён в другом окне. Закройте настройки и откройте их заново.');
+      localStorage.setItem(recordFormatKey, JSON.stringify(value));
+      document.getElementById('record-format-dialog').close();
+      toast('Формат сохранён для следующих черновиков. Уже написанный текст сохранён.');
+    } catch (error) { formMessage('record-format-error', 'Настройки не сохранены. ' + error.message); }
+  }
+  function renderPersonalNote(patient) {
+    if (!patient.personalNote?.trim()) return '';
+    return '<div class="patient-personal-note"><div class="personal-note-heading"><strong>Личная заметка</strong>' + button('patient-note', patient.personalNote?.trim() ? 'Изменить заметку' : 'Добавить заметку', 'edit', 'ghost compact') + '</div>' +
+      (patient.personalNote?.trim() ? '<p id="patient-personal-note" class="personal-note-text">' + escape(patient.personalNote) + '</p><p class="hint">Только для вас · не входит в врачебную запись</p>' : '') + '</div>';
+  }
+  function openPersonalNote() {
+    const patient = selectedPatient();
+    if (!patient || !requireFreshState()) return;
+    personalNoteForm = {patientId: patient.id, snapshot: dataSnapshot()};
+    document.getElementById('personal-note-patient').textContent = patientName(patient);
+    document.getElementById('personal-note-text').value = patient.personalNote || '';
+    formMessage('personal-note-error', '');
+    document.getElementById('personal-note-dialog').showModal();
+    document.getElementById('personal-note-text').focus();
+  }
+  function savePersonalNote() {
+    if (!personalNoteForm) return;
+    try {
+      if (!requireFreshState() || personalNoteForm.snapshot !== dataSnapshot()) throw new Error('Данные изменились. Закройте форму и загрузите сохранённую версию.');
+      const patient = selectedPatient();
+      if (state.view !== 'patient' || patient?.id !== personalNoteForm.patientId) throw new Error('Откройте нужную карточку пациента заново.');
+      const updated = core.setPatientNote(patient, document.getElementById('personal-note-text').value);
+      if (!commitEncounters(state.encounters, state.patients.map(item => item.id === patient.id ? updated : item))) {
+        formMessage('personal-note-error', (state.error || 'Не удалось сохранить заметку.') + ' Введённый текст остаётся в форме.'); return;
+      }
+      document.getElementById('personal-note-dialog').close(); render();
+      toast('Личная заметка сохранена. Врачебная запись не изменена.');
+    } catch (error) { formMessage('personal-note-error', error.message); }
+  }
+  function openLabPaste() {
+    const patient = investigationPatient();
+    if (!patient || !requireFreshState()) return;
+    labPasteForm = {...investigationContext(patient), snapshot: dataSnapshot(), rows: [], source: '', saving: false};
+    document.getElementById('lab-paste-patient').textContent = patientName(patient);
+    for (const id of ['lab-paste-source', 'lab-paste-date', 'lab-paste-original']) document.getElementById(id).value = '';
+    document.getElementById('lab-paste-rows').innerHTML = '';
+    document.getElementById('lab-paste-review').hidden = true;
+    document.getElementById('lab-paste-confirm').checked = false;
+    document.getElementById('lab-paste-save').disabled = false;
+    formMessage('lab-paste-error', '');
+    document.getElementById('lab-paste-dialog').showModal();
+    document.getElementById('lab-paste-source').focus();
+  }
+  function invalidateLabPasteSource() {
+    if (!labPasteForm) return;
+    labPasteForm.rows = []; labPasteForm.source = '';
+    document.getElementById('lab-paste-review').hidden = true;
+    document.getElementById('lab-paste-rows').innerHTML = '';
+    document.getElementById('lab-paste-original').value = '';
+    document.getElementById('lab-paste-confirm').checked = false;
+    formMessage('lab-paste-error', '');
+  }
+  function parseLabPaste() {
+    if (!labPasteForm || labPasteForm.saving) return;
+    try {
+      const source = document.getElementById('lab-paste-source').value;
+      const parsed = window.MedAssistLabPaste.parse(source);
+      if (!parsed.rows.length) throw new Error('Вставьте строки с результатами анализов.');
+      labPasteForm.source = source; labPasteForm.rows = parsed.rows;
+      document.getElementById('lab-paste-original').value = source;
+      document.getElementById('lab-paste-notices').textContent = parsed.notices.join('\n');
+      const labels = {name: 'Показатель', result: 'Результат', unit: 'Единицы из бланка', reference: 'Нормы из бланка', note: 'Примечание'};
+      document.getElementById('lab-paste-rows').innerHTML = parsed.rows.map((row, index) => '<section class="lab-paste-row" data-row-index="' + index + '"><label class="check-row"><input type="checkbox" data-paste-include> Включить строку ' + (index + 1) + '</label><p class="lab-paste-source-line">' + escape(row.sourceLine) + '</p>' +
+        (row.warnings.length ? '<p class="lab-paste-warning">' + escape(row.warnings.join(' ')) + '</p>' : '') + '<div class="paste-fields">' + Object.entries(labels).map(([key, label]) => '<label>' + label + '<input data-paste-field="' + key + '" maxlength="' + core.INVESTIGATION_FIELD_LIMITS[key] + '" value="' + escape(row[key]) + '"></label>').join('') + '</div></section>').join('');
+      document.getElementById('lab-paste-review').hidden = false;
+      document.getElementById('lab-paste-confirm').checked = false;
+      formMessage('lab-paste-error', '');
+      document.getElementById('lab-paste-date').focus();
+    } catch (error) { invalidateLabPasteSource(); formMessage('lab-paste-error', error.message); }
+  }
+  function saveLabPaste() {
+    if (!labPasteForm || labPasteForm.saving) return;
+    try {
+      if (!requireFreshState() || labPasteForm.snapshot !== dataSnapshot()) throw new Error('Данные изменились. Закройте форму и загрузите сохранённую версию.');
+      if (!investigationContextMatches(labPasteForm)) throw new Error('Откройте нужную карточку или приём заново.');
+      if (!labPasteForm.rows.length || labPasteForm.source !== document.getElementById('lab-paste-source').value) throw new Error('Сначала разберите вставленный текст.');
+      const date = document.getElementById('lab-paste-date').value;
+      if (!date) throw new Error('Укажите дату результатов из бланка.');
+      const rows = Array.from(document.querySelectorAll('#lab-paste-rows .lab-paste-row')).filter(row => row.querySelector('[data-paste-include]').checked).map(row => ({
+        fieldId: 'row-' + (Number(row.dataset.rowIndex) + 1),
+        ...Object.fromEntries(['name', 'result', 'unit', 'reference', 'note'].map(key => [key, row.querySelector('[data-paste-field="' + key + '"]').value]))
+      }));
+      if (!rows.length) throw new Error('Отметьте строки, которые нужно сохранить.');
+      if (rows.some(row => !row.name.trim() || !row.result.trim())) throw new Error('Заполните название и результат каждой выбранной строки или снимите с неё отметку.');
+      if (!document.getElementById('lab-paste-confirm').checked) throw new Error('Сверьте выбранные строки с исходным текстом и подтвердите проверку.');
+      if (labPasteForm.encounterId) {
+        const errors = dateInputIssues(active());
+        if (errors.length) throw new Error(errors[0].message);
+      }
+      const patient = investigationPatient();
+      const updated = core.upsertInvestigationReport(patient, {panelId: 'pasted-text', title: 'Лабораторные результаты из текста', kind: 'lab', date, rows});
+      const beforeIds = new Set((patient.investigations || []).map(item => item.id));
+      const added = updated.investigations.filter(item => !beforeIds.has(item.id));
+      labPasteForm.saving = true; document.getElementById('lab-paste-save').disabled = true;
+      if (!commitInvestigationChange(patient, updated, labPasteForm, added.map(item => item.id))) {
+        formMessage('lab-paste-error', (state.error || 'Не удалось сохранить результаты.') + ' Строки остаются в форме.'); return;
+      }
+      state.investigationPatientId = patient.id;
+      state.investigationSeriesKey = core.getInvestigationSeries(updated).find(series => series.results.some(item => item.id === added[0].id)).key;
+      document.getElementById('lab-paste-dialog').close(); labPasteForm = null;
+      finishInvestigationChange('Сохранено результатов: ' + added.length + '.');
+    } catch (error) { formMessage('lab-paste-error', error.message); }
+    finally { if (labPasteForm) { labPasteForm.saving = false; document.getElementById('lab-paste-save').disabled = false; } }
+  }
   function renderDraft() {
     return '<div class="draft-layout"><section class="card draft-controls"><h2>Диагноз и рекомендации</h2><p class="section-intro">Заполняет врач. Рекомендации, повторный приём и больничный включаются в текст только при заполнении или явной отметке.</p>' +
       renderDiagnosis() + renderPrescriptions() + '<div class="recommendation-templates">' + button('visit-templates', 'Мои шаблоны рекомендаций', 'document', 'secondary compact', 'data-template-kind="recommendations"') + '</div>' + field('assessment.plan', 'Рекомендации', 'Необязательно. Пустое поле не попадёт в черновик', {hint: 'Свободный текст и его шаблоны сохраняются отдельно от назначений препаратов.'}) +
       (active().assessment.followUp.trim() ? '<div class="legacy-note"><p>Сохранено из предыдущей версии. Перенесите нужное в рекомендации или выберите дату, затем очистите старый текст, если он больше не нужен.</p>' + field('assessment.followUp', 'Наблюдение из предыдущей версии', '') + '</div>' : '') +
       renderEncounterSickLeave() +
       field('assessment.returnVisitDate', 'Повторный приём', '', {type: 'date', hint: 'Оставьте дату пустой, чтобы не включать повторный приём в запись.'}) +
-      '</section><section class="card draft-card"><div class="card-head"><h2>Текст записи</h2><span class="pill neutral">Редактируемый текст</span></div><div id="draft-state" class="draft-state" role="status"></div><label class="small muted" for="draft-text">Текст записи · свободное редактирование</label><textarea class="draft-editor" id="draft-text" data-field="draft.text" maxlength="100000" aria-describedby="draft-state field-draft-text-error" placeholder="Нажмите «Сформировать черновик» или начните писать здесь.">' + escape(active().draft.text) + '</textarea><p class="field-error" id="field-draft-text-error" hidden></p><div id="record-review-state" class="record-review-state"></div><p class="small muted">Это свободный демонстрационный черновик, не нормативная форма Беларуси.</p></section></div>';
+      '</section><section class="card draft-card"><div class="card-head"><h2>Текст записи</h2>' + button('record-format', 'Формат записи', 'document', 'secondary compact') + '</div><div id="draft-state" class="draft-state" role="status"></div><label class="small muted" for="draft-text">Текст записи · свободное редактирование</label><textarea class="draft-editor" id="draft-text" data-field="draft.text" maxlength="100000" aria-describedby="draft-state field-draft-text-error" placeholder="Нажмите «Сформировать черновик» или начните писать здесь.">' + escape(active().draft.text) + '</textarea><p class="field-error" id="field-draft-text-error" hidden></p><div id="record-review-state" class="record-review-state"></div><p class="small muted">Это свободный демонстрационный черновик, не нормативная форма Беларуси.</p></section></div>';
   }
   function encounterContext(entry = active()) {
     return {patient: patientFor(entry), encounters: state.encounters};
@@ -2422,6 +2595,9 @@
     if (action === 'finish-visit') { finishVisit(); return; }
     if (action === 'patient-history') { switchPatientTab('history'); return; }
     if (action === 'investigations') { switchPatientTab('investigations'); return; }
+    if (action === 'record-format') { openRecordFormat(); return; }
+    if (action === 'patient-note') { openPersonalNote(); return; }
+    if (action === 'lab-paste') { openLabPaste(); return; }
     if (action === 'investigation-add') { openInvestigationForm(); return; }
     if (action === 'investigation-edit') { openInvestigationForm(target.dataset.investigationId); return; }
     if (action === 'investigation-delete') { await deleteInvestigation(target.dataset.investigationId); return; }
@@ -2596,8 +2772,10 @@
       }
       if (entry.draft.text.trim() && !await confirmAction('Заменить текст черновика?', 'Будет создан новый текст из текущих полей приёма. Все ручные правки в этом черновике будут заменены. Чтобы сохранить их отдельно, сначала скачайте .txt.', 'Заменить черновик')) return;
       if (!requireFreshState()) return;
+      const format = readRecordFormat().value;
+      const generatedText = core.generateDraft(entry, encounterContext(entry), format);
       invalidateReview(entry);
-      entry.draft = {text: core.generateDraft(entry, encounterContext(entry)), generatedAt: new Date().toISOString(), sourceFingerprint: core.fingerprint(entry, encounterContext(entry))};
+      entry.draft = {text: generatedText, generatedAt: new Date().toISOString(), sourceFingerprint: core.fingerprint(entry, encounterContext(entry))};
       entry.updatedAt = new Date().toISOString(); persist(); render(); document.getElementById('draft-text').focus(); toast('Черновик сформирован. Проверьте и отредактируйте текст.'); return;
     }
     if (action === 'download-text' || action === 'copy') {
@@ -2824,12 +3002,18 @@
   document.getElementById('restore-backup').addEventListener('click', exportBackup);
   window.addEventListener('beforeunload', (event) => { if ((!state.saved && (state.encounters.length || state.patients.length || state.templates.length || pendingHasContent())) || Object.keys(state.birthDateInputs).length || Object.keys(state.visitDateInputs).length) { event.preventDefault(); event.returnValue = ''; } });
   window.addEventListener('storage', (event) => {
+    if (event.key === recordFormatKey) {
+      if (recordFormatForm) formMessage('record-format-error', 'Формат изменён в другом окне. Закройте настройки и откройте их заново.');
+      return;
+    }
     if (event.key === repository.BACKUP_KEY) { updateBackupStatus(); return; }
     if (!repository.WATCHED_KEYS.includes(event.key) && event.key !== null) return;
     state.externalChange = true; state.saved = false;
     state.error = 'Данные изменены в другом окне. Автосохранение приостановлено, чтобы не перезаписать их. Скачайте нужные изменения или загрузите сохранённую версию.';
     updateSaveStatus();
     if (restorePreview) restoreError('Данные изменены в другом окне. Закройте просмотр, загрузите сохранённую версию и выберите файл заново.', true);
+    if (personalNoteForm) formMessage('personal-note-error', 'Данные изменены в другом окне. Закройте форму и загрузите сохранённую версию перед сохранением.');
+    if (labPasteForm) formMessage('lab-paste-error', 'Данные изменены в другом окне. Закройте форму и загрузите сохранённую версию перед сохранением.');
     if (document.getElementById('repeat-dialog').open) repeatError('Данные изменены в другом окне. Создание приёма заблокировано. Закройте сводку и загрузите сохранённую версию.');
     if (document.getElementById('briefing-source-dialog').open) document.getElementById('briefing-source-notice').textContent = 'Данные изменены в другом окне. Здесь показана прежняя версия только для просмотра; создание приёма заблокировано.';
     if (templateForm) templateError('Данные изменены в другом окне. Закройте шаблоны и загрузите сохранённую версию перед сохранением.');
@@ -2866,6 +3050,46 @@
   });
   document.getElementById('diagnosis-edit-options').addEventListener('pointerdown', event => { if (event.button === 0 && event.target.closest('.diagnosis-option')) event.preventDefault(); });
   document.getElementById('diagnosis-edit-options').addEventListener('click', event => { const option = event.target.closest('[data-code]'); if (option) selectDiagnosis(option.dataset.code); });
+  document.getElementById('record-format-form').addEventListener('submit', event => { event.preventDefault(); saveRecordFormat(); });
+  document.getElementById('record-format-form').addEventListener('input', updateRecordFormatPreview);
+  document.getElementById('record-format-form').addEventListener('change', updateRecordFormatPreview);
+  document.getElementById('record-format-order').addEventListener('click', event => {
+    const button = event.target.closest('[data-format-move]');
+    if (!button || button.disabled) return;
+    const row = button.closest('[data-format-section]');
+    if (button.dataset.formatMove === 'up' && row.previousElementSibling) row.parentElement.insertBefore(row, row.previousElementSibling);
+    else if (button.dataset.formatMove === 'down' && row.nextElementSibling) row.parentElement.insertBefore(row.nextElementSibling, row);
+    const rows = Array.from(document.querySelectorAll('#record-format-order [data-format-section]'));
+    rows.forEach((element, index) => {
+      element.querySelector('[data-format-move="up"]').disabled = index === 0;
+      element.querySelector('[data-format-move="down"]').disabled = index === rows.length - 1;
+    });
+    updateRecordFormatPreview();
+  });
+  document.getElementById('record-format-reset').addEventListener('click', () => {
+    if (!recordFormatForm) return;
+    recordFormatForm.valid = true;
+    renderRecordFormatControls(core.DEFAULT_RECORD_FORMAT);
+    document.getElementById('record-format-save').disabled = false;
+    updateRecordFormatPreview();
+  });
+  document.getElementById('record-format-cancel').addEventListener('click', () => document.getElementById('record-format-dialog').close());
+  document.getElementById('record-format-dialog').addEventListener('close', event => { if (!event.target.open) recordFormatForm = null; });
+  document.getElementById('personal-note-form').addEventListener('submit', event => { event.preventDefault(); savePersonalNote(); });
+  document.getElementById('personal-note-cancel').addEventListener('click', () => document.getElementById('personal-note-dialog').close());
+  document.getElementById('personal-note-dialog').addEventListener('close', event => { if (!event.target.open) personalNoteForm = null; });
+  document.getElementById('lab-paste-form').addEventListener('submit', event => { event.preventDefault(); saveLabPaste(); });
+  document.getElementById('lab-paste-source').addEventListener('input', invalidateLabPasteSource);
+  document.getElementById('lab-paste-parse').addEventListener('click', parseLabPaste);
+  document.getElementById('lab-paste-review').addEventListener('input', event => {
+    if (event.target.id !== 'lab-paste-confirm') document.getElementById('lab-paste-confirm').checked = false;
+  });
+  document.getElementById('lab-paste-select-all').addEventListener('click', () => {
+    document.querySelectorAll('#lab-paste-rows [data-paste-include]').forEach(input => { input.checked = true; });
+    document.getElementById('lab-paste-confirm').checked = false;
+  });
+  document.getElementById('lab-paste-cancel').addEventListener('click', () => document.getElementById('lab-paste-dialog').close());
+  document.getElementById('lab-paste-dialog').addEventListener('close', event => { if (!event.target.open) labPasteForm = null; });
   document.getElementById('investigation-form').addEventListener('submit', event => { event.preventDefault(); saveInvestigation(); });
   document.getElementById('investigation-form').addEventListener('input', event => { if (event.target.value.trim()) event.target.removeAttribute('aria-invalid'); });
   document.getElementById('investigation-cancel').addEventListener('click', () => document.getElementById('investigation-dialog').close());

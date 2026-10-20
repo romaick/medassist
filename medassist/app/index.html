@@ -134,15 +134,30 @@
     <div class="dialog-actions"><button id="template-close" class="button secondary" type="button">Закрыть</button></div>
   </dialog>
   <dialog id="repeat-dialog" aria-labelledby="repeat-title" aria-describedby="repeat-description">
-    <h2 id="repeat-title">Повторный приём</h2>
+    <h2 id="repeat-title" tabindex="-1">Повторный приём</h2>
     <p id="repeat-patient"></p>
-    <p id="repeat-description">Отметьте только сведения анамнеза и назначения препаратов, которые хотите перенести, и подтвердите создание приёма. Без отметок они останутся пустыми. Возраст, пол, жалобы, осмотр, показатели, диагноз и свободные рекомендации заполняются заново.</p>
+    <p id="repeat-description">Сводка собрана из сохранённых записей разных дат. Проверьте актуальность сведений. Просмотр источника ничего не переносит.</p>
+    <div id="repeat-briefing" class="patient-briefing"></div>
+    <section class="repeat-transfer" aria-labelledby="repeat-transfer-title">
+    <h3 id="repeat-transfer-title">Что перенести в новый приём</h3>
+    <p class="hint">Выберите исходный приём и отметьте нужные сведения. Перенос произойдёт только после нажатия «Создать приём». Возраст, пол, жалобы, осмотр, показатели, диагноз, исследования и свободные рекомендации заполняются заново.</p>
     <div id="repeat-source-wrap" class="field"><label for="repeat-source">Перенести из приёма</label><select id="repeat-source"></select><p class="hint">При выборе другой записи отметки сбрасываются. Проверьте актуальность сведений.</p></div>
     <div id="repeat-fields">
       <div id="repeat-history-fields"></div>
       <section id="repeat-prescriptions-section" hidden aria-labelledby="repeat-prescriptions-title"><h3 id="repeat-prescriptions-title">Назначения препаратов из выбранного приёма</h3><p class="hint">Каждое назначение переносится только по вашей отметке. Проверьте параметры и актуальность назначения.</p><div id="repeat-prescriptions"></div></section>
     </div>
-    <div class="dialog-actions"><button id="repeat-cancel" class="button secondary" type="button">Отмена</button><button id="repeat-create" class="button primary" type="button">Создать приём</button></div>
+    </section>
+    <div class="repeat-footer">
+      <p id="repeat-error" class="field-error" role="alert" hidden></p>
+      <p id="repeat-carry-status" class="small" role="status"></p>
+      <div class="dialog-actions"><button id="repeat-cancel" class="button secondary" type="button">Отмена</button><button id="repeat-create" class="button primary" type="button">Создать приём</button></div>
+    </div>
+  </dialog>
+  <dialog id="briefing-source-dialog" aria-labelledby="briefing-source-title" aria-describedby="briefing-source-notice">
+    <h2 id="briefing-source-title" tabindex="-1">Источник сведений</h2>
+    <p id="briefing-source-notice">Только просмотр. Для переноса вернитесь к сводке и отметьте нужные сведения.</p>
+    <div id="briefing-source-content"></div>
+    <div class="dialog-actions"><button id="briefing-source-close" class="button secondary" type="button">Вернуться к сводке</button></div>
   </dialog>
   <dialog id="update-help" aria-labelledby="update-help-title" aria-describedby="update-help-message">
     <h2 id="update-help-title">Подключение кнопки обновления</h2>

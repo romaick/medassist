@@ -298,6 +298,38 @@ body{--sidebar-width:220px}
 @media(max-width:650px){body{--sidebar-width:0px}.shell{display:block}.navigation-header{display:block;padding:12px 12px 8px}.navigation-header .brand{padding:0 4px 10px}.navigation-header .brand strong{font-size:17px}.navigation-header .brand small{font-size:9px}.navigation-header .brand img{width:30px;height:30px}.navigation-header .nav{max-width:100%;gap:3px}.navigation-header .nav button{font-size:12px;min-height:40px}.context-sidebar.topbar{position:static;display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);align-items:center;gap:10px 16px;min-height:0;padding:14px 18px;border-right:0;border-bottom:1px solid var(--line)}.context-sidebar .current-datetime{font-size:13px;gap:4px}.context-sidebar #current-time{font-size:27px}.context-sidebar .topbar-left{gap:4px}.context-sidebar .topbar-left strong{font-size:14px}.context-sidebar .context-mode{font-size:10px}.context-sidebar .side-bottom{display:none}.workspace>main{padding-top:20px}}
 @media print{.navigation-header,.context-sidebar{display:none!important}.shell{display:block}.workspace>main{padding-top:0}}
 .finish-review-dialog{width:min(700px,calc(100vw - 32px));max-width:700px;max-height:calc(100dvh - 32px);overflow-y:auto}
+#repeat-dialog{width:min(1000px,calc(100vw - 32px));max-width:1000px;max-height:calc(100dvh - 32px);padding:28px;scroll-padding-bottom:160px}
+#repeat-title:focus,#briefing-source-title:focus{outline:none}
+#repeat-patient{margin:6px 0;font-size:17px}
+#repeat-description{margin:8px 0 20px}
+.briefing-heading{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:12px}
+.briefing-heading h3{margin:0}
+.briefing-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.briefing-section{border:1px solid var(--line);border-radius:10px;padding:14px 16px;min-width:0;background:#f8faf9;overflow-wrap:anywhere}
+.briefing-section h3{font-size:14px;margin:0 0 10px}
+.briefing-section p{font-size:13px;margin:4px 0;white-space:pre-wrap}
+.briefing-items{list-style:none;margin:0;padding:0}
+.briefing-items li+li{border-top:1px solid var(--line);padding-top:9px;margin-top:9px}
+.briefing-meta{display:flex;align-items:center;flex-wrap:wrap;gap:5px 8px;font-size:12px;color:var(--muted)}
+.briefing-meta .briefing-source{margin-left:auto}
+.briefing-source.button{font-size:12px;padding:3px 7px;min-height:28px}
+.briefing-fact+.briefing-fact{margin-top:12px}
+.briefing-fact>strong{font-size:12px}
+.briefing-future{font-size:11px;color:#805a13;background:#fff5dc;border-radius:4px;padding:1px 5px}
+.briefing-return-date{font-size:19px!important;font-weight:650}
+.repeat-transfer{margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}
+.repeat-transfer>h3{margin:0}
+.repeat-footer{position:sticky;bottom:-28px;z-index:2;background:var(--surface,#fff);padding:12px 0 14px;border-top:1px solid var(--line);margin-top:18px;box-shadow:0 -8px 10px #ffffffd9}
+.repeat-footer .dialog-actions{margin-top:8px}
+.repeat-footer>p{margin:5px 0;overflow-wrap:anywhere}
+#briefing-source-dialog{width:min(800px,calc(100vw - 32px));max-width:800px;max-height:calc(100dvh - 32px);overflow-y:auto;scroll-padding-bottom:80px}
+#briefing-source-notice{font-size:13px;color:var(--muted)}
+#briefing-source-content{overflow-wrap:anywhere}
+#briefing-source-content .historical-fields{grid-template-columns:repeat(2,minmax(0,1fr))}
+#briefing-source-dialog>.dialog-actions{position:sticky;bottom:-28px;background:#fff;padding:12px 0;margin-bottom:0}
+.briefing-saved-text{white-space:pre-wrap;font-size:14px;padding:14px;background:#f5f8f6;border-radius:8px}
+.briefing-source-section+.briefing-source-section{border-top:1px solid var(--line);margin-top:18px;padding-top:12px}
+@media(max-width:650px){#repeat-dialog,#briefing-source-dialog{padding:20px}.briefing-grid{grid-template-columns:minmax(0,1fr)}.briefing-section{padding:12px}.repeat-footer{bottom:-20px}.repeat-footer .dialog-actions{display:flex;gap:8px}.repeat-footer .dialog-actions button{flex:1;padding:10px 12px}.repeat-footer>p{font-size:12px}#briefing-source-content .historical-fields{grid-template-columns:minmax(0,1fr)}#briefing-source-dialog>.dialog-actions{bottom:-20px}}
 .backup-status{margin:20px 0;padding:16px;background:#f3f8f6;border:1px solid var(--line);border-radius:10px;overflow-wrap:anywhere}
 .backup-status h3{font-size:15px;margin:0 0 8px}
 .backup-reminder{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:16px 20px;margin:0 0 24px;border:1px solid #c9dfd8;border-radius:10px;background:#f0f7f4}

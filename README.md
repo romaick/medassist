@@ -1,6 +1,10 @@
 # МедАссистент
 
-Поликлинический офлайн-прототип для Windows: структурированный приём, анамнез, осмотр и редактируемый черновик врачебной записи. Версия 0.18.0.
+Поликлинический офлайн-прототип для Windows: структурированный приём, анамнез, осмотр и редактируемый черновик врачебной записи. Версия 0.19.0.
+
+В 0.19.0 перед повторным приёмом открывается краткая сводка пациента: последние диагнозы, сведения анамнеза, назначения с датами, свежие бланки и отдельные исследования, незакрытые больничные и ближайшая явка. У сведений есть источники, которые открываются только для просмотра. Будущие даты отмечаются; актуальность лечения автоматически не определяется. Сводка может объединять сведения из разных приёмов.
+
+Перенос выполняется из выбранного исходного приёма и только по отмеченным полям после «Создать приём». Все отметки изначально выключены; смена источника сбрасывает выбор. Отмена и просмотр не меняют данные. После отказа сохранения выбор остаётся для повторной попытки; конфликт другого окна или изменение снимка данных блокируют создание.
 
 В 0.18.0 перед завершением приёма показываются технические замечания с переходами к полям. Можно исправить их либо явно завершить с замечаниями; ручной текст не переписывается. Ошибки сохранения и конфликт окон сохраняют форму открытой.
 
@@ -159,7 +163,7 @@
 
 ```powershell
 $env:MEDASSIST_PLAYWRIGHT = 'C:\tools\node_modules\playwright'
-node --test --test-concurrency=2 medassist/tests/core.test.cjs medassist/tests/icd.test.cjs medassist/tests/icd-catalog.test.cjs medassist/tests/ui-patient.test.cjs medassist/tests/ui-workflow.test.cjs medassist/tests/ui-icd.test.cjs medassist/tests/sick-leave.test.cjs medassist/tests/ui-sick-leave.test.cjs medassist/tests/workflow-tools.test.cjs medassist/tests/ui-visit-tools.test.cjs medassist/tests/prescriptions.test.cjs medassist/tests/ui-prescriptions.test.cjs medassist/tests/investigations.test.cjs medassist/tests/ui-investigations.test.cjs medassist/tests/investigation-reports.test.cjs medassist/tests/investigation-catalog.test.cjs medassist/tests/ui-investigation-reports.test.cjs medassist/tests/ui-navigation.test.cjs medassist/tests/backup.test.cjs medassist/tests/ui-backup.test.cjs medassist/tests/ui-finish-review.test.cjs
+node --test --test-concurrency=2 medassist/tests/core.test.cjs medassist/tests/icd.test.cjs medassist/tests/icd-catalog.test.cjs medassist/tests/ui-patient.test.cjs medassist/tests/ui-workflow.test.cjs medassist/tests/ui-icd.test.cjs medassist/tests/sick-leave.test.cjs medassist/tests/ui-sick-leave.test.cjs medassist/tests/workflow-tools.test.cjs medassist/tests/ui-visit-tools.test.cjs medassist/tests/prescriptions.test.cjs medassist/tests/ui-prescriptions.test.cjs medassist/tests/investigations.test.cjs medassist/tests/ui-investigations.test.cjs medassist/tests/investigation-reports.test.cjs medassist/tests/investigation-catalog.test.cjs medassist/tests/ui-investigation-reports.test.cjs medassist/tests/ui-navigation.test.cjs medassist/tests/backup.test.cjs medassist/tests/ui-backup.test.cjs medassist/tests/ui-finish-review.test.cjs medassist/tests/patient-briefing.test.cjs medassist/tests/ui-patient-briefing.test.cjs
 powershell.exe -NoProfile -File medassist/tests/update.test.ps1
 powershell.exe -NoProfile -File medassist/tests/update-link.test.ps1
 ```

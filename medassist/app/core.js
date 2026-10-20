@@ -972,6 +972,52 @@
     }).sort((first, second) => first.date < second.date ? -1 : first.date > second.date ? 1 : first.encounterId < second.encounterId ? -1 : first.encounterId > second.encounterId ? 1 : 0);
   }
 
+  function getPatientBriefing(patient, encounters, today) {
+    assertPatient(patient);
+    if (typeof today !== "string" || !validDate(today)) throw new Error("Укажите сегодняшнюю дату в формате ГГГГ-ММ-ДД.");
+    if (!Array.isArray(encounters) || encounters.length > MAX_ENCOUNTERS) throw new Error("Ожидается список не более 500 приёмов.");
+    const ids = new Set();
+    for (const encounter of encounters) {
+      assertEncounter(encounter);
+      if (ids.has(encounter.id)) throw new Error("Повторный идентификатор приёма.");
+      ids.add(encounter.id);
+    }
+    const visits = encounters.filter(encounter => encounter.patientId === patient.id).sort((first, second) =>
+      second.visitDate.localeCompare(first.visitDate) || second.createdAt.localeCompare(first.createdAt) || first.id.localeCompare(second.id));
+    const facts = Object.fromEntries(CARRY_HISTORY_FIELDS.map(field => {
+      const source = visits.find(encounter => encounter.history[field].trim());
+      return [field, source ? { encounterId: source.id, date: source.visitDate, text: source.history[field] } : null];
+    }));
+    const prescriptionSource = visits.find(encounter => encounter.prescriptions?.length);
+    const investigations = [
+      ...getInvestigationReports(patient).map(report => ({
+        id: report.id, type: "report", date: report.date, title: report.title, kind: report.kind, results: report.results
+      })),
+      ...(patient.investigations || []).filter(item => !item.reportId).map(item => ({
+        id: item.id, type: "result", date: item.date, title: item.name, kind: item.kind, results: [{ ...item }]
+      }))
+    ].sort((first, second) => second.date.localeCompare(first.date) || first.id.localeCompare(second.id) || first.type.localeCompare(second.type));
+    const journal = getSickLeaveJournal(patient, visits);
+    const returnVisits = getReturnVisits(visits, today);
+    return {
+      patientId: patient.id,
+      today,
+      visitCount: visits.length,
+      diagnoses: visits.filter(encounter => encounter.assessment.summary.trim()).slice(0, 3).map(encounter => ({
+        encounterId: encounter.id, date: encounter.visitDate, text: encounter.assessment.summary, reviewStatus: encounter.workflow.reviewStatus
+      })),
+      facts,
+      prescriptions: prescriptionSource ? {
+        encounterId: prescriptionSource.id, date: prescriptionSource.visitDate, items: prescriptionSource.prescriptions.map(item => ({ ...item }))
+      } : null,
+      investigations: investigations.slice(0, 3),
+      investigationCount: investigations.length,
+      sickLeaves: { open: journal.leaves.filter(leave => leave.status === "open"), legacy: journal.legacy },
+      nextReturn: returnVisits.find(item => item.bucket === "today" || item.bucket === "upcoming") || null,
+      overdueReturnCount: returnVisits.filter(item => item.bucket === "past").length
+    };
+  }
+
   function createDemoEncounter(options = {}) {
     const encounter = createEncounter(options);
     encounter.age = "36";
@@ -1365,5 +1411,5 @@
     return validateBundle(parsed);
   }
 
-  return Object.freeze({ createPatient, createEncounter, createRepeatEncounter, createDemoEncounter, upsertInvestigation, removeInvestigation, validateInvestigations, getInvestigationSeries, getInvestigationReports, upsertInvestigationReport, removeInvestigationReport, setEncounterInvestigations, reconcileInvestigationReferences, upsertPrescription, removePrescription, formatPrescription, validatePrescriptions, setReviewStatus, setReturnVisitStatus, linkReturnVisit, getReturnVisits, calculateBmi, calculateSickLeaveDays, calculateSickLeaveTotalDays, getSickLeaveJournal, getEncounterSickLeaveSummary, getEncounterSickLeaveAction, applyEncounterSickLeave, undoEncounterSickLeave, issueSickLeave, extendSickLeave, closeSickLeave, undoSickLeaveAction, createVisitTemplate, applyVisitTemplate, validateTemplates, generateDraft, fingerprint, validatePatient, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_PATIENTS, MAX_PATIENT_LABEL_LENGTH, MAX_SICK_LEAVES, MAX_SICK_LEAVE_EVENTS, MAX_SICK_LEAVE_NUMBER_LENGTH, MAX_TEMPLATES, MAX_TEMPLATE_NAME_LENGTH, MAX_PRESCRIPTIONS, MAX_PRESCRIPTION_FIELD_LENGTH, MAX_PRESCRIPTION_NOTE_LENGTH, MAX_INVESTIGATIONS, MAX_INVESTIGATION_REPORT_FIELDS, INVESTIGATION_FIELD_LIMITS, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
+  return Object.freeze({ createPatient, createEncounter, createRepeatEncounter, createDemoEncounter, upsertInvestigation, removeInvestigation, validateInvestigations, getInvestigationSeries, getInvestigationReports, upsertInvestigationReport, removeInvestigationReport, setEncounterInvestigations, reconcileInvestigationReferences, upsertPrescription, removePrescription, formatPrescription, validatePrescriptions, setReviewStatus, setReturnVisitStatus, linkReturnVisit, getReturnVisits, getPatientBriefing, calculateBmi, calculateSickLeaveDays, calculateSickLeaveTotalDays, getSickLeaveJournal, getEncounterSickLeaveSummary, getEncounterSickLeaveAction, applyEncounterSickLeave, undoEncounterSickLeave, issueSickLeave, extendSickLeave, closeSickLeave, undoSickLeaveAction, createVisitTemplate, applyVisitTemplate, validateTemplates, generateDraft, fingerprint, validatePatient, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_PATIENTS, MAX_PATIENT_LABEL_LENGTH, MAX_SICK_LEAVES, MAX_SICK_LEAVE_EVENTS, MAX_SICK_LEAVE_NUMBER_LENGTH, MAX_TEMPLATES, MAX_TEMPLATE_NAME_LENGTH, MAX_PRESCRIPTIONS, MAX_PRESCRIPTION_FIELD_LENGTH, MAX_PRESCRIPTION_NOTE_LENGTH, MAX_INVESTIGATIONS, MAX_INVESTIGATION_REPORT_FIELDS, INVESTIGATION_FIELD_LIMITS, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
 });

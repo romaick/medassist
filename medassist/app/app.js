@@ -74,6 +74,7 @@
   let backupStatusMinute = '';
   let restorePreview = null;
   let restoreReadToken = 0;
+  let repeatPreparation = null;
   const investigationFields = ['kind', 'date', 'name', 'result', 'unit', 'reference', 'note'];
   const prescriptionFields = [
     ['name', 'Название препарата'], ['dose', 'Дозировка / доза на приём'],
@@ -152,10 +153,10 @@
     app.innerHTML = '<div class="shell"><header class="navigation-header"><div class="brand"><img src="icon.svg" alt=""><div><strong>МедАссистент</strong><small>ПОЛИКЛИНИЧЕСКИЙ РЕЖИМ</small></div></div><nav id="main-navigation" class="nav pager-tabs" aria-label="Главная навигация">' +
       navButton('home', 'Обзор', 'home') + navButton('patients', 'Пациенты', 'user') +
       (current ? navButton('visit', 'Текущий приём', 'document') : navButton('new', 'Новый пациент', 'plus')) + navButton('followups', 'Повторные приёмы', 'calendar') + navButton('modules', 'Модули', 'grid') + navButton('help', 'Помощь и данные', 'help') + navButton('check-updates', 'Проверить обновления', 'download') +
-      '</nav></header><aside class="topbar context-sidebar" aria-label="Дата, время и текущий раздел"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><div class="topbar-left"><span class="context-mode">Поликлиника</span><strong>' + sectionName + '</strong></div><div class="side-bottom"><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><div class="version">Прототип 0.18.0 · Демонстрация</div></div></aside><div class="workspace"><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
+      '</nav></header><aside class="topbar context-sidebar" aria-label="Дата, время и текущий раздел"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><div class="topbar-left"><span class="context-mode">Поликлиника</span><strong>' + sectionName + '</strong></div><div class="side-bottom"><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><div class="version">Прототип 0.19.0 · Демонстрация</div></div></aside><div class="workspace"><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
       (state.migrated ? '<div class="migration-notice">Прежние записи доступны со статусом «Черновик». Карточки, данные и ручные тексты сохранены. Исходное сохранение предыдущей версии не изменяется.</div>' : '') +
       ({home: renderHome, patients: renderPatients, followups: renderFollowups, patient: renderPatient, visit: renderVisit, modules: renderModules, help: renderHelp}[state.view])() +
-      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.18.0</span></footer></main></div></div>';
+      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.19.0</span></footer></main></div></div>';
     const reminder = document.createElement('section');
     reminder.id = 'backup-reminder'; reminder.className = 'backup-reminder'; reminder.hidden = true;
     document.getElementById('storage-banner').after(reminder);
@@ -1172,16 +1173,145 @@
     document.getElementById('patient-next-return').innerHTML = renderPatientReturn();
   }
   const carryFields = [['medications', 'Принимаемые препараты на постоянной основе'], ['allergies', 'Аллергологический анамнез'], ['conditions', 'Заболевания и операции в анамнезе']];
+  function briefingSource(type, id, label = 'Источник') {
+    return '<button type="button" class="briefing-source button ghost compact" data-briefing-source="' + type + '" data-source-id="' + escape(id) + '">' + escape(label) + '</button>';
+  }
+  function briefingDate(value) {
+    return escape(dateText(value)) + (value > localDate() ? ' <span class="briefing-future">Будущая дата</span>' : '');
+  }
+  function briefingText(value, limit = 180) {
+    return escape(value.length > limit ? value.slice(0, limit) + '…' : value);
+  }
+  function renderPatientBriefing(brief) {
+    const empty = '<p class="small">Нет внесённых сведений.</p>';
+    const section = (id, title, content) => '<section id="' + id + '" class="briefing-section"><h3>' + title + '</h3>' + content + '</section>';
+    const diagnoses = brief.diagnoses.map(item => '<li><p>' + briefingText(item.text) + '</p><div class="briefing-meta">' + briefingDate(item.date) + ' · ' +
+      (item.reviewStatus === 'reviewed' ? 'Проверено врачом' : 'Черновик') + briefingSource('encounter', item.encounterId) + '</div></li>').join('');
+    const facts = [['allergies', 'Аллергии'], ['medications', 'Постоянные препараты'], ['conditions', 'Заболевания и операции']].map(([key, label]) => {
+      const fact = brief.facts[key];
+      return '<div class="briefing-fact"><strong>' + label + '</strong><p>' + (fact ? briefingText(fact.text) : 'Не указано в сохранённых записях.') +
+        '</p>' + (fact ? '<div class="briefing-meta">' + briefingDate(fact.date) + briefingSource('encounter', fact.encounterId) + '</div>' : '') + '</div>';
+    }).join('');
+    const prescribed = brief.prescriptions;
+    const prescriptions = prescribed ? '<div class="briefing-meta">' + briefingDate(prescribed.date) + briefingSource('encounter', prescribed.encounterId) +
+      '</div><ul class="briefing-items">' + prescribed.items.slice(0, 3).map(item => '<li>' + briefingText(core.formatPrescription(item)) + '</li>').join('') +
+      '</ul>' + (prescribed.items.length > 3 ? '<p class="small">Ещё назначений: ' + (prescribed.items.length - 3) + '. Все — в источнике.</p>' : '') +
+      '<p class="hint">Назначения из записи; актуальность и продолжение курса требуют вашей проверки.</p>' : empty;
+    const investigations = brief.investigations.map(item => '<li><strong>' + escape(item.title) + '</strong><div class="briefing-meta">' + briefingDate(item.date) +
+      briefingSource(item.type, item.id) + '</div><p>' + briefingText(item.results.slice(0, 2).map(result => result.name + ': ' + result.result +
+      (investigationUnit(result) ? ' ' + investigationUnit(result) : '')).join('; ')) + '</p>' +
+      (item.results.length > 2 ? '<p class="small">Ещё показателей: ' + (item.results.length - 2) + ' — в источнике.</p>' : '') + '</li>').join('');
+    const leaves = brief.sickLeaves.open;
+    const legacy = brief.sickLeaves.legacy;
+    const sick = leaves.slice(0, 3).map(leave => {
+      const last = leave.events.at(-1);
+      const from = leave.periods[0]?.from || last.from;
+      const to = leave.periods.at(-1)?.to || last.to;
+      return '<li><strong>№ ' + escape(leave.number || 'не указан') + ' · Не закрыт</strong><p>' + briefingDate(from) + ' — ' + briefingDate(to) +
+        ' · ' + leave.days + ' календ. дн.</p>' + (to < brief.today ? '<p class="small">Указанный период закончился; закрытие не отмечено.</p>' : '') +
+        briefingSource('journal', leave.id) + '</li>';
+    }).join('');
+    const legacySummary = legacy.length ? '<p class="small">Старые отметки из приёмов: ' + legacy.length + '. Статус закрытия по ним не установлен.</p>' +
+      legacy.slice(0, 2).map(item => '<div class="briefing-meta">№ ' + escape(item.number || 'не указан') + ' · ' +
+        (item.from ? briefingDate(item.from) : 'Начало не указано') + ' — ' + (item.to ? briefingDate(item.to) : 'Окончание не указано') +
+        briefingSource('encounter', item.encounterId) + '</div>').join('') : '';
+    const returnVisit = brief.nextReturn;
+    const upcoming = returnVisit ? '<p class="briefing-return-date">' + escape(dateText(returnVisit.date)) + (returnVisit.date === brief.today ? ' · Сегодня' : '') +
+      '</p><p class="small">' + (returnVisit.linkedEncounterId ? 'Запись приёма уже начата.' : 'Явка назначена.') + '</p>' +
+      briefingSource('encounter', returnVisit.encounterId, 'Где назначена') : '<p class="small">Предстоящая явка не назначена.</p>';
+    return '<div class="briefing-heading"><h3>Краткая сводка</h3><span class="small">Записей: ' + brief.visitCount + '</span></div><div class="briefing-grid">' +
+      section('briefing-facts', 'Последние внесённые сведения', facts) +
+      section('briefing-diagnoses', 'Последние диагнозы', diagnoses ? '<ul class="briefing-items">' + diagnoses + '</ul>' : empty) +
+      section('briefing-prescriptions', 'Последние внесённые назначения', prescriptions) +
+      section('briefing-investigations', 'Свежие исследования', investigations ? '<ul class="briefing-items">' + investigations + '</ul>' +
+        (brief.investigationCount > 3 ? '<p class="small">Показаны 3 из ' + brief.investigationCount + '. Полная история — в карточке.</p>' : '') : empty) +
+      section('briefing-sick-leaves', 'Больничные', (sick ? '<ul class="briefing-items">' + sick + '</ul>' : '<p class="small">Незакрытых листков в журнале нет.</p>') +
+        (leaves.length > 3 ? '<p class="small">Ещё незакрытых листков: ' + (leaves.length - 3) + '.</p>' + briefingSource('journal', '', 'Все незакрытые листки') : '') + legacySummary +
+        (legacy.length > 2 ? briefingSource('journal', '', 'Все старые отметки') : '')) +
+      section('briefing-return', 'Ближайшая повторная явка', upcoming + (brief.overdueReturnCount ? '<p class="small">Прошедших дат без отметки «Состоялся»: ' + brief.overdueReturnCount + '.</p>' : '')) +
+      '</div>';
+  }
+  function briefingJournalSource(patient, leafId) {
+    const journal = core.getSickLeaveJournal(patient, state.encounters);
+    const leaves = leafId ? journal.leaves.filter(item => item.id === leafId) : journal.leaves.filter(item => item.status === 'open');
+    const html = leaves.map(leave => '<section class="briefing-source-section"><h3>№ ' + escape(leave.number || 'не указан') + ' · ' +
+      (leave.status === 'closed' ? 'Закрыт' : 'Не закрыт') + '</h3><p>Всего календарных дней: ' + leave.days + '</p><ul class="briefing-items">' +
+      leave.events.map(event => '<li><strong>' + ({issue: 'Выдача', extend: 'Продление', close: 'Закрытие'}[event.type]) + '</strong> · ' +
+        (event.type === 'close' ? briefingDate(event.to) : briefingDate(event.from) + ' — ' + briefingDate(event.to)) + '</li>').join('') + '</ul></section>').join('');
+    return html + (!leafId && journal.legacy.length ? '<h3>Старые отметки, статус закрытия неизвестен</h3>' +
+      journal.legacy.map(item => '<p>№ ' + escape(item.number || 'не указан') + ' · ' + (item.from ? briefingDate(item.from) : 'Начало не указано') +
+        ' — ' + (item.to ? briefingDate(item.to) : 'Окончание не указано') + ' · Приём ' +
+        escape(dateText(state.encounters.find(entry => entry.id === item.encounterId).visitDate)) + '</p>').join('') : '');
+  }
+  function openBriefingSource(target) {
+    if (!repeatPreparation || !document.getElementById('repeat-dialog').open) return;
+    const patient = state.patients.find(item => item.id === repeatPreparation.patientId);
+    if (!patient) return;
+    const type = target.dataset.briefingSource, id = target.dataset.sourceId;
+    let title, html;
+    if (type === 'encounter') {
+      const entry = state.encounters.find(item => item.id === id && item.patientId === patient.id);
+      if (!entry) return;
+      title = 'Приём от ' + dateText(entry.visitDate);
+      html = '<p>' + recordStatus(entry) + '</p><dl class="historical-fields">' +
+        historyFields.map(([key, label]) => historicalField(label, entry.history[key])).join('') +
+        vitalFields.filter(([key]) => entry.vitals[key].trim()).map(([key, label, unit]) => historicalField(label, entry.vitals[key] + ' ' + unit)).join('') +
+        examDescription(entry.exam, entry.examSelections).filter(item => item.text).map(item => historicalField(item.title, item.text)).join('') +
+        historicalField('Диагноз', entry.assessment.summary) +
+        historicalField('Назначения препаратов', (entry.prescriptions || []).map(core.formatPrescription).join('\n\n')) +
+        historicalField('Рекомендации', entry.assessment.plan) +
+        historicalField('Повторная явка', entry.assessment.returnVisitDate ? dateText(entry.assessment.returnVisitDate) : '') +
+        (entry.assessment.sickLeaveIssued === 'yes' ? historicalField('Больничный', '№ ' + (entry.assessment.sickLeaveNumber || 'не указан') + ' · ' +
+          dateText(entry.assessment.sickLeaveFrom) + ' — ' + dateText(entry.assessment.sickLeaveTo)) : '') +
+        '</dl>' + ((entry.investigationIds || []).length ? '<h3>Выбранные исследования</h3>' +
+          renderReportRows((patient.investigations || []).filter(item => entry.investigationIds.includes(item.id))) : '') +
+        '<h3>Сохранённый текст записи</h3><p class="briefing-saved-text">' + escape(entry.draft.text || 'Текст не заполнен.') + '</p>';
+    } else if (type === 'report' || type === 'result') {
+      const report = type === 'report' ? core.getInvestigationReports(patient).find(item => item.id === id) : null;
+      const result = type === 'result' ? (patient.investigations || []).find(item => item.id === id && !item.reportId) : null;
+      if (!report && !result) return;
+      title = report ? report.title : result.name;
+      html = '<p>' + briefingDate((report || result).date) + '</p>' + renderReportRows(report ? report.results : [result]);
+    } else if (type === 'journal') {
+      title = 'Журнал больничных';
+      html = briefingJournalSource(patient, id);
+      if (!html) return;
+    } else return;
+    document.getElementById('briefing-source-title').textContent = title;
+    document.getElementById('briefing-source-notice').textContent = state.externalChange ?
+      'Сведения в другом окне изменились. Здесь показана прежняя версия только для просмотра. Загрузите сохранённую версию перед созданием приёма.' :
+      'Только просмотр. Для переноса вернитесь к сводке и отметьте нужные сведения.';
+    document.getElementById('briefing-source-content').innerHTML = '<p class="small">' + escape(patientName(patient)) + '</p>' + html;
+    const dialog = document.getElementById('briefing-source-dialog');
+    dialog.showModal(); dialog.scrollTop = 0; document.getElementById('briefing-source-title').focus({preventScroll: true});
+  }
+  function repeatError(message) {
+    const error = document.getElementById('repeat-error');
+    error.textContent = message; error.hidden = !message;
+  }
+  function updateCarryStatus() {
+    const historyCount = document.querySelectorAll('#repeat-fields input[name="carry-history"]:checked').length;
+    const prescriptions = document.querySelectorAll('#repeat-fields input[name="carry-prescription"]:checked').length;
+    document.getElementById('repeat-carry-status').textContent = historyCount || prescriptions ?
+      'После подтверждения: сведений анамнеза — ' + historyCount + ', назначений — ' + prescriptions + '.' :
+      'Перенос не выбран. Новый приём будет создан с пустыми полями.';
+  }
   function updateCarryPreview() {
     const source = state.encounters.find((entry) => entry.id === document.getElementById('repeat-source').value && entry.patientId === state.patientId);
     document.getElementById('repeat-history-fields').innerHTML = source ? carryFields.map(([key, title]) => '<label class="carry-choice"><input type="checkbox" name="carry-history" value="' + key + '"' + (source.history[key].trim() ? '' : ' disabled') + '><span><strong>' + title + '</strong><span class="carry-preview">' + escape(source.history[key].trim() || 'Не заполнено — переносить нечего') + '</span></span></label>').join('') : '';
     const prescriptions = source?.prescriptions || [];
     document.getElementById('repeat-prescriptions-section').hidden = !prescriptions.length;
     document.getElementById('repeat-prescriptions').innerHTML = prescriptions.map(item => '<label class="carry-choice"><input type="checkbox" name="carry-prescription" value="' + escape(item.id) + '"><span><strong>' + escape(item.name) + '</strong><span class="carry-preview">' + escape(core.formatPrescription(item)) + '</span></span></label>').join('');
+    updateCarryStatus();
   }
   function openRepeatDialog(planId = null) {
+    if (document.getElementById('repeat-dialog').open || !requireFreshState()) return;
     state.repeatPlanId = planId;
     const patient = selectedPatient();
+    if (!patient) return;
+    const brief = core.getPatientBriefing(patient, state.encounters, localDate());
+    const snapshot = dataSnapshot();
+    repeatPreparation = {patientId: patient.id, snapshot, today: brief.today};
     const visits = patientHistory(patient.id);
     document.getElementById('repeat-patient').textContent = patientName(patient);
     document.getElementById('repeat-title').textContent = visits.length ? 'Повторный приём' : 'Первый приём';
@@ -1190,17 +1320,25 @@
     select.disabled = Boolean(planId);
     if (planId) select.value = planId;
     document.getElementById('repeat-source-wrap').hidden = !visits.length;
+    document.getElementById('repeat-briefing').innerHTML = renderPatientBriefing(brief);
+    repeatError('');
     updateCarryPreview();
     document.getElementById('repeat-dialog').showModal();
-    document.getElementById('repeat-cancel').focus();
+    document.getElementById('repeat-dialog').scrollTop = 0;
+    document.getElementById('repeat-title').focus({preventScroll: true});
   }
   function createRepeat() {
-    if (state.externalChange) {
+    if (!repeatPreparation || !document.getElementById('repeat-dialog').open) return;
+    if (state.externalChange || repeatPreparation.snapshot !== dataSnapshot()) {
+      state.externalChange = true; state.saved = false;
+      state.error = 'Данные изменены после открытия сводки. Загрузите сохранённую версию перед новым приёмом.';
+      updateSaveStatus();
       document.getElementById('repeat-dialog').close();
-      toast('Данные изменены в другом окне. Загрузите сохранённую версию перед новым приёмом.', true); return;
+      toast('Данные изменены в другом окне или после открытия сводки. Загрузите сохранённую версию перед новым приёмом.', true); return;
     }
     const patient = selectedPatient();
-    if (!patient) throw new Error('Карточка пациента больше не доступна.');
+    if (!patient || patient.id !== repeatPreparation.patientId) throw new Error('Карточка пациента больше не доступна.');
+    if (repeatPreparation.today !== localDate()) throw new Error('Дата изменилась. Закройте сводку и откройте её заново.');
     if (state.encounters.length >= core.MAX_ENCOUNTERS) throw new Error('Достигнут лимит 500 приёмов. Сначала сохраните резервную копию.');
     const visits = patientHistory(patient.id);
     const sourceId = document.getElementById('repeat-source').value;
@@ -1216,8 +1354,8 @@
     const entry = source ? core.createRepeatEncounter(source, {carryHistoryFields: fields, carryPrescriptionIds: prescriptionIds}) : core.createEncounter({patientId: patient.id});
     const encounters = state.encounters.map(item => state.repeatPlanId && item.id === source.id ? {...core.linkReturnVisit(item, entry), updatedAt: entry.createdAt} : item).concat(entry);
     const patients = state.patients.map(item => item.id === patient.id ? {...item, updatedAt: entry.createdAt} : item);
+    if (!commitEncounters(encounters, patients)) { repeatError(state.error || 'Приём не сохранён. Выбор остался в форме; повторите попытку.'); return; }
     document.getElementById('repeat-dialog').close();
-    if (!commitEncounters(encounters, patients)) return;
     state.activeId = entry.id; state.repeatPlanId = null; navigate('visit', 'basic');
     const carried = [fields.length ? 'отмеченные сведения анамнеза' : '', prescriptionIds.length ? 'выбранные назначения препаратов (' + prescriptionIds.length + ')' : ''].filter(Boolean);
     toast(carried.length ? 'Приём создан. Перенесены только ' + carried.join(' и ') + '; проверьте их актуальность.' : 'Приём создан с пустыми полями. Сведения из прошлых приёмов не перенесены.');
@@ -1665,7 +1803,7 @@
     if (restorePreview) document.getElementById('restore-backup-status').textContent = message;
     toast(message, failed);
   }
-  function restoreSnapshot() {
+  function dataSnapshot() {
     return JSON.stringify({
       memory: [state.encounters, state.patients, state.templates, state.pendingNew],
       disk: repository.WATCHED_KEYS.map(key => localStorage.getItem(key))
@@ -1692,7 +1830,7 @@
     const current = backupContents();
     const before = repository.summarizeBackup(core.parseBundle(core.serializeBundle(current.encounters, current.patients, current.templates)));
     const summary = repository.summarizeBackup(bundle);
-    const snapshot = restoreSnapshot();
+    const snapshot = dataSnapshot();
     const dialog = document.getElementById('confirmation');
     const accept = document.getElementById('dialog-accept');
     const cancel = document.getElementById('dialog-cancel');
@@ -1707,7 +1845,7 @@
     const cancelPreview = event => { event.preventDefault(); close(); };
     const replace = () => {
       try {
-        if (state.externalChange || snapshot !== restoreSnapshot()) {
+        if (state.externalChange || snapshot !== dataSnapshot()) {
           restoreError('Данные изменились после открытия копии. Закройте просмотр, загрузите сохранённую версию и выберите файл заново.', true);
           return;
         }
@@ -2515,6 +2653,8 @@
     state.error = 'Данные изменены в другом окне. Автосохранение приостановлено, чтобы не перезаписать их. Скачайте нужные изменения или загрузите сохранённую версию.';
     updateSaveStatus();
     if (restorePreview) restoreError('Данные изменены в другом окне. Закройте просмотр, загрузите сохранённую версию и выберите файл заново.', true);
+    if (document.getElementById('repeat-dialog').open) repeatError('Данные изменены в другом окне. Создание приёма заблокировано. Закройте сводку и загрузите сохранённую версию.');
+    if (document.getElementById('briefing-source-dialog').open) document.getElementById('briefing-source-notice').textContent = 'Данные изменены в другом окне. Здесь показана прежняя версия только для просмотра; создание приёма заблокировано.';
     if (templateForm) templateError('Данные изменены в другом окне. Закройте шаблоны и загрузите сохранённую версию перед сохранением.');
     if (sickLeaveForm) sickLeaveError('Данные изменены в другом окне. Закройте форму и загрузите сохранённую версию перед сохранением.');
     if (investigationForm) investigationError('Данные изменены в другом окне. Закройте форму и загрузите сохранённую версию перед сохранением.');
@@ -2556,9 +2696,18 @@
   document.getElementById('sick-leave-cancel').addEventListener('click', () => document.getElementById('sick-leave-dialog').close());
   document.getElementById('sick-leave-dialog').addEventListener('close', event => { if (!event.target.open) sickLeaveForm = null; });
   document.getElementById('repeat-source').addEventListener('change', updateCarryPreview);
+  document.getElementById('repeat-fields').addEventListener('change', updateCarryStatus);
+  document.getElementById('repeat-dialog').addEventListener('click', event => {
+    const target = event.target.closest('[data-briefing-source]');
+    if (target) openBriefingSource(target);
+  });
+  document.getElementById('repeat-dialog').addEventListener('close', event => {
+    if (!event.target.open) { repeatPreparation = null; state.repeatPlanId = null; document.getElementById('briefing-source-dialog').close(); }
+  });
+  document.getElementById('briefing-source-close').addEventListener('click', () => document.getElementById('briefing-source-dialog').close());
   document.getElementById('repeat-cancel').addEventListener('click', () => document.getElementById('repeat-dialog').close());
   document.getElementById('repeat-create').addEventListener('click', () => {
-    try { createRepeat(); } catch (error) { document.getElementById('repeat-dialog').close(); toast(error.message, true); }
+    try { createRepeat(); } catch (error) { repeatError(error.message); }
   });
   window.setInterval(updateClock, 1000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) updateClock(); });

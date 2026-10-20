@@ -18,8 +18,27 @@
   <a class="skip-link" href="#main">К содержимому</a>
   <div id="app"><main class="loading"><h1>МедАссистент</h1><p>Загрузка локального приложения…</p><noscript>Для работы приложения включите JavaScript в браузере.</noscript></main></div>
   <div id="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="finish-review-dialog" class="finish-review-dialog" aria-labelledby="finish-review-title" aria-describedby="finish-review-description">
+    <h2 id="finish-review-title">Перед завершением приёма</h2>
+    <p id="finish-review-description">Проверьте технические замечания. Содержание записи и необходимость заполнения сведений определяете вы. Текст не будет изменён автоматически.</p>
+    <ul id="finish-review-list" class="finish-review-list"></ul>
+    <p id="finish-review-error" class="field-error" role="alert" hidden></p>
+    <div class="dialog-actions finish-review-actions"><button id="finish-review-cancel" class="button secondary" type="button">Вернуться к записи</button><button id="finish-review-accept" class="button primary" type="button">Завершить с замечаниями</button></div>
+  </dialog>
   <dialog id="confirmation" aria-labelledby="dialog-title" aria-describedby="dialog-message">
     <h2 id="dialog-title"></h2><p id="dialog-message"></p>
+    <section id="restore-preview-area" hidden>
+      <p id="restore-file-info" class="small"></p>
+      <div id="restore-summary" class="restore-summary"></div>
+      <h3>Пациенты в файле</h3>
+      <label for="restore-patient-search">Найти пациента в копии</label>
+      <input id="restore-patient-search" class="search-field" type="search" placeholder="ФИО или код пациента">
+      <p id="restore-patient-count" class="small" role="status"></p>
+      <div id="restore-patients" class="restore-patients"></div>
+      <p id="restore-preview-error" class="restore-error" role="alert" hidden></p>
+      <button id="restore-backup" class="button secondary" type="button">Скачать текущую копию</button>
+      <p id="restore-backup-status" class="small" role="status"></p>
+    </section>
     <div class="dialog-actions"><button id="dialog-cancel" class="button secondary" type="button">Отмена</button><button id="dialog-accept" class="button primary" type="button">Продолжить</button></div>
   </dialog>
   <dialog id="investigation-dialog" aria-labelledby="investigation-title" aria-describedby="investigation-description investigation-patient">

@@ -1,6 +1,12 @@
 # МедАссистент
 
-Поликлинический офлайн-прототип для Windows: структурированный приём, анамнез, осмотр и редактируемый черновик врачебной записи. Версия 0.19.0.
+Поликлинический офлайн-прототип для Windows: структурированный приём, анамнез, осмотр и редактируемый черновик врачебной записи. Версия 0.20.0.
+
+В 0.20.0 на вкладке «Запись» можно добавить отдельные основной диагноз, сопутствующие заболевания и осложнения. Для каждого доступны МКБ-10, свободное уточнение, изменение и удаление; стрелки меняют порядок в новом черновике. Прежний текст при первом добавлении сохраняется отдельным основным диагнозом. Изменения снимают отметку проверки, сохраняя ручной текст; повторный приём диагнозы не копирует.
+
+Дата рождения вводится рядом с ФИО в приёме или в карточке через «Изменить». Возраст рассчитывается на дату каждого приёма; список пациентов показывает дату рождения, возраст на сегодня и код для различения одинаковых ФИО. Если дата неизвестна, доступен прежний ручной возраст. Неверные даты не сохраняются и остаются видны для исправления. Изменение даты рождения возвращает записи карточки в черновики, сохраняя их текст. Для родившихся 29 февраля полный год в невисокосном году меняется 1 марта.
+
+Копии с датой рождения или отдельными диагнозами требуют 0.20.0+. Старые данные читаются, схема остаётся 4. Распознавание фото отложено; компонент не подключён. Зависимости, сетевые разрешения, запуск и обновлятор не менялись.
 
 В 0.19.0 перед повторным приёмом открывается краткая сводка пациента: последние диагнозы, сведения анамнеза, назначения с датами, свежие бланки и отдельные исследования, незакрытые больничные и ближайшая явка. У сведений есть источники, которые открываются только для просмотра. Будущие даты отмечаются; актуальность лечения автоматически не определяется. Сводка может объединять сведения из разных приёмов.
 
@@ -163,7 +169,7 @@
 
 ```powershell
 $env:MEDASSIST_PLAYWRIGHT = 'C:\tools\node_modules\playwright'
-node --test --test-concurrency=2 medassist/tests/core.test.cjs medassist/tests/icd.test.cjs medassist/tests/icd-catalog.test.cjs medassist/tests/ui-patient.test.cjs medassist/tests/ui-workflow.test.cjs medassist/tests/ui-icd.test.cjs medassist/tests/sick-leave.test.cjs medassist/tests/ui-sick-leave.test.cjs medassist/tests/workflow-tools.test.cjs medassist/tests/ui-visit-tools.test.cjs medassist/tests/prescriptions.test.cjs medassist/tests/ui-prescriptions.test.cjs medassist/tests/investigations.test.cjs medassist/tests/ui-investigations.test.cjs medassist/tests/investigation-reports.test.cjs medassist/tests/investigation-catalog.test.cjs medassist/tests/ui-investigation-reports.test.cjs medassist/tests/ui-navigation.test.cjs medassist/tests/backup.test.cjs medassist/tests/ui-backup.test.cjs medassist/tests/ui-finish-review.test.cjs medassist/tests/patient-briefing.test.cjs medassist/tests/ui-patient-briefing.test.cjs
+node --test --test-concurrency=2 medassist/tests/core.test.cjs medassist/tests/icd.test.cjs medassist/tests/icd-catalog.test.cjs medassist/tests/ui-patient.test.cjs medassist/tests/ui-workflow.test.cjs medassist/tests/ui-icd.test.cjs medassist/tests/sick-leave.test.cjs medassist/tests/ui-sick-leave.test.cjs medassist/tests/workflow-tools.test.cjs medassist/tests/ui-visit-tools.test.cjs medassist/tests/prescriptions.test.cjs medassist/tests/ui-prescriptions.test.cjs medassist/tests/investigations.test.cjs medassist/tests/ui-investigations.test.cjs medassist/tests/investigation-reports.test.cjs medassist/tests/investigation-catalog.test.cjs medassist/tests/ui-investigation-reports.test.cjs medassist/tests/ui-navigation.test.cjs medassist/tests/backup.test.cjs medassist/tests/ui-backup.test.cjs medassist/tests/ui-finish-review.test.cjs medassist/tests/patient-briefing.test.cjs medassist/tests/ui-patient-briefing.test.cjs medassist/tests/clinical-fields.test.cjs medassist/tests/ui-patient-birthdate.test.cjs medassist/tests/ui-diagnoses.test.cjs
 powershell.exe -NoProfile -File medassist/tests/update.test.ps1
 powershell.exe -NoProfile -File medassist/tests/update-link.test.ps1
 ```

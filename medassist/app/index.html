@@ -18,6 +18,21 @@
   <a class="skip-link" href="#main">К содержимому</a>
   <div id="app"><main class="loading"><h1>МедАссистент</h1><p>Загрузка локального приложения…</p><noscript>Для работы приложения включите JavaScript в браузере.</noscript></main></div>
   <div id="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="diagnosis-dialog" class="diagnosis-dialog" aria-labelledby="diagnosis-title" aria-describedby="diagnosis-lookup-note">
+    <h2 id="diagnosis-title">Добавить диагноз</h2>
+    <form id="diagnosis-form" novalidate>
+      <div class="field"><label for="diagnosis-kind">Вид диагноза</label><select id="diagnosis-kind"><option value="primary">Основной диагноз</option><option value="comorbidity">Сопутствующее заболевание</option><option value="complication">Осложнение</option></select></div>
+      <p id="diagnosis-legacy-note" class="hint" hidden>После сохранения прежний текст диагноза останется отдельным основным диагнозом. При необходимости разделите его на несколько пунктов вручную.</p>
+      <div class="field diagnosis-field">
+        <label for="diagnosis-text">Диагноз и уточнения</label>
+        <textarea id="diagnosis-text" rows="4" maxlength="10000" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="diagnosis-edit-options" aria-describedby="diagnosis-lookup-note diagnosis-error" placeholder="Введите диагноз или код МКБ-10" required></textarea>
+        <div id="diagnosis-edit-suggestions" class="diagnosis-suggestions" hidden><p id="diagnosis-edit-result-count" role="status" aria-live="polite"></p><div id="diagnosis-edit-options" role="listbox" aria-label="Подсказки МКБ-10"></div></div>
+        <p id="diagnosis-lookup-note" class="hint"></p>
+      </div>
+      <p id="diagnosis-error" class="field-error" role="alert" hidden></p>
+      <div class="dialog-actions"><button id="diagnosis-cancel" class="button secondary" type="button">Отмена</button><button id="diagnosis-save" class="button primary" type="submit">Сохранить диагноз</button></div>
+    </form>
+  </dialog>
   <dialog id="finish-review-dialog" class="finish-review-dialog" aria-labelledby="finish-review-title" aria-describedby="finish-review-description">
     <h2 id="finish-review-title">Перед завершением приёма</h2>
     <p id="finish-review-description">Проверьте технические замечания. Содержание записи и необходимость заполнения сведений определяете вы. Текст не будет изменён автоматически.</p>
@@ -140,7 +155,7 @@
     <div id="repeat-briefing" class="patient-briefing"></div>
     <section class="repeat-transfer" aria-labelledby="repeat-transfer-title">
     <h3 id="repeat-transfer-title">Что перенести в новый приём</h3>
-    <p class="hint">Выберите исходный приём и отметьте нужные сведения. Перенос произойдёт только после нажатия «Создать приём». Возраст, пол, жалобы, осмотр, показатели, диагноз, исследования и свободные рекомендации заполняются заново.</p>
+    <p class="hint">Выберите исходный приём и отметьте нужные сведения. Перенос произойдёт только после нажатия «Создать приём». Пол, жалобы, осмотр, показатели, диагнозы, исследования и свободные рекомендации заполняются заново. Возраст рассчитывается по дате рождения из карточки; если её нет, укажите возраст вручную.</p>
     <div id="repeat-source-wrap" class="field"><label for="repeat-source">Перенести из приёма</label><select id="repeat-source"></select><p class="hint">При выборе другой записи отметки сбрасываются. Проверьте актуальность сведений.</p></div>
     <div id="repeat-fields">
       <div id="repeat-history-fields"></div>

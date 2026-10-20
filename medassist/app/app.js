@@ -24,7 +24,7 @@
     recordFilter: 'draft', followupFilter: 'today', followupDay: '', repeatPlanId: null, patientListDay: '', homeDay: '',
     patientCategory: 'all', patientFilters: defaultPatientFilters(), patientFiltersOpen: false, pendingNew: null,
     patientEditOpen: false, patientCardDay: '', patientTab: 'history', previousOpen: false, previousId: '', previousForId: '',
-    investigationPatientId: '', investigationSeriesKey: ''
+    investigationPatientId: '', investigationSeriesKey: '', birthDateInputs: {}, visitDateInputs: {}
   };
   const icons = {
     home: '<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>',
@@ -63,6 +63,8 @@
   ];
   const examCatalog = window.MedAssistExam;
   let diagnosisSuggestions = null;
+  let diagnosisForm = null;
+  let diagnosisDeletePending = false;
   let sickLeaveForm = null;
   let templateForm = null;
   let prescriptionForm = null;
@@ -117,6 +119,40 @@
   const patientLabel = (entry) => patientName(patientFor(entry));
   const selectedPatient = () => state.patients.find((patient) => patient.id === state.patientId);
   const patientHistory = (id) => state.encounters.filter((entry) => entry.patientId === id).sort((a, b) => b.visitDate.localeCompare(a.visitDate) || b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id));
+  function patientIdentityDetails(patient, date = localDate(), includeCode = false) {
+    const age = core.calculateAge(patient.birthDate || '', date);
+    return (patient.birthDate ? 'Дата рождения: ' + dateText(patient.birthDate) + (age === null ? '' : ' · Полных лет: ' + age) : 'Дата рождения не указана') +
+      (includeCode ? ' · Код: ' + shortId(patient) : '');
+  }
+  function patientBirthDateError(patient, value) {
+    if (!value) return '';
+    if (core.calculateAge(value, localDate()) === null) return value > localDate() ? 'Дата рождения не может быть позже сегодняшнего дня.' : 'Укажите существующую дату рождения.';
+    const visits = patientHistory(patient.id).concat(state.pendingNew?.patient.id === patient.id ? [state.pendingNew.entry] : []);
+    const invalidVisit = visits.find(entry => core.calculateAge(value, entry.visitDate) === null);
+    return invalidVisit ? 'Дата рождения должна быть не позже даты каждого приёма. Проверьте приём ' + dateText(invalidVisit.visitDate) + '.' : '';
+  }
+  function dateInputIssues(entry = active()) {
+    const patient = state.view === 'patient' ? selectedPatient() : entry && patientFor(entry);
+    const issues = [];
+    if (patient && state.birthDateInputs[patient.id]) issues.push({field: 'patient.birthDate', message: state.birthDateInputs[patient.id].error});
+    if (state.view === 'visit' && entry && state.visitDateInputs[entry.id]) issues.push({field: 'visitDate', message: state.visitDateInputs[entry.id].error});
+    return issues;
+  }
+  function updatePatientAgeDisplays(patient) {
+    app.querySelectorAll('[data-patient-age-summary]').forEach(element => {
+      element.textContent = patientIdentityDetails(patient, state.view === 'visit' ? active().visitDate : localDate(), state.view === 'visit');
+    });
+    app.querySelectorAll('[data-encounter-age]').forEach(element => {
+      const entry = state.encounters.find(item => item.id === element.dataset.encounterAge) || active();
+      if (entry) element.textContent = core.encounterAge(entry, patient).trim() || 'Не указан';
+    });
+    const control = document.getElementById('field-age');
+    if (control) {
+      control.value = core.encounterAge(active(), patient);
+      control.readOnly = Boolean(patient.birthDate);
+      document.getElementById('field-age-hint').textContent = patient.birthDate ? 'Рассчитан по дате рождения на дату этого приёма.' : 'Можно указать вручную, если дата рождения неизвестна.';
+    }
+  }
   const get = (object, path) => path.split('.').reduce((value, key) => value[key], object);
   function set(object, path, value) {
     const parts = path.split('.');
@@ -128,7 +164,7 @@
     return '<button type="button" class="button ' + variant + '" data-action="' + action + '" ' + extra + '>' + (symbol ? icon(symbol) : '') + escape(text) + '</button>';
   }
   function field(path, title, placeholder = '', options = {}) {
-    const value = get(active(), path);
+    const value = path === 'visitDate' && state.visitDateInputs[active().id] ? state.visitDateInputs[active().id].value : get(active(), path);
     const id = 'field-' + path.replaceAll('.', '-');
     const shared = ' id="' + id + '" data-field="' + path + '" aria-describedby="' + id + '-error' + (options.hint ? ' ' + id + '-hint' : '') + '"';
     let control;
@@ -153,10 +189,10 @@
     app.innerHTML = '<div class="shell"><header class="navigation-header"><div class="brand"><img src="icon.svg" alt=""><div><strong>МедАссистент</strong><small>ПОЛИКЛИНИЧЕСКИЙ РЕЖИМ</small></div></div><nav id="main-navigation" class="nav pager-tabs" aria-label="Главная навигация">' +
       navButton('home', 'Обзор', 'home') + navButton('patients', 'Пациенты', 'user') +
       (current ? navButton('visit', 'Текущий приём', 'document') : navButton('new', 'Новый пациент', 'plus')) + navButton('followups', 'Повторные приёмы', 'calendar') + navButton('modules', 'Модули', 'grid') + navButton('help', 'Помощь и данные', 'help') + navButton('check-updates', 'Проверить обновления', 'download') +
-      '</nav></header><aside class="topbar context-sidebar" aria-label="Дата, время и текущий раздел"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><div class="topbar-left"><span class="context-mode">Поликлиника</span><strong>' + sectionName + '</strong></div><div class="side-bottom"><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><div class="version">Прототип 0.19.0 · Демонстрация</div></div></aside><div class="workspace"><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
+      '</nav></header><aside class="topbar context-sidebar" aria-label="Дата, время и текущий раздел"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><div class="topbar-left"><span class="context-mode">Поликлиника</span><strong>' + sectionName + '</strong></div><div class="side-bottom"><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><div class="version">Прототип 0.20.0 · Демонстрация</div></div></aside><div class="workspace"><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
       (state.migrated ? '<div class="migration-notice">Прежние записи доступны со статусом «Черновик». Карточки, данные и ручные тексты сохранены. Исходное сохранение предыдущей версии не изменяется.</div>' : '') +
       ({home: renderHome, patients: renderPatients, followups: renderFollowups, patient: renderPatient, visit: renderVisit, modules: renderModules, help: renderHelp}[state.view])() +
-      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.19.0</span></footer></main></div></div>';
+      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.20.0</span></footer></main></div></div>';
     const reminder = document.createElement('section');
     reminder.id = 'backup-reminder'; reminder.className = 'backup-reminder'; reminder.hidden = true;
     document.getElementById('storage-banner').after(reminder);
@@ -516,7 +552,7 @@
       const uniqueLeaves = new Map(shownLeaves.map(leave => [JSON.stringify([leave.number, leave.from, leave.to, leave.open]), leave]));
       const sickText = [...uniqueLeaves.values()].map(leave => '<p class="patient-sick"><span>ЛН ' + (leave.number.trim() ? '№' + escape(leave.number) : '· номер не указан') + '</span><span class="patient-cell-note">' + (leave.from ? 'с ' + escape(dateText(leave.from)) : 'начало не указано') + ' · ' + (leave.to ? 'по ' + escape(dateText(leave.to)) : 'окончание не указано') + '</span>' + (leave.days !== null ? '<span class="patient-cell-note patient-sick-days">Календарных дней: ' + leave.days + '</span>' : '') + (leave.journal ? '<span class="patient-cell-note">' + (leave.open ? 'Открыт' : 'Закрыт') + ' · в журнале</span>' : '') + (leave.current || (leave.journal && !leave.open) ? '' : '<span class="patient-cell-note">' + (leave.unknown ? 'период требует уточнения' : leave.from > today ? 'период ещё не начался' : 'указанный период прошёл') + '</span>') + '</p>').join('');
       const matchButton = entry => button('open', 'Приём ' + dateText(entry.visitDate) + ' · ' + shortId(entry), null, 'secondary compact', 'data-id="' + escape(entry.id) + '"');
-      return '<div class="visit-row patient-row" data-patient-id="' + escape(patient.id) + '"><div class="patient-cell patient-identity visit-text"><strong>' + escape(patientName(patient)) + '</strong><p>Код: ' + escape(shortId(patient)) + ' · Приёмов: ' + visits.length + '</p></div>' +
+      return '<div class="visit-row patient-row" data-patient-id="' + escape(patient.id) + '"><div class="patient-cell patient-identity visit-text"><strong>' + escape(patientName(patient)) + '</strong><p class="patient-birth-summary">' + escape(patientIdentityDetails(patient)) + '</p><p>Код: ' + escape(shortId(patient)) + ' · Приёмов: ' + visits.length + '</p></div>' +
         '<div class="patient-cell patient-last"><p>' + (visits.length ? '<span class="patient-cell-label">Последний приём: </span>' + escape(dateText(visits[0].visitDate)) : 'Приёмов пока нет') + '</p></div>' +
         '<div class="patient-cell patient-return-cell">' + (next ? '<p class="patient-return"><span class="patient-cell-label">Повторная явка: </span>' + escape(dateText(next)) + (next === today ? ' · сегодня' : '') + '</p>' : '') +
         (past ? '<p class="patient-overdue">' + escape(dateText(past)) + '<span class="patient-cell-note">Дата прошла · исход не отмечен</span></p>' : '') +
@@ -531,19 +567,27 @@
   function patientNameField(patient) {
     return '<div class="field full"><label for="patient-label">ФИО пациента</label><input id="patient-label" type="text" maxlength="' + core.MAX_PATIENT_LABEL_LENGTH + '" autocomplete="off" value="' + escape(patient.label) + '" placeholder="Например, Тестов Иван Демонстрационный" aria-describedby="patient-label-hint"><p id="patient-label-hint" class="hint">Только вымышленные фамилия, имя и отчество. ФИО сохраняется в карточке и отображается во всех её приёмах. Если поле пустое, используется код пациента.</p></div>';
   }
+  function patientBirthDateField(patient) {
+    const pending = state.birthDateInputs[patient.id];
+    return '<div class="field patient-birth-field"><label for="patient-birth-date">Дата рождения</label><input id="patient-birth-date" data-field="patient.birthDate" type="date" max="' + localDate() + '" value="' + escape(pending ? pending.value : patient.birthDate || '') + '" aria-invalid="' + Boolean(pending) + '" aria-describedby="patient-birth-date-hint patient-birth-date-error"><p id="patient-birth-date-hint" class="hint">Необязательно. Сохраняется в карточке; возраст рассчитывается на дату каждого приёма.</p><p id="patient-birth-date-error" class="field-error"' + (pending ? '' : ' hidden') + '>' + escape(pending?.error || '') + '</p></div>';
+  }
+  function renderEncounterAge() {
+    const patient = patientFor(active());
+    return '<div class="field"><label for="field-age">Возраст, полных лет</label><input id="field-age" data-field="age" type="text" inputmode="decimal" maxlength="30" value="' + escape(core.encounterAge(active(), patient)) + '" placeholder="Не указан"' + (patient.birthDate ? ' readonly' : '') + ' aria-describedby="field-age-error field-age-hint"><p id="field-age-hint" class="hint">' + (patient.birthDate ? 'Рассчитан по дате рождения на дату этого приёма.' : 'Можно указать вручную, если дата рождения неизвестна.') + '</p><p id="field-age-error" class="field-error" hidden></p></div>';
+  }
   function renderPatient() {
     const patient = selectedPatient();
     const visits = patientHistory(patient.id);
     state.patientCardDay = localDate();
     return '<div class="patient-card-page"><div class="patient-card-nav">' + button('patients', 'Все пациенты', 'user', 'ghost') + '<span class="small muted">Только вымышленные данные</span></div>' +
-      '<section class="card patient-card-header" aria-labelledby="patient-heading"><div class="patient-card-identity"><div class="patient-card-name"><h1 id="patient-heading">' + escape(patientName(patient)) + '</h1>' + button('edit-patient', 'Изменить', 'edit', 'secondary compact', 'aria-controls="patient-edit-panel" aria-expanded="' + state.patientEditOpen + '" aria-label="Изменить ФИО пациента"') + '</div><div class="patient-card-meta"><span>Код пациента: ' + escape(shortId(patient)) + '</span><div id="save-status" class="save-indicator" role="status"></div></div></div>' +
+      '<section class="card patient-card-header" aria-labelledby="patient-heading"><div class="patient-card-identity"><div class="patient-card-name"><h1 id="patient-heading">' + escape(patientName(patient)) + '</h1>' + button('edit-patient', 'Изменить', 'edit', 'secondary compact', 'aria-controls="patient-edit-panel" aria-expanded="' + state.patientEditOpen + '" aria-label="Изменить сведения пациента"') + '</div><div class="patient-card-meta"><span data-patient-age-summary>' + escape(patientIdentityDetails(patient)) + '</span><span>Код пациента: ' + escape(shortId(patient)) + '</span><div id="save-status" class="save-indicator" role="status"></div></div></div>' +
       '<div class="patient-card-actions"><div id="patient-next-return" class="patient-next-return">' + renderPatientReturn() + '</div>' + button('repeat', visits.length ? 'Повторный приём' : 'Первый приём', 'plus', 'primary') + '</div>' + renderPatientInformation(visits[0]) +
-      '<div id="patient-edit-panel" class="patient-edit-panel"' + (state.patientEditOpen ? '' : ' hidden') + '>' + patientNameField(patient) + '<div class="patient-edit-actions"><span class="small muted">Изменения сохраняются при вводе.</span>' + button('finish-patient-edit', 'Готово', 'check', 'secondary compact') + '</div></div></section>' +
+      '<div id="patient-edit-panel" class="patient-edit-panel"' + (state.patientEditOpen ? '' : ' hidden') + '>' + patientNameField(patient) + patientBirthDateField(patient) + '<div class="patient-edit-actions"><span class="small muted">Изменения сохраняются при вводе.</span>' + button('finish-patient-edit', 'Готово', 'check', 'secondary compact') + '</div></div></section>' +
       '<nav class="patient-tabs pager-tabs" role="tablist" aria-label="Разделы карточки пациента">' + patientModules.map(module => '<button type="button" id="patient-tab-' + module.id + '" class="tab pager-tab' + (state.patientTab === module.id ? ' active' : '') + '" role="tab" data-action="' + module.action + '" data-card-tab="' + module.id + '" aria-controls="patient-panel-' + module.id + '" aria-selected="' + (state.patientTab === module.id) + '" tabindex="' + (state.patientTab === module.id ? '0' : '-1') + '">' + module.title + '</button>').join('') + '</nav>' +
       '<div id="patient-module-panel" class="pager-viewport">' + patientModules.map(module => '<div id="patient-panel-' + module.id + '" role="tabpanel" aria-labelledby="patient-tab-' + module.id + '" data-card-panel="' + module.id + '" tabindex="0"' + (state.patientTab === module.id ? '' : ' hidden') + '>' + module.render(patient, visits) + '</div>').join('') + '</div></div>';
   }
   function renderPatientHistory(patient, visits) {
-    return '<section id="patient-history" class="card"><div class="card-head"><h2 id="patient-history-heading" tabindex="-1">История приёмов</h2><span class="result-count">' + visits.length + ' записей</span></div><div class="list">' + (visits.length ? visits.map((entry) => '<div class="visit-row patient-visit-row" data-visit-id="' + escape(entry.id) + '"><div class="visit-text"><strong>' + escape(dateText(entry.visitDate)) + '</strong><p>' + escape(entry.history.complaints.trim() || 'Жалобы не указаны') + '</p><p>Диагноз: ' + escape(entry.assessment.summary.trim() || 'не указан') + '</p><p>' + recordStatus(entry) + ' · Приём ' + escape(shortId(entry)) + '</p></div>' + button('open', 'Открыть приём', null, 'secondary compact', 'data-id="' + escape(entry.id) + '"') + '</div>').join('') : '<div class="empty"><p>Здесь появятся приёмы этого пациента.</p></div>') + '</div></section>';
+    return '<section id="patient-history" class="card"><div class="card-head"><h2 id="patient-history-heading" tabindex="-1">История приёмов</h2><span class="result-count">' + visits.length + ' записей</span></div><div class="list">' + (visits.length ? visits.map((entry) => '<div class="visit-row patient-visit-row" data-visit-id="' + escape(entry.id) + '"><div class="visit-text"><strong>' + escape(dateText(entry.visitDate)) + '</strong><span class="patient-history-age"> · Возраст на дату приёма: <span data-encounter-age="' + escape(entry.id) + '">' + escape(core.encounterAge(entry, patient).trim() || 'Не указан') + '</span></span><p>' + escape(entry.history.complaints.trim() || 'Жалобы не указаны') + '</p><p>Диагноз: ' + escape(entry.assessment.summary.trim() || 'не указан') + '</p><p>' + recordStatus(entry) + ' · Приём ' + escape(shortId(entry)) + '</p></div>' + button('open', 'Открыть приём', null, 'secondary compact', 'data-id="' + escape(entry.id) + '"') + '</div>').join('') : '<div class="empty"><p>Здесь появятся приёмы этого пациента.</p></div>') + '</div></section>';
   }
   function investigationNumber(value) {
     const absolute = Math.abs(value);
@@ -923,7 +967,7 @@
     try {
       const ids = Array.from(document.querySelectorAll('#investigation-attach-options [name="attach-investigation"]:checked'), input => input.value);
       const updated = core.setEncounterInvestigations(active(), investigationPatient(), ids);
-      if (!commitPrescription(updated)) { investigationAttachError((state.error || 'Не удалось сохранить выбор.') + ' Выбранные результаты остаются отмечены.'); return; }
+      if (!commitVisitChange(updated)) { investigationAttachError((state.error || 'Не удалось сохранить выбор.') + ' Выбранные результаты остаются отмечены.'); return; }
       document.getElementById('investigation-attach-dialog').close(); investigationAttachForm = null;
       finishInvestigationChange('Выбор исследований сохранён для этого приёма.');
     } catch (error) { investigationAttachError(error.message); }
@@ -942,7 +986,7 @@
       if (!await confirmAction('Убрать исследования из приёма?', 'Результаты останутся в карточке пациента. Они не войдут в новый черновик этого приёма. Сохранённый текст останется для вашей проверки.', 'Убрать из приёма') || !requireFreshState()) return;
       if (!investigationContextMatches(context)) { toast('Откройте нужный приём заново.', true); return; }
       const updated = core.setEncounterInvestigations(active(), patient, (active().investigationIds || []).filter(id => !ids.has(id)));
-      if (!commitPrescription(updated)) return;
+      if (!commitVisitChange(updated)) return;
       finishInvestigationChange('Связь с приёмом убрана. Результаты остаются в карточке.');
     } catch (error) { toast(error.message, true); }
     finally { investigationDeletePending = false; }
@@ -1156,7 +1200,7 @@
     if (!entry) return '<section id="patient-information" class="patient-information"><p class="patient-fact-empty">Сведения появятся после первого приёма.</p></section>';
     const sex = {female: 'Женский', male: 'Мужской', unspecified: 'Не уточнён'}[entry.sex] || 'Не указан';
     return '<section id="patient-information" class="patient-information" aria-labelledby="patient-information-heading"><div class="patient-information-heading"><h2 id="patient-information-heading">Сведения из последнего приёма · <time datetime="' + escape(entry.visitDate) + '">' + escape(dateText(entry.visitDate)) + '</time></h2>' + button('edit-patient-information', 'Изменить сведения', 'edit', 'secondary compact', 'data-id="' + escape(entry.id) + '" aria-label="Изменить сведения в приёме от ' + escape(dateText(entry.visitDate)) + '"') + '</div>' +
-      '<dl class="patient-demographics"><div><dt>Возраст на дату приёма</dt><dd data-patient-information="age">' + escape(entry.age.trim() || 'Не указан') + '</dd></div><div><dt>Пол</dt><dd data-patient-information="sex">' + escape(sex) + '</dd></div></dl>' +
+      '<dl class="patient-demographics"><div><dt>Возраст на дату приёма</dt><dd data-patient-information="age" data-encounter-age="' + escape(entry.id) + '">' + escape(core.encounterAge(entry, patientFor(entry)).trim() || 'Не указан') + '</dd></div><div><dt>Пол</dt><dd data-patient-information="sex">' + escape(sex) + '</dd></div></dl>' +
       '<dl class="patient-facts">' + [['allergies', 'Аллергии'], ['medications', 'Постоянные препараты'], ['conditions', 'Заболевания и операции']].map(([key, title]) => '<div><dt>' + title + '</dt><dd data-patient-information="' + key + '">' + patientInformationValue(entry.history[key]) + '</dd></div>').join('') + '</dl></section>';
   }
   function renderPatientReturn() {
@@ -1171,6 +1215,7 @@
   function refreshPatientReturn() {
     state.patientCardDay = localDate();
     document.getElementById('patient-next-return').innerHTML = renderPatientReturn();
+    updatePatientAgeDisplays(selectedPatient());
   }
   const carryFields = [['medications', 'Принимаемые препараты на постоянной основе'], ['allergies', 'Аллергологический анамнез'], ['conditions', 'Заболевания и операции в анамнезе']];
   function briefingSource(type, id, label = 'Источник') {
@@ -1309,6 +1354,7 @@
     state.repeatPlanId = planId;
     const patient = selectedPatient();
     if (!patient) return;
+    if (state.birthDateInputs[patient.id]) { toast('Перед созданием приёма исправьте дату рождения в карточке пациента.', true); return; }
     const brief = core.getPatientBriefing(patient, state.encounters, localDate());
     const snapshot = dataSnapshot();
     repeatPreparation = {patientId: patient.id, snapshot, today: brief.today};
@@ -1483,7 +1529,7 @@
   function renderVisit() {
     if (state.previousForId !== active().id) { state.previousOpen = false; state.previousId = ''; state.previousForId = active().id; }
     const previous = state.previousOpen && precedingVisits().length > 0;
-    return '<section class="visit-context" aria-label="Пациент и приём"><div class="visit-heading"><h1 id="visit-patient-heading">' + escape(patientLabel(active())) + '</h1><div class="actions">' + button('previous-visit', 'Предыдущий приём', 'clock', 'secondary compact', 'aria-controls="previous-visit-panel" aria-expanded="' + previous + '"' + (precedingVisits().length ? '' : ' disabled')) + button('patient', 'Карточка и история', 'user', 'secondary compact', 'data-patient-id="' + escape(active().patientId) + '"') + '</div></div><div class="visit-meta"><p id="visit-date-summary">Демонстрационный приём · ' + escape(dateText(active().visitDate)) + '</p><div id="visit-record-status">' + recordStatus(active()) + '</div><div id="save-status" class="save-indicator" role="status"></div></div>' +
+    return '<section class="visit-context" aria-label="Пациент и приём"><div class="visit-heading"><h1 id="visit-patient-heading">' + escape(patientLabel(active())) + '</h1><div class="actions">' + button('previous-visit', 'Предыдущий приём', 'clock', 'secondary compact', 'aria-controls="previous-visit-panel" aria-expanded="' + previous + '"' + (precedingVisits().length ? '' : ' disabled')) + button('patient', 'Карточка и история', 'user', 'secondary compact', 'data-patient-id="' + escape(active().patientId) + '"') + '</div></div><p class="patient-birth-summary" data-patient-age-summary>' + escape(patientIdentityDetails(patientFor(active()), active().visitDate, true)) + '</p><div class="visit-meta"><p id="visit-date-summary">Демонстрационный приём · ' + escape(dateText(active().visitDate)) + '</p><div id="visit-record-status">' + recordStatus(active()) + '</div><div id="save-status" class="save-indicator" role="status"></div></div>' +
       '<nav class="tab-bar pager-tabs" role="tablist" aria-label="Разделы приёма">' + tabs.map(([key, label], i) => '<button type="button" id="visit-tab-' + key + '" class="tab pager-tab' + (state.tab === key ? ' active' : '') + '" role="tab" data-action="tab" data-tab="' + key + '" aria-controls="visit-form-panel" aria-selected="' + (state.tab === key) + '" tabindex="' + (state.tab === key ? '0' : '-1') + '"' + (state.tab === key ? ' aria-current="step"' : '') + '><span class="step-number">' + (i + 1) + '</span>' + label + '</button>').join('') + '</nav></section>' +
       '<div class="visit-comparison' + (previous ? ' has-previous' : '') + '"><div id="visit-form-panel" class="current-visit-form pager-viewport" role="tabpanel" aria-labelledby="visit-tab-' + state.tab + '" tabindex="0">' + ({basic: renderBasic, history: renderHistory, exam: renderExam, investigations: renderVisitInvestigations, draft: renderDraft}[state.tab])() + '</div><aside id="previous-visit-panel" class="card previous-visit-panel" aria-labelledby="previous-visit-title"' + (previous ? '' : ' hidden') + '>' + (previous ? renderPreviousVisit() : '') + '</aside></div>' + renderVisitActions();
   }
@@ -1512,10 +1558,10 @@
     return '<div class="form-footer">' + (previous ? button('tab', 'Назад', null, 'secondary', 'data-tab="' + previous + '"') : '<span class="muted small">Все поля необязательны</span>') + button('tab', label, 'arrow', 'primary', 'data-tab="' + next + '"') + '</div>';
   }
   function renderBasic() {
-    return '<div class="form-layout"><section class="card form-card"><h2>Сведения о приёме</h2><p class="section-intro">Укажите вымышленное ФИО и сведения об этом приёме. Все поля необязательны.</p><div class="field-grid three">' + patientNameField(patientFor(active())) +
-      field('visitDate', 'Дата приёма', '', {type: 'date'}) + field('age', 'Возраст, полных лет', 'Не указан', {type: 'text', numeric: true}) +
+    return '<div class="form-layout"><section class="card form-card"><h2>Сведения о приёме</h2><p class="section-intro">Укажите вымышленное ФИО и сведения об этом приёме. Все поля необязательны.</p><div class="field-grid three">' + patientNameField(patientFor(active())) + patientBirthDateField(patientFor(active())) +
+      field('visitDate', 'Дата приёма', '', {type: 'date'}) + renderEncounterAge() +
       field('sex', 'Пол', '', {select: [['', 'Не указан'], ['female', 'Женский'], ['male', 'Мужской'], ['unspecified', 'Не уточнён']]}) +
-      '</div>' + '</section>' + aside('Карточка пациента', 'Сведения сохраняются при вводе. ФИО связано с карточкой пациента; возраст и пол относятся к этому приёму. Для переноса данных используйте резервную копию.') + '</div>';
+      '</div>' + '</section>' + aside('Карточка пациента', 'ФИО и дата рождения связаны с карточкой пациента. Возраст рассчитывается на дату приёма; если дата рождения неизвестна, можно указать возраст вручную. Для переноса данных используйте резервную копию.') + '</div>';
   }
   function renderHistory() {
     return '<div class="form-layout"><section class="card form-card"><h2>Анамнез</h2><p class="section-intro">Запишите известные сведения. Пустое поле не означает отсутствие симптомов, заболеваний или аллергии. Дополнительный анамнез включается только при заполнении.</p><div class="field-grid">' + historyFields.map(([key, title, hint], i) => field('history.' + key, title, hint, {full: i === 0 || i === 6})).join('') + '</div>' + '</section>' + aside('Никаких предположений', 'Генератор упорядочит ваши формулировки. Пустой дополнительный анамнез будет пропущен; основные незаполненные поля останутся обозначены.') + '</div>';
@@ -1553,6 +1599,18 @@
     return '<div class="exam-workspace"><section class="card form-card"><div class="visit-tools-heading"><h2>Осмотр</h2>' + button('visit-templates', 'Мои шаблоны', 'document', 'secondary compact', 'data-template-kind="exam"') + '</div><p class="section-intro">Выберите только оценённые признаки. Пустой раздел не означает норму.</p><section class="exam-measurements" aria-labelledby="exam-measurements-heading"><h3 id="exam-measurements-heading">Измеренные показатели</h3><div class="field-grid exam-vitals-grid">' + vitalFields.map(([key, title, unit]) => field('vitals.' + key, title, 'Не указано', {type: 'text', numeric: true, hint: unit})).join('') + renderBmi() + '</div></section><div class="exam-toolbar"><h3>Описание осмотра</h3><div class="actions">' + button('normal-exam', 'Осмотр без особенностей', 'check') + button('expand-exam', 'Раскрыть все', null, 'ghost') + button('collapse-exam', 'Свернуть все', null, 'ghost') + '</div></div><p class="exam-normal-hint">Кнопка у раздела заполняет его признаки; общая — весь осмотр. Уточнения и показатели сохраняются.</p>' + examCatalog.SECTIONS.map(renderExamGroup).join('') + '<div class="form-section">' + field('exam.other', 'Другие данные осмотра', 'Необязательно. Пустое поле не попадёт в черновик') + '</div></section></div>';
   }
   function renderDiagnosis() {
+    const items = active().diagnoses || [];
+    return '<section class="visit-diagnoses" aria-labelledby="diagnoses-heading"><div class="visit-tools-heading"><h3 id="diagnoses-heading" tabindex="-1">Диагнозы</h3>' +
+      button('diagnosis-add', 'Добавить диагноз', 'plus', 'secondary compact', items.length >= core.MAX_DIAGNOSES ? 'disabled' : '') +
+      '</div>' + (items.length ? '<p class="hint">Основной диагноз, сопутствующие заболевания и осложнения указываете вы. Стрелки меняют порядок в новом черновике.</p><div class="diagnosis-list">' +
+        items.map((item, index) => '<article class="diagnosis-row" data-diagnosis-id="' + escape(item.id) + '"><div class="diagnosis-row-head"><h4>' + escape(core.DIAGNOSIS_LABELS[item.kind]) + '</h4><div class="actions">' +
+          button('diagnosis-move', '↑', null, 'secondary compact', 'data-diagnosis-id="' + escape(item.id) + '" data-direction="-1" aria-label="Переместить диагноз выше"' + (index === 0 ? ' disabled' : '')) +
+          button('diagnosis-move', '↓', null, 'secondary compact', 'data-diagnosis-id="' + escape(item.id) + '" data-direction="1" aria-label="Переместить диагноз ниже"' + (index === items.length - 1 ? ' disabled' : '')) +
+          button('diagnosis-edit', 'Изменить', null, 'secondary compact', 'data-diagnosis-id="' + escape(item.id) + '"') +
+          button('diagnosis-delete', 'Удалить', null, 'ghost compact', 'data-diagnosis-id="' + escape(item.id) + '"') +
+          '</div></div><p class="diagnosis-text">' + escape(item.text) + '</p></article>').join('') + '</div>' : renderLegacyDiagnosis()) + '</section>';
+  }
+  function renderLegacyDiagnosis() {
     const id = 'field-assessment-summary';
     if (!icd) return field('assessment.summary', 'Диагноз', 'Введите диагноз самостоятельно', {hint: 'Справочник МКБ не загрузился: ' + icdLoadError + ' Можно сохранить собственную формулировку диагноза.'});
     return '<div class="field diagnosis-field"><label for="' + id + '">Диагноз</label>' +
@@ -1563,13 +1621,16 @@
   }
   function closeDiagnosisSuggestions() {
     diagnosisSuggestions = null;
-    const control = document.getElementById('field-assessment-summary');
-    const panel = document.getElementById('diagnosis-suggestions');
-    if (panel) panel.hidden = true;
-    if (control) { control.setAttribute('aria-expanded', 'false'); control.removeAttribute('aria-activedescendant'); }
+    for (const [controlId, prefix] of [['field-assessment-summary', 'diagnosis'], ['diagnosis-text', 'diagnosis-edit']]) {
+      const control = document.getElementById(controlId);
+      const panel = document.getElementById(prefix + '-suggestions');
+      if (panel) panel.hidden = true;
+      if (control) { control.setAttribute('aria-expanded', 'false'); control.removeAttribute('aria-activedescendant'); }
+    }
   }
   function showDiagnosisSuggestions(control) {
-    if (!icd || !active() || !document.getElementById('diagnosis-options')) return;
+    const prefix = control.id === 'diagnosis-text' ? 'diagnosis-edit' : 'diagnosis';
+    if (!icd || !active() || !document.getElementById(prefix + '-options')) return;
     const start = control.selectionStart === 0 ? 0 : control.value.lastIndexOf('\n', control.selectionStart - 1) + 1;
     const nextLine = control.value.indexOf('\n', control.selectionStart);
     const end = nextLine === -1 ? control.value.length : nextLine;
@@ -1577,28 +1638,28 @@
     const query = control.value.slice(start, end).trim();
     if (query.length < 2) { closeDiagnosisSuggestions(); return; }
     const result = icd.search(query);
-    diagnosisSuggestions = {entryId: active().id, value: control.value, start, end, items: result.items, selected: -1};
-    const panel = document.getElementById('diagnosis-suggestions');
-    document.getElementById('diagnosis-options').innerHTML = result.items.map((item, index) => '<div class="diagnosis-option" id="diagnosis-option-' + index + '" role="option" aria-selected="false" data-action="select-diagnosis" data-code="' + escape(item.code) + '"><span><strong>' + escape(item.title) + '</strong><small>' + (item.parent ? escape(item.parent.code + ' · ' + item.parent.title) : item.kind === 'category' ? 'Рубрика' : 'Подрубрика') + '</small></span><span class="diagnosis-code">' + escape(item.code) + '</span></div>').join('');
-    document.getElementById('diagnosis-result-count').textContent = result.total ? (result.total > result.items.length ? 'Показано ' + result.items.length + ' из ' + result.total + '. Уточните название или код.' : 'Совпадений: ' + result.total + '. Выберите нужную формулировку.') : 'Совпадений в этом справочнике нет. Можно оставить введённый диагноз.';
+    diagnosisSuggestions = {entryId: active().id, controlId: control.id, prefix, value: control.value, start, end, items: result.items, selected: -1};
+    const panel = document.getElementById(prefix + '-suggestions');
+    document.getElementById(prefix + '-options').innerHTML = result.items.map((item, index) => '<div class="diagnosis-option" id="' + prefix + '-option-' + index + '" role="option" aria-selected="false" data-action="select-diagnosis" data-code="' + escape(item.code) + '"><span><strong>' + escape(item.title) + '</strong><small>' + (item.parent ? escape(item.parent.code + ' · ' + item.parent.title) : item.kind === 'category' ? 'Рубрика' : 'Подрубрика') + '</small></span><span class="diagnosis-code">' + escape(item.code) + '</span></div>').join('');
+    document.getElementById(prefix + '-result-count').textContent = result.total ? (result.total > result.items.length ? 'Показано ' + result.items.length + ' из ' + result.total + '. Уточните название или код.' : 'Совпадений: ' + result.total + '. Выберите нужную формулировку.') : 'Совпадений в этом справочнике нет. Можно оставить введённый диагноз.';
     panel.hidden = false;
-    document.getElementById('diagnosis-options').scrollTop = 0;
+    document.getElementById(prefix + '-options').scrollTop = 0;
     control.setAttribute('aria-expanded', 'true'); control.removeAttribute('aria-activedescendant');
   }
   function highlightDiagnosisSuggestion(index) {
     const suggestions = diagnosisSuggestions;
     if (!suggestions || !suggestions.items.length) return;
     suggestions.selected = Math.max(0, Math.min(index, suggestions.items.length - 1));
-    const options = document.getElementById('diagnosis-options');
+    const options = document.getElementById(suggestions.prefix + '-options');
     Array.from(options.children).forEach((option, position) => option.setAttribute('aria-selected', String(position === suggestions.selected)));
     const selected = options.children[suggestions.selected];
-    document.getElementById('field-assessment-summary').setAttribute('aria-activedescendant', selected.id);
+    document.getElementById(suggestions.controlId).setAttribute('aria-activedescendant', selected.id);
     if (selected.offsetTop < options.scrollTop) options.scrollTop = selected.offsetTop;
     if (selected.offsetTop + selected.offsetHeight > options.scrollTop + options.clientHeight) options.scrollTop = selected.offsetTop + selected.offsetHeight - options.clientHeight;
   }
   function selectDiagnosis(code) {
     const suggestions = diagnosisSuggestions;
-    const control = document.getElementById('field-assessment-summary');
+    const control = document.getElementById(suggestions?.controlId || 'field-assessment-summary');
     if (!suggestions || !control || !active() || suggestions.entryId !== active().id || suggestions.value !== control.value) { closeDiagnosisSuggestions(); return; }
     if (control.selectionStart < suggestions.start || control.selectionStart > suggestions.end || control.selectionEnd > suggestions.end) { showDiagnosisSuggestions(control); return; }
     const item = suggestions.items.find(item => item.code === code);
@@ -1607,11 +1668,74 @@
     const value = control.value.slice(0, suggestions.start) + text + control.value.slice(suggestions.end);
     if (value.length > control.maxLength) { toast('Диагноз слишком длинный. Сократите текущую строку перед выбором.', true); return; }
     control.value = value;
-    handleInput({target: control});
+    if (control.id === 'field-assessment-summary') handleInput({target: control});
+    else { control.removeAttribute('aria-invalid'); diagnosisError(''); }
     control.focus({preventScroll: true});
     const caret = suggestions.start + text.length;
     control.setSelectionRange(caret, caret);
     closeDiagnosisSuggestions();
+  }
+  function diagnosisError(message) {
+    const target = document.getElementById('diagnosis-error');
+    target.textContent = message; target.hidden = !message;
+  }
+  function openDiagnosisForm(id = '') {
+    const entry = active();
+    if (!entry || state.view !== 'visit' || !requireFreshState()) return;
+    const items = core.getDiagnoses(entry);
+    const item = id ? items.find(row => row.id === id) : null;
+    if (id && !item) { toast('Диагноз не найден. Откройте приём заново.', true); return; }
+    if (!id && items.length >= core.MAX_DIAGNOSES) { toast('В одном приёме можно сохранить до ' + core.MAX_DIAGNOSES + ' диагнозов.', true); return; }
+    closeDiagnosisSuggestions();
+    diagnosisForm = {encounterId: entry.id, id, snapshot: dataSnapshot(), saving: false};
+    document.getElementById('diagnosis-title').textContent = id ? 'Изменить диагноз' : 'Добавить диагноз';
+    document.getElementById('diagnosis-kind').value = item?.kind || (items.some(row => row.kind === 'primary') ? 'comorbidity' : 'primary');
+    const text = document.getElementById('diagnosis-text');
+    text.value = item?.text || ''; text.maxLength = core.MAX_DIAGNOSIS_TEXT_LENGTH;
+    text.removeAttribute('aria-invalid');
+    document.getElementById('diagnosis-legacy-note').hidden = Boolean(entry.diagnoses?.length) || !entry.assessment.summary.trim();
+    document.getElementById('diagnosis-lookup-note').textContent = icd ? 'Введите диагноз или код МКБ-10, выберите подсказку и уточните текст. Выбор не сохраняет запись до нажатия «Сохранить диагноз».' : 'Справочник МКБ не загрузился: ' + icdLoadError + '. Можно ввести собственную формулировку.';
+    document.getElementById('diagnosis-save').disabled = false;
+    diagnosisError('');
+    document.getElementById('diagnosis-dialog').showModal(); text.focus();
+  }
+  function saveDiagnosis() {
+    if (!diagnosisForm || diagnosisForm.saving) return;
+    if (!requireFreshState() || diagnosisForm.snapshot !== dataSnapshot()) { diagnosisError('Данные изменились. Закройте форму, загрузите сохранённую версию и откройте диагноз заново.'); return; }
+    const entry = active();
+    if (!entry || entry.id !== diagnosisForm.encounterId || state.view !== 'visit') { diagnosisError('Откройте нужный приём заново.'); return; }
+    diagnosisForm.saving = true; document.getElementById('diagnosis-save').disabled = true;
+    try {
+      const updated = core.upsertDiagnosis(entry, {kind: document.getElementById('diagnosis-kind').value, text: document.getElementById('diagnosis-text').value}, diagnosisForm.id ? {id: diagnosisForm.id} : {});
+      if (!commitVisitChange(updated)) { diagnosisError(state.error || 'Не удалось сохранить диагноз. Попробуйте ещё раз.'); return; }
+      document.getElementById('diagnosis-dialog').close(); diagnosisForm = null;
+      render(); document.getElementById('diagnoses-heading').focus({preventScroll: true});
+      toast('Диагноз сохранён. Обновите текст записи, когда будете готовы.');
+    } catch (error) { diagnosisError(error.message); }
+    finally { if (diagnosisForm) diagnosisForm.saving = false; document.getElementById('diagnosis-save').disabled = false; }
+  }
+  async function deleteDiagnosis(id) {
+    if (diagnosisDeletePending || !requireFreshState() || state.view !== 'visit') return;
+    const entry = active();
+    const item = entry?.diagnoses?.find(row => row.id === id);
+    if (!item) return;
+    const snapshot = dataSnapshot();
+    diagnosisDeletePending = true;
+    try {
+      if (!await confirmAction('Удалить диагноз?', 'Диагноз будет удалён из списка этого приёма. Сохранённый текст записи останется для вашей проверки.', 'Удалить диагноз') || !requireFreshState()) return;
+      if (active()?.id !== entry.id || state.view !== 'visit' || dataSnapshot() !== snapshot) { toast('Данные изменились. Откройте диагноз заново.', true); return; }
+      if (!commitVisitChange(core.removeDiagnosis(active(), id))) return;
+      render(); document.getElementById('diagnoses-heading').focus({preventScroll: true});
+      toast('Диагноз удалён. Проверьте сохранённый текст записи.');
+    } catch (error) { toast(error.message, true); }
+    finally { diagnosisDeletePending = false; }
+  }
+  function moveDiagnosis(id, direction) {
+    if (!requireFreshState() || state.view !== 'visit' || !active()) return;
+    try {
+      if (!commitVisitChange(core.moveDiagnosis(active(), id, direction))) return;
+      render(); document.getElementById('diagnoses-heading').focus({preventScroll: true});
+    } catch (error) { toast(error.message, true); }
   }
   function renderPrescriptions() {
     const items = active().prescriptions || [];
@@ -1644,7 +1768,11 @@
     document.getElementById('prescription-dialog').showModal();
     document.getElementById('prescription-name').focus();
   }
-  function commitPrescription(entry) {
+  function commitVisitChange(entry) {
+    const dateErrors = dateInputIssues(entry);
+    if (dateErrors.length) {
+      state.saved = false; state.error = dateErrors[0].message; updateSaveStatus(); return false;
+    }
     const pending = state.pendingNew?.entry.id === entry.id;
     const encounters = pending ? state.encounters.concat(entry) : state.encounters.map(item => item.id === entry.id ? entry : item);
     const patients = pending ? state.patients.concat(state.pendingNew.patient) : state.patients;
@@ -1668,7 +1796,7 @@
     document.getElementById('prescription-save').disabled = true;
     try {
       const updated = core.upsertPrescription(entry, values, prescriptionForm.id ? {id: prescriptionForm.id} : {});
-      if (!commitPrescription(updated)) { prescriptionError(state.error || 'Не удалось сохранить назначение. Введённые значения остаются в форме; повторите сохранение.'); return; }
+      if (!commitVisitChange(updated)) { prescriptionError(state.error || 'Не удалось сохранить назначение. Введённые значения остаются в форме; повторите сохранение.'); return; }
       document.getElementById('prescription-dialog').close(); prescriptionForm = null;
       render(); document.getElementById('prescriptions-heading').focus({preventScroll: true});
       toast('Назначение сохранено. Проверьте параметры и обновите черновик, когда будете готовы.');
@@ -1687,7 +1815,7 @@
     try {
       if (!await confirmAction('Удалить назначение?', 'Назначение «' + item.name + '» будет удалено из этого приёма. Сохранённый текст черновика останется для вашей проверки.', 'Удалить назначение') || !requireFreshState()) return;
       if (active()?.id !== entry.id || state.view !== 'visit') { toast('Откройте нужный приём заново перед удалением.', true); return; }
-      if (!commitPrescription(core.removePrescription(active(), id))) return;
+      if (!commitVisitChange(core.removePrescription(active(), id))) return;
       render(); document.getElementById('prescriptions-heading').focus({preventScroll: true});
       toast('Назначение удалено. Проверьте сохранённый текст черновика.');
     } catch (error) { toast(error.message, true); }
@@ -1852,7 +1980,7 @@
         const result = repository.reset(bundle.encounters, bundle.patients, bundle.templates || []);
         if (!result.ok) { restoreError(result.error); return; }
         state.encounters = bundle.encounters; state.patients = bundle.patients; state.templates = bundle.templates || [];
-        state.activeId = null; state.patientId = null; state.pendingNew = null; state.externalChange = false;
+        state.activeId = null; state.patientId = null; state.pendingNew = null; state.externalChange = false; state.birthDateInputs = {}; state.visitDateInputs = {};
         state.saved = true; state.error = null; state.migrated = false;
         close(); navigate('home'); toast('Резервная копия восстановлена.');
       } catch (error) { restoreError('Восстановление не выполнено: ' + error.message); }
@@ -1880,13 +2008,20 @@
   function updateValidation() {
     const entry = active();
     if (!entry) return [];
-    const errors = core.validateEncounter(entry);
+    const errors = core.validateEncounter(entry).concat(dateInputIssues(entry));
     app.querySelectorAll('[data-field]').forEach((control) => {
       const error = errors.find((item) => item.field === control.dataset.field);
       control.setAttribute('aria-invalid', error ? 'true' : 'false');
       const message = document.getElementById('field-' + control.dataset.field.replaceAll('.', '-') + '-error');
       if (message) { message.textContent = error ? error.message : ''; message.hidden = !error; }
     });
+    const birth = document.getElementById('patient-birth-date');
+    if (birth) {
+      const error = errors.find(item => item.field === 'patient.birthDate');
+      birth.setAttribute('aria-invalid', String(Boolean(error)));
+      document.getElementById('patient-birth-date-error').textContent = error?.message || '';
+      document.getElementById('patient-birth-date-error').hidden = !error;
+    }
     return errors;
   }
   function updateSaveStatus() {
@@ -1922,7 +2057,7 @@
   function pendingHasContent() {
     if (!state.pendingNew) return false;
     const {patient, entry, initialDate} = state.pendingNew;
-    return Boolean(patient.label.trim() || entry.age.trim() || entry.sex.trim() || entry.reason.trim() || entry.visitDate !== initialDate ||
+    return Boolean(patient.label.trim() || patient.birthDate || state.birthDateInputs[patient.id]?.value || state.visitDateInputs[entry.id] || entry.age.trim() || entry.sex.trim() || entry.reason.trim() || entry.visitDate !== initialDate ||
       [entry.history, entry.exam, entry.examSelections, entry.vitals, entry.assessment].some(group => Object.values(group).some(value => value.trim())) || entry.draft.text.trim());
   }
   function discardEmptyForm() {
@@ -1938,6 +2073,8 @@
   }
   function persist() {
     if (state.externalChange) { state.saved = false; updateSaveStatus(); return; }
+    const dateIssues = dateInputIssues();
+    if (dateIssues.length) { state.saved = false; state.error = dateIssues[0].message + ' Исправьте дату: введённое значение пока не сохранено.'; updateSaveStatus(); return; }
     if (state.pendingNew && !pendingHasContent()) { updateSaveStatus(); return; }
     const encounters = state.pendingNew ? state.encounters.concat(state.pendingNew.entry) : state.encounters;
     const patients = state.pendingNew ? state.patients.concat(state.pendingNew.patient) : state.patients;
@@ -1953,7 +2090,7 @@
         /^(assessment\.|draft\.|prescriptions)/.test(field) ? 'draft' :
           field.startsWith('investigation') ? 'investigations' : 'basic';
     const titles = {
-      visitDate: 'Дата приёма', age: 'Возраст', sex: 'Пол',
+      visitDate: 'Дата приёма', age: 'Возраст', sex: 'Пол', 'patient.birthDate': 'Дата рождения',
       'assessment.sickLeaveFrom': 'Начало больничного', 'assessment.sickLeaveTo': 'Окончание больничного',
       'assessment.sickLeaveIssued': 'Отметка о больничном', 'assessment.returnVisitDate': 'Повторный приём',
       'assessment.summary': 'Диагноз', 'assessment.plan': 'Рекомендации', 'draft.text': 'Текст записи'
@@ -1965,7 +2102,7 @@
     return {section, label};
   }
   function finishReviewIssues(entry) {
-    const errors = core.validateEncounter(entry);
+    const errors = core.validateEncounter(entry).concat(dateInputIssues(entry));
     const issues = errors.map(error => ({...error, ...finishReviewTarget(error.field)}));
     if (!entry.draft.text.trim()) {
       issues.push({field: 'draft.text', section: 'draft', label: 'Текст записи', message: 'Текст записи пуст. Можно сформировать черновик или написать текст вручную.'});
@@ -2293,6 +2430,10 @@
     if (action === 'investigation-report-delete') { await deleteInvestigationReport(target.dataset.reportId); return; }
     if (action === 'investigation-attach') { openInvestigationAttach(); return; }
     if (action === 'investigation-detach') { await detachInvestigation(target); return; }
+    if (action === 'diagnosis-add') { openDiagnosisForm(); return; }
+    if (action === 'diagnosis-edit') { openDiagnosisForm(target.dataset.diagnosisId); return; }
+    if (action === 'diagnosis-delete') { await deleteDiagnosis(target.dataset.diagnosisId); return; }
+    if (action === 'diagnosis-move') { moveDiagnosis(target.dataset.diagnosisId, Number(target.dataset.direction)); return; }
     if (action === 'prescription-add') { openPrescriptionForm(); return; }
     if (action === 'prescription-edit') { openPrescriptionForm(target.dataset.prescriptionId); return; }
     if (action === 'prescription-delete') { await deletePrescription(target.dataset.prescriptionId); return; }
@@ -2347,9 +2488,13 @@
     if (action === 'edit-patient' || action === 'finish-patient-edit') {
       if (state.view !== 'patient' || !requireFreshState()) return;
       const opening = action === 'edit-patient';
+      if (!opening && state.birthDateInputs[state.patientId]) {
+        toast(state.birthDateInputs[state.patientId].error, true);
+        document.getElementById('patient-birth-date').focus(); return;
+      }
       if (!opening && !state.saved) {
         persist();
-        if (!state.saved) { toast('ФИО пока не сохранено. Оставьте окно открытым и сохраните резервную копию.', true); return; }
+        if (!state.saved) { toast('Сведения пациента пока не сохранены. Оставьте окно открытым и сохраните резервную копию.', true); return; }
       }
       state.patientEditOpen = opening;
       document.getElementById('patient-edit-panel').hidden = !opening;
@@ -2484,13 +2629,13 @@
       if (!await confirmAction('Очистить демонстрационные записи?', 'Будут удалены все сохранённые в этом браузере карточки, приёмы, ручные черновики и личные шаблоны МедАссистента. Скачанные файлы останутся. При необходимости сначала сделайте резервную копию.', 'Очистить записи')) return;
       const result = repository.reset([]);
       if (!result.ok) { state.error = result.error; state.saved = false; updateSaveStatus(); toast(result.error, true); return; }
-      state.encounters = []; state.patients = []; state.templates = []; state.activeId = null; state.patientId = null; state.pendingNew = null; state.externalChange = false; state.saved = true; state.error = null; state.migrated = false; navigate('home'); toast('Демонстрационные записи и шаблоны очищены.'); return;
+      state.encounters = []; state.patients = []; state.templates = []; state.activeId = null; state.patientId = null; state.pendingNew = null; state.externalChange = false; state.birthDateInputs = {}; state.visitDateInputs = {}; state.saved = true; state.error = null; state.migrated = false; navigate('home'); toast('Демонстрационные записи и шаблоны очищены.'); return;
     }
     if (action === 'reload') {
       if (!await confirmAction('Загрузить сохранённую версию?', 'Текущие изменения в этом окне будут заменены данными из локального хранилища. При необходимости сначала скачайте резервную копию.', 'Загрузить')) return;
       const result = repository.load();
       if (result.error) { toast(result.error, true); return; }
-      state.encounters = result.encounters; state.patients = result.patients; state.templates = result.templates || []; state.activeId = null; state.patientId = null; state.pendingNew = null; state.externalChange = false; state.error = null; state.saved = true; state.migrated = Boolean(result.migrated); navigate('home');
+      state.encounters = result.encounters; state.patients = result.patients; state.templates = result.templates || []; state.activeId = null; state.patientId = null; state.pendingNew = null; state.externalChange = false; state.birthDateInputs = {}; state.visitDateInputs = {}; state.error = null; state.saved = true; state.migrated = Boolean(result.migrated); navigate('home');
     }
     if (action === 'normal-exam' || action === 'normal-exam-section') {
       const entry = active();
@@ -2525,6 +2670,25 @@
   });
   function handleInput(event) {
     const control = event.target;
+    if (control.id === 'patient-birth-date') {
+      const patient = state.view === 'visit' ? patientFor(active()) : selectedPatient();
+      if (!requireFreshState()) return;
+      const error = patientBirthDateError(patient, control.value);
+      if (error) state.birthDateInputs[patient.id] = {value: control.value, error};
+      else delete state.birthDateInputs[patient.id];
+      control.setAttribute('aria-invalid', String(Boolean(error)));
+      document.getElementById('patient-birth-date-error').textContent = error;
+      document.getElementById('patient-birth-date-error').hidden = !error;
+      if (error) { persist(); return; }
+      if ((patient.birthDate || '') === control.value) { persist(); updateValidation(); return; }
+      patient.birthDate = control.value; patient.updatedAt = new Date().toISOString();
+      let reviewReset = false;
+      state.encounters.filter(entry => entry.patientId === patient.id).forEach(entry => { if (invalidateReview(entry)) reviewReset = true; });
+      updatePatientAgeDisplays(patient); persist(); updateValidation(); updateDraftState(); updateReviewState();
+      if (state.view === 'patient') app.querySelectorAll('[data-visit-id]').forEach(row => { row.querySelector('.record-status').outerHTML = recordStatus(state.encounters.find(entry => entry.id === row.dataset.visitId)); });
+      if (reviewReset) toast('Дата рождения изменена. Проверенные записи этой карточки возвращены в черновики; текст записей сохранён.');
+      return;
+    }
     if (control.id === 'investigation-series') {
       if (state.investigationSeriesKey === control.value) return;
       state.investigationSeriesKey = control.value;
@@ -2557,7 +2721,20 @@
       state.search = control.value; refreshRecords(); return;
     }
     if (!control.dataset.field || !active()) return;
-    if (get(active(), control.dataset.field) === control.value) return;
+    if (control.dataset.field === 'age' && patientFor(active()).birthDate) return;
+    if (control.dataset.field === 'visitDate') {
+      if (!requireFreshState()) return;
+      const patient = patientFor(active());
+      if (patient.birthDate && core.calculateAge(patient.birthDate, control.value) === null) {
+        state.visitDateInputs[active().id] = {value: control.value, error: 'Укажите существующую дату приёма не раньше даты рождения пациента.'};
+        updateValidation(); persist(); return;
+      }
+      delete state.visitDateInputs[active().id];
+    }
+    if (get(active(), control.dataset.field) === control.value) {
+      if (control.dataset.field === 'visitDate') { updateValidation(); persist(); }
+      return;
+    }
     const reviewReset = invalidateReview(active());
     const planReset = control.dataset.field === 'assessment.returnVisitDate' && (active().workflow.returnVisitStatus === 'completed' || Boolean(active().workflow.returnVisitEncounterId));
     if (control.dataset.field === 'assessment.returnVisitDate') {
@@ -2565,7 +2742,7 @@
     }
     set(active(), control.dataset.field, control.value);
     active().updatedAt = new Date().toISOString();
-    if (control.dataset.field === 'visitDate') { document.getElementById('visit-date-summary').textContent = 'Демонстрационный приём · ' + dateText(active().visitDate); refreshPreviousVisit(); }
+    if (control.dataset.field === 'visitDate') { document.getElementById('visit-date-summary').textContent = 'Демонстрационный приём · ' + dateText(active().visitDate); updatePatientAgeDisplays(patientFor(active())); refreshPreviousVisit(); }
     app.querySelectorAll('[data-summary]').forEach((element) => {
       const fields = active()[element.dataset.summary];
       element.textContent = filledCount(fields) + ' из ' + Object.keys(fields).length + ' полей';
@@ -2645,7 +2822,7 @@
   });
   document.getElementById('restore-patient-search').addEventListener('input', renderRestorePatients);
   document.getElementById('restore-backup').addEventListener('click', exportBackup);
-  window.addEventListener('beforeunload', (event) => { if (!state.saved && (state.encounters.length || state.patients.length || state.templates.length || pendingHasContent())) { event.preventDefault(); event.returnValue = ''; } });
+  window.addEventListener('beforeunload', (event) => { if ((!state.saved && (state.encounters.length || state.patients.length || state.templates.length || pendingHasContent())) || Object.keys(state.birthDateInputs).length || Object.keys(state.visitDateInputs).length) { event.preventDefault(); event.returnValue = ''; } });
   window.addEventListener('storage', (event) => {
     if (event.key === repository.BACKUP_KEY) { updateBackupStatus(); return; }
     if (!repository.WATCHED_KEYS.includes(event.key) && event.key !== null) return;
@@ -2663,9 +2840,32 @@
     if (prescriptionForm) {
       prescriptionError('Данные изменены в другом окне. Закройте форму и загрузите сохранённую версию перед сохранением.');
     }
-    if ((prescriptionDeletePending || investigationDeletePending) && document.getElementById('confirmation').open) document.getElementById('dialog-message').textContent = 'Данные изменены в другом окне. Удаление не будет выполнено. Закройте это окно и загрузите сохранённую версию.';
+    if (diagnosisForm) diagnosisError('Данные изменены в другом окне. Закройте форму и загрузите сохранённую версию перед сохранением.');
+    if ((prescriptionDeletePending || investigationDeletePending || diagnosisDeletePending) && document.getElementById('confirmation').open) document.getElementById('dialog-message').textContent = 'Данные изменены в другом окне. Удаление не будет выполнено. Закройте это окно и загрузите сохранённую версию.';
   });
   render();
+  document.getElementById('diagnosis-form').addEventListener('submit', event => { event.preventDefault(); saveDiagnosis(); });
+  document.getElementById('diagnosis-cancel').addEventListener('click', () => document.getElementById('diagnosis-dialog').close());
+  document.getElementById('diagnosis-dialog').addEventListener('close', event => { if (!event.target.open) { diagnosisForm = null; closeDiagnosisSuggestions(); } });
+  const diagnosisText = document.getElementById('diagnosis-text');
+  ['input', 'focus', 'click', 'compositionend'].forEach(name => diagnosisText.addEventListener(name, event => { if (!event.isComposing) showDiagnosisSuggestions(diagnosisText); }));
+  diagnosisText.addEventListener('blur', event => {
+    if (!event.relatedTarget?.closest('#diagnosis-dialog .dialog-actions')) closeDiagnosisSuggestions();
+  });
+  diagnosisText.addEventListener('keyup', event => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key) && !event.isComposing) showDiagnosisSuggestions(diagnosisText); });
+  diagnosisText.addEventListener('keydown', event => {
+    if (event.isComposing) return;
+    if (event.key === 'Escape') { if (diagnosisSuggestions) { event.preventDefault(); event.stopPropagation(); } closeDiagnosisSuggestions(); return; }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      if (!diagnosisSuggestions) showDiagnosisSuggestions(diagnosisText);
+      if (!diagnosisSuggestions?.items.length) return;
+      event.preventDefault(); highlightDiagnosisSuggestion(diagnosisSuggestions.selected + (event.key === 'ArrowDown' ? 1 : -1));
+    } else if (event.key === 'Enter' && diagnosisSuggestions?.selected >= 0) {
+      event.preventDefault(); selectDiagnosis(diagnosisSuggestions.items[diagnosisSuggestions.selected].code);
+    }
+  });
+  document.getElementById('diagnosis-edit-options').addEventListener('pointerdown', event => { if (event.button === 0 && event.target.closest('.diagnosis-option')) event.preventDefault(); });
+  document.getElementById('diagnosis-edit-options').addEventListener('click', event => { const option = event.target.closest('[data-code]'); if (option) selectDiagnosis(option.dataset.code); });
   document.getElementById('investigation-form').addEventListener('submit', event => { event.preventDefault(); saveInvestigation(); });
   document.getElementById('investigation-form').addEventListener('input', event => { if (event.target.value.trim()) event.target.removeAttribute('aria-invalid'); });
   document.getElementById('investigation-cancel').addEventListener('click', () => document.getElementById('investigation-dialog').close());

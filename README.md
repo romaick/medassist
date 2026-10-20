@@ -1,6 +1,12 @@
 # МедАссистент
 
-Поликлинический офлайн-прототип для Windows: структурированный приём, анамнез, осмотр и редактируемый черновик врачебной записи. Версия 0.13.0.
+Поликлинический офлайн-прототип для Windows: структурированный приём, анамнез, осмотр и редактируемый черновик врачебной записи. Версия 0.14.0.
+
+В 0.14.0 добавлены анализы и исследования в карточку пациента. Кнопка в шапке ведёт к разделу ниже истории приёмов. Нажмите «Добавить результат»: тип, дата, название, результат, единицы, нормы из бланка и примечание вводятся вручную. Дата, название и результат обязательны. Отмена ничего не сохраняет; каждую строку можно изменить или удалить после подтверждения.
+
+Выберите показатель для просмотра результатов по датам. Серии объединяются по типу, названию и одинаковым единицам; единицы не переводятся. Если все значения — полные десятичные числа с точкой или запятой, их не меньше двух и даты различны, видны график и разность двух последних результатов. Текстовые заключения, диапазоны, значения со знаком «<» и повторяющиеся даты остаются в таблице без догадок о числах или порядке измерений внутри дня. Нормы каждого бланка сохраняются как введены; различия между строками норм отмечаются без медицинского вывода.
+
+Результаты доступны через поиск пациентов, входят в резервную копию и не меняют тексты или статусы проверенных приёмов. Работа офлайн, ручной ввод, без автоматической интерпретации. Копии с результатами требуют 0.14.0 или новее, старые данные читаются без миграции. Проверки используют только вымышленные данные.
 
 В 0.13.0 добавлены структурированные назначения препаратов. В разделе «Запись» нажмите «Добавить препарат»: название, дозировка/доза на приём, способ приёма, кратность, длительность и примечание вводятся врачом. Несколько назначений можно редактировать или удалять по отдельности. Название обязательно; незаполненные основные параметры явно обозначаются, без подстановки доз и сроков. Новый черновик включает список назначений, а ручной текст сохраняется.
 
@@ -123,7 +129,7 @@
 
 ```powershell
 $env:MEDASSIST_PLAYWRIGHT = 'C:\tools\node_modules\playwright'
-node --test medassist/tests/core.test.cjs medassist/tests/icd.test.cjs medassist/tests/icd-catalog.test.cjs medassist/tests/ui-patient.test.cjs medassist/tests/ui-workflow.test.cjs medassist/tests/ui-icd.test.cjs medassist/tests/sick-leave.test.cjs medassist/tests/ui-sick-leave.test.cjs medassist/tests/workflow-tools.test.cjs medassist/tests/ui-visit-tools.test.cjs medassist/tests/prescriptions.test.cjs medassist/tests/ui-prescriptions.test.cjs
+node --test medassist/tests/core.test.cjs medassist/tests/icd.test.cjs medassist/tests/icd-catalog.test.cjs medassist/tests/ui-patient.test.cjs medassist/tests/ui-workflow.test.cjs medassist/tests/ui-icd.test.cjs medassist/tests/sick-leave.test.cjs medassist/tests/ui-sick-leave.test.cjs medassist/tests/workflow-tools.test.cjs medassist/tests/ui-visit-tools.test.cjs medassist/tests/prescriptions.test.cjs medassist/tests/ui-prescriptions.test.cjs medassist/tests/investigations.test.cjs medassist/tests/ui-investigations.test.cjs
 powershell.exe -NoProfile -File medassist/tests/update.test.ps1
 powershell.exe -NoProfile -File medassist/tests/update-link.test.ps1
 ```

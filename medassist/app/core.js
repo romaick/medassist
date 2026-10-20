@@ -18,6 +18,8 @@
   const MAX_PRESCRIPTIONS = 50;
   const MAX_PRESCRIPTION_FIELD_LENGTH = 200;
   const MAX_PRESCRIPTION_NOTE_LENGTH = 1000;
+  const MAX_INVESTIGATIONS = 500;
+  const INVESTIGATION_FIELD_LIMITS = Object.freeze({ name: 200, result: 2000, unit: 80, reference: 500, note: 1000 });
   const MAX_TEXT_LENGTH = 10000;
   const MAX_DRAFT_LENGTH = 100000;
   const MAX_FINGERPRINT_LENGTH = 350000;
@@ -27,6 +29,8 @@
   const CARRY_HISTORY_FIELDS = ["conditions", "medications", "allergies"];
   const PRESCRIPTION_VALUE_FIELDS = ["name", "dose", "route", "frequency", "duration", "note"];
   const PRESCRIPTION_FIELDS = ["id", ...PRESCRIPTION_VALUE_FIELDS];
+  const INVESTIGATION_VALUE_FIELDS = ["kind", "date", "name", "result", "unit", "reference", "note"];
+  const INVESTIGATION_FIELDS = ["id", ...INVESTIGATION_VALUE_FIELDS];
   const LEGACY_GROUPS = {
     history: ["complaints", "onset", "course", "conditions", "medications", "allergies", "context"],
     exam: ["general", "cardiovascular", "respiratory", "abdomen", "neurological", "other"],
@@ -184,6 +188,9 @@
       ...Object.fromEntries(PATIENT_FIELDS.map(field => [field, patient[field]])),
       ...(Object.prototype.hasOwnProperty.call(patient, "sickLeaves") ? {
         sickLeaves: patient.sickLeaves.map(leave => ({ ...leave, events: leave.events.map(event => ({ ...event })) }))
+      } : {}),
+      ...(patient.investigations?.length ? {
+        investigations: patient.investigations.map(item => Object.fromEntries(INVESTIGATION_FIELDS.map(field => [field, item[field]])))
       } : {})
     };
   }
@@ -470,7 +477,7 @@
       else if (typeof patient[field] !== "string") errors.push({ field, message: "Значение должно быть строкой." });
     }
     for (const field of Object.keys(patient)) {
-      if (!PATIENT_FIELDS.includes(field) && field !== "sickLeaves") errors.push({ field, message: "Неизвестное поле карточки пациента." });
+      if (!PATIENT_FIELDS.includes(field) && !["sickLeaves", "investigations"].includes(field)) errors.push({ field, message: "Неизвестное поле карточки пациента." });
     }
     if (typeof patient.id === "string" && !ID_PATTERN.test(patient.id)) errors.push({ field: "id", message: "Некорректный идентификатор карточки пациента." });
     if (typeof patient.label === "string" && patient.label.length > MAX_PATIENT_LABEL_LENGTH) errors.push({ field: "label", message: "Условное имя не должно превышать 120 символов." });
@@ -478,6 +485,7 @@
       if (typeof patient[field] === "string" && !validTimestamp(patient[field])) errors.push({ field, message: "Некорректная дата и время; ожидается формат ISO UTC." });
     }
     if (Object.prototype.hasOwnProperty.call(patient, "sickLeaves")) errors.push(...validateSickLeaves(patient.sickLeaves));
+    if (Object.prototype.hasOwnProperty.call(patient, "investigations")) errors.push(...validateInvestigations(patient.investigations));
     return errors;
   }
 
@@ -499,6 +507,100 @@
     };
     assertPatient(patient);
     return patient;
+  }
+
+  function validateInvestigations(investigations) {
+    if (!Array.isArray(investigations)) return [{ field: "investigations", message: "Анализы и исследования должны быть массивом." }];
+    const errors = [];
+    const ids = new Set();
+    if (investigations.length > MAX_INVESTIGATIONS) errors.push({ field: "investigations", message: "Допускается не более 500 результатов в одной карточке." });
+    for (let index = 0; index < investigations.length; index += 1) {
+      const item = investigations[index];
+      const prefix = "investigations." + index;
+      if (!isObject(item)) {
+        errors.push({ field: prefix, message: "Ожидается объект результата исследования." });
+        continue;
+      }
+      for (const field of INVESTIGATION_FIELDS) {
+        if (!Object.prototype.hasOwnProperty.call(item, field)) errors.push({ field: prefix + "." + field, message: "Обязательное поле отсутствует." });
+        else if (typeof item[field] !== "string") errors.push({ field: prefix + "." + field, message: "Значение должно быть строкой." });
+      }
+      for (const field of Object.keys(item)) {
+        if (!INVESTIGATION_FIELDS.includes(field)) errors.push({ field: prefix + "." + field, message: "Неизвестное поле результата исследования." });
+      }
+      if (typeof item.id === "string") {
+        if (!ID_PATTERN.test(item.id) || ids.has(item.id)) errors.push({ field: prefix + ".id", message: "Некорректный или повторяющийся идентификатор результата." });
+        ids.add(item.id);
+      }
+      if (!["lab", "study"].includes(item.kind)) errors.push({ field: prefix + ".kind", message: "Выберите анализ или исследование." });
+      if (typeof item.date === "string" && !validDate(item.date)) errors.push({ field: prefix + ".date", message: "Укажите существующую дату результата." });
+      for (const [field, limit] of Object.entries(INVESTIGATION_FIELD_LIMITS)) {
+        if (typeof item[field] === "string" && item[field].length > limit) errors.push({ field: prefix + "." + field, message: "Превышен лимит: " + limit + " символов." });
+      }
+      for (const [field, message] of [["name", "Укажите название анализа или исследования."], ["result", "Укажите результат."]]) {
+        if (typeof item[field] === "string" && !item[field].trim()) errors.push({ field: prefix + "." + field, message });
+      }
+    }
+    return errors;
+  }
+
+  function investigationChangeTime(options, fields) {
+    if (!isObject(options) || Object.keys(options).some(field => !fields.includes(field))) throw new Error("Некорректные параметры изменения результата.");
+    const now = options.now === undefined ? new Date() : new Date(options.now);
+    if (!Number.isFinite(now.getTime()) || now.getUTCFullYear() < 1 || now.getUTCFullYear() > 9999) throw new Error("Некорректное время изменения результата.");
+    return now.toISOString();
+  }
+
+  function upsertInvestigation(patient, values, options = {}) {
+    assertPatient(patient);
+    const updatedAt = investigationChangeTime(options, ["id", "now"]);
+    if (!isObject(values) || Object.keys(values).some(field => !INVESTIGATION_VALUE_FIELDS.includes(field)) || INVESTIGATION_VALUE_FIELDS.some(field => !Object.prototype.hasOwnProperty.call(values, field))) throw new Error("Неверная структура результата исследования.");
+    const existing = patient.investigations || [];
+    if (options.id !== undefined && (typeof options.id !== "string" || !existing.some(item => item.id === options.id))) throw new Error("Результат для изменения не найден.");
+    const item = { id: options.id === undefined ? newId("investigation") : options.id, ...values };
+    const investigations = options.id === undefined ? [...existing, item] : existing.map(entry => entry.id === options.id ? item : entry);
+    const result = { ...patient, investigations, updatedAt };
+    assertPatient(result);
+    return normalizePatient(result);
+  }
+
+  function removeInvestigation(patient, id, options = {}) {
+    assertPatient(patient);
+    const updatedAt = investigationChangeTime(options, ["now"]);
+    if (typeof id !== "string" || !(patient.investigations || []).some(item => item.id === id)) throw new Error("Результат для удаления не найден.");
+    return normalizePatient({ ...patient, investigations: patient.investigations.filter(item => item.id !== id), updatedAt });
+  }
+
+  function getInvestigationSeries(patient) {
+    assertPatient(patient);
+    const groups = new Map();
+    for (const item of patient.investigations || []) {
+      const name = item.name.trim().replace(/\s+/g, " ");
+      const unit = item.unit.trim().replace(/\s+/g, " ");
+      const key = JSON.stringify([item.kind, name.toLocaleLowerCase("ru").replace(/ё/g, "е"), unit]);
+      if (!groups.has(key)) groups.set(key, { key, kind: item.kind, name, unit, results: [] });
+      groups.get(key).results.push({ ...item });
+    }
+    return [...groups.values()].map(series => {
+      series.results.sort((first, second) => first.date.localeCompare(second.date) || first.id.localeCompare(second.id));
+      const values = series.results.map(item => {
+        const text = item.result.trim();
+        const value = DECIMAL_PATTERN.test(text) ? Number(text.replace(",", ".")) : NaN;
+        return Number.isFinite(value) ? value : null;
+      });
+      const reason = series.results.length < 2 ? "insufficient"
+        : values.some(value => value === null) ? "non-numeric"
+          : new Set(series.results.map(item => item.date)).size !== series.results.length ? "duplicate-date" : "";
+      const difference = reason ? null : values[values.length - 1] - values[values.length - 2];
+      return {
+        ...series,
+        numeric: !reason,
+        reason,
+        points: reason ? [] : series.results.map((item, index) => ({ id: item.id, date: item.date, value: values[index] })),
+        delta: difference === null || !Number.isFinite(difference) ? null : difference === 0 ? 0 : difference,
+        referenceChanged: new Set(series.results.map(item => item.reference)).size > 1
+      };
+    }).sort((first, second) => first.name.localeCompare(second.name, "ru") || first.kind.localeCompare(second.kind) || first.unit.localeCompare(second.unit));
   }
 
   function createEncounter(options = {}) {
@@ -1010,6 +1112,7 @@
       patients = value.patients.map((patient, index) => {
         assertPatient(patient, "Карточка пациента №" + (index + 1));
         if (version < 4 && Object.prototype.hasOwnProperty.call(patient, "sickLeaves")) throw new Error("Журнал больничных не поддерживается в резервной копии версии " + version + ".");
+        if (version < 4 && Object.prototype.hasOwnProperty.call(patient, "investigations")) throw new Error("Анализы и исследования не поддерживаются в резервной копии версии " + version + ".");
         if (patientIds.has(patient.id)) throw new Error("В резервной копии повторяется идентификатор карточки пациента №" + (index + 1) + ".");
         patientIds.add(patient.id);
         return normalizePatient(patient);
@@ -1079,5 +1182,5 @@
     return validateBundle(parsed);
   }
 
-  return Object.freeze({ createPatient, createEncounter, createRepeatEncounter, createDemoEncounter, upsertPrescription, removePrescription, formatPrescription, validatePrescriptions, setReviewStatus, setReturnVisitStatus, linkReturnVisit, getReturnVisits, calculateBmi, calculateSickLeaveDays, calculateSickLeaveTotalDays, getSickLeaveJournal, getEncounterSickLeaveSummary, getEncounterSickLeaveAction, applyEncounterSickLeave, undoEncounterSickLeave, issueSickLeave, extendSickLeave, closeSickLeave, undoSickLeaveAction, createVisitTemplate, applyVisitTemplate, validateTemplates, generateDraft, fingerprint, validatePatient, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_PATIENTS, MAX_PATIENT_LABEL_LENGTH, MAX_SICK_LEAVES, MAX_SICK_LEAVE_EVENTS, MAX_SICK_LEAVE_NUMBER_LENGTH, MAX_TEMPLATES, MAX_TEMPLATE_NAME_LENGTH, MAX_PRESCRIPTIONS, MAX_PRESCRIPTION_FIELD_LENGTH, MAX_PRESCRIPTION_NOTE_LENGTH, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
+  return Object.freeze({ createPatient, createEncounter, createRepeatEncounter, createDemoEncounter, upsertInvestigation, removeInvestigation, validateInvestigations, getInvestigationSeries, upsertPrescription, removePrescription, formatPrescription, validatePrescriptions, setReviewStatus, setReturnVisitStatus, linkReturnVisit, getReturnVisits, calculateBmi, calculateSickLeaveDays, calculateSickLeaveTotalDays, getSickLeaveJournal, getEncounterSickLeaveSummary, getEncounterSickLeaveAction, applyEncounterSickLeave, undoEncounterSickLeave, issueSickLeave, extendSickLeave, closeSickLeave, undoSickLeaveAction, createVisitTemplate, applyVisitTemplate, validateTemplates, generateDraft, fingerprint, validatePatient, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_PATIENTS, MAX_PATIENT_LABEL_LENGTH, MAX_SICK_LEAVES, MAX_SICK_LEAVE_EVENTS, MAX_SICK_LEAVE_NUMBER_LENGTH, MAX_TEMPLATES, MAX_TEMPLATE_NAME_LENGTH, MAX_PRESCRIPTIONS, MAX_PRESCRIPTION_FIELD_LENGTH, MAX_PRESCRIPTION_NOTE_LENGTH, MAX_INVESTIGATIONS, INVESTIGATION_FIELD_LIMITS, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
 });

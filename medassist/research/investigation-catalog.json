@@ -1,0 +1,1179 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-10-20",
+  "title": "Шаблоны ручного ввода исследований",
+  "scope": "Шаблоны ввода, не утверждённые медицинские бланки или клинические протоколы Республики Беларусь. Названия категорий проверены по сайтам государственных учреждений Беларуси; состав и единицы сверены отдельно по первичным материалам лабораторий. Единицы редактируются по бланку. Нормы, результаты и интерпретация не предзаполняются.",
+  "sources": [
+    {
+      "id": "minsk1-lab",
+      "title": "1-я ГКБ Минска: лабораторная диагностика",
+      "url": "https://1gkb.by/home/paid-services/list-of-paid-services/laboratornaya-diagnostika",
+      "verified": true,
+      "checkedAt": "2026-10-20",
+      "role": "belarus-state-service-list",
+      "note": "Подтверждены категории ОАК, ОАМ, глюкоза, биохимия и гормоны щитовидной железы. Состав каждого бланка и единицы на странице не опубликованы текстом."
+    },
+    {
+      "id": "kopyl-lab",
+      "title": "Копыльская ЦРБ: лабораторная диагностика в описании гуманитарного проекта",
+      "url": "https://kopylcrb.by/gumanitarnyj-proekt",
+      "verified": true,
+      "checkedAt": "2026-10-20",
+      "role": "belarus-state-service-list",
+      "note": "В индексированном тексте официального сайта перечислены развернутый анализ крови, биохимия, коагулограмма, ОАМ. Прямое открытие страницы инструментом не удалось; состав и актуальная доступность отдельных тестов не подтверждены."
+    },
+    {
+      "id": "minsk1-functional",
+      "title": "1-я ГКБ Минска: функциональные исследования",
+      "url": "https://1gkb.by/home/paid-services/list-of-paid-services/funktsionalnye-issledovaniya",
+      "verified": true,
+      "checkedAt": "2026-10-20",
+      "role": "belarus-state-service-list",
+      "note": "Названы ЭКГ, ЭхоКГ, суточное мониторирование ЭКГ и АД."
+    },
+    {
+      "id": "minsk1-ultrasound",
+      "title": "1-я ГКБ Минска: ультразвуковые исследования",
+      "url": "https://1gkb.by/home/paid-services/list-of-paid-services/uzi-issledovaniya",
+      "verified": true,
+      "checkedAt": "2026-10-20",
+      "role": "belarus-state-service-list",
+      "note": "Названы УЗИ брюшной полости, почек и щитовидной железы; единый протокол описания не задан."
+    },
+    {
+      "id": "minsk1-xray",
+      "title": "1-я ГКБ Минска: рентгенологические исследования",
+      "url": "https://1gkb.by/home/paid-services/list-of-paid-services/rentgenologicheskie-issledovaniya",
+      "verified": true,
+      "checkedAt": "2026-10-20",
+      "role": "belarus-state-service-list",
+      "note": "Подтверждена категория исследования органов грудной полости."
+    },
+    {
+      "id": "helix-cbc",
+      "title": "Хеликс: общий анализ крови с лейкоцитарной формулой",
+      "url": "https://helix.ru/kb/item/02-005",
+      "verified": true,
+      "checkedAt": "2026-10-20",
+      "role": "laboratory-units",
+      "note": "Первичный источник лаборатории в России: названия и единицы. Не нормативный бланк Беларуси."
+    },
+    {
+      "id": "helix-cbc-example",
+      "title": "Хеликс: опубликованный пример результата ОАК 02-005",
+      "url": "https://helix.ru/catalog/downloadexamplefile?hxid=02-005",
+      "verified": true,
+      "checkedAt": "2026-10-20",
+      "role": "laboratory-result-example",
+      "note": "Проверены 23 показателя, в том числе RDW-SD, PDW, MPV, P-LCR и абсолютная/относительная формула. В каталог перенесены только названия и единицы, без результатов, норм и идентификаторов."
+    },
+    {
+      "id": "helix-reticulocytes",
+      "title": "Хеликс: ретикулоциты",
+      "url": "https://helix.ru/kb/item/02-027",
+      "verified": true,
+      "checkedAt": "2026-10-20",
+      "role": "laboratory-units",
+      "note": "Подтверждены RET% и абсолютное количество 10^9/л. Не утверждается, что они входят в каждый ОАК."
+    },
+    {
+      "id": "invitro-manual-differential",
+      "title": "ИНВИТРО: лейкоцитарная формула",
+      "url": "https://www.invitro.ru/analizes/for-doctors/156/74565/",
+      "verified": true,
+      "checkedAt": "2026-10-20",
+      "role": "laboratory-units",
+      "note": "Индексированный первичный текст подтверждает процентные палочкоядерные, сегментоядерные нейтрофилы, миелоциты и метамиелоциты. Прямое открытие возвращает пустую страницу."
+    },
+    {
+      "id": "helix-urinalysis",
+      "title": "Хеликс: общий анализ мочи с микроскопией",
+      "url": "https://helix.ru/kb/item/02-006",
+      "verified": true,
+      "checkedAt": "2026-10-20",
+      "role": "laboratory-units",
+      "note": "Белок г/л; клетки осадка клет./мкл; физические и качественные показатели без единицы. Метод и единицы конкретного бланка могут отличаться."
+    },
+    {
+      "id": "helix-biochemistry",
+      "title": "Хеликс: основные клинические и биохимические показатели крови",
+      "url": "https://helix.ru/kb/item/40-063",
+      "verified": true,
+      "checkedAt": "2026-10-20",
+      "role": "laboratory-units",
+      "note": "Подтверждены названия и единицы основных биохимических показателей, а также СОЭ мм/ч."
+    },
+    {
+      "id": "helix-liver",
+      "title": "Хеликс: лабораторное обследование функции печени",
+      "url": "https://helix.ru/kb/item/40-483",
+      "verified": true,
+      "checkedAt": "2026-10-20",
+      "role": "laboratory-units",
+      "note": "Подтверждены единицы альбумина, билирубина и ферментов; протромбиновое время с, МНО безразмерно."
+    },
+    {
+      "id": "helix-urea",
+      "title": "Хеликс: мочевина в сыворотке",
+      "url": "https://helix.ru/kb/item/06-034",
+      "verified": true,
+      "checkedAt": "2026-10-20",
+      "role": "laboratory-units",
+      "note": "Мочевина крови ммоль/л."
+    },
+    {
+      "id": "helix-electrolytes",
+      "title": "Хеликс: калий, натрий, хлор в сыворотке",
+      "url": "https://helix.ru/kb/item/06-019",
+      "verified": true,
+      "checkedAt": "2026-10-20",
+      "role": "laboratory-units",
+      "note": "Калий, натрий и хлор крови ммоль/л."
+    },
+    {
+      "id": "helix-crp",
+      "title": "Хеликс: С-реактивный белок, количественно, обычная чувствительность",
+      "url": "https://helix.ru/kb/item/06-182",
+      "verified": true,
+      "checkedAt": "2026-10-20",
+      "role": "laboratory-units",
+      "note": "СРБ мг/л; высокочувствительный СРБ не объединяется с этой строкой."
+    },
+    {
+      "id": "helix-lipids",
+      "title": "Хеликс: липидограмма",
+      "url": "https://helix.ru/kb/item/40-039",
+      "verified": true,
+      "checkedAt": "2026-10-20",
+      "role": "laboratory-units",
+      "note": "Холестерин ЛПВП и ЛПНП ммоль/л."
+    },
+    {
+      "id": "helix-hba1c",
+      "title": "Хеликс: первичная диагностика сахарного диабета",
+      "url": "https://helix.ru/kb/item/41-010",
+      "verified": true,
+      "checkedAt": "2026-10-20",
+      "role": "laboratory-units",
+      "note": "HbA1c в процентах. Диагностические критерии и рекомендации из статьи в приложение не переносятся."
+    },
+    {
+      "id": "helix-coagulation",
+      "title": "Хеликс: коагулограмма №3",
+      "url": "https://helix.ru/kb/item/03-016",
+      "verified": true,
+      "checkedAt": "2026-10-20",
+      "role": "laboratory-units",
+      "note": "Протромбин по Квику %, МНО без единицы, фибриноген г/л, АЧТВ с, антитромбин III %. Протромбин по Квику не отождествляется с ПТИ."
+    },
+    {
+      "id": "helix-thrombin-time",
+      "title": "Хеликс: тромбиновое время",
+      "url": "https://helix.ru/kb/item/03-010",
+      "verified": true,
+      "checkedAt": "2026-10-20",
+      "role": "laboratory-units",
+      "note": "Тромбиновое время в секундах."
+    },
+    {
+      "id": "helix-thyroid-units",
+      "title": "Хеликс: таблица единиц ТТГ, свободных Т3 и Т4",
+      "url": "https://helix.ru/kb/item/40-603",
+      "verified": true,
+      "checkedAt": "2026-10-20",
+      "role": "laboratory-units",
+      "note": "Использована только таблица единиц: ТТГ мкМЕ/мл, свободные Т3/Т4 пмоль/л. Не копируются спортивные показания, рекомендации или нормы."
+    }
+  ],
+  "panels": [
+    {
+      "id": "cbc",
+      "title": "Общий анализ крови",
+      "kind": "lab",
+      "sourceIds": [
+        "minsk1-lab",
+        "helix-cbc",
+        "helix-cbc-example",
+        "helix-biochemistry",
+        "invitro-manual-differential",
+        "helix-reticulocytes"
+      ],
+      "note": "Поля нескольких вариантов ОАК: автоматическая и ручная формула, СОЭ, ретикулоциты. Переносите только выполненные показатели с бланка. Состав каждого белорусского бланка не подтверждён.",
+      "fields": [
+        {
+          "id": "hemoglobin",
+          "name": "Гемоглобин крови (HGB/Hb)",
+          "unit": "г/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-cbc-example"
+          ]
+        },
+        {
+          "id": "erythrocytes",
+          "name": "Эритроциты крови (RBC)",
+          "unit": "10¹²/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-cbc-example"
+          ]
+        },
+        {
+          "id": "leukocytes",
+          "name": "Лейкоциты крови (WBC)",
+          "unit": "10⁹/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-cbc-example"
+          ]
+        },
+        {
+          "id": "hematocrit",
+          "name": "Гематокрит (HCT)",
+          "unit": "%",
+          "type": "number",
+          "sourceIds": [
+            "helix-cbc-example"
+          ]
+        },
+        {
+          "id": "platelets",
+          "name": "Тромбоциты крови (PLT)",
+          "unit": "10⁹/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-cbc-example"
+          ]
+        },
+        {
+          "id": "esr",
+          "name": "Скорость оседания эритроцитов (СОЭ)",
+          "unit": "мм/ч",
+          "type": "number",
+          "sourceIds": [
+            "helix-biochemistry"
+          ]
+        },
+        {
+          "id": "mcv",
+          "name": "Средний объём эритроцита (MCV)",
+          "unit": "фл",
+          "type": "number",
+          "sourceIds": [
+            "helix-cbc-example"
+          ]
+        },
+        {
+          "id": "mch",
+          "name": "Среднее содержание Hb в эритроците (MCH)",
+          "unit": "пг",
+          "type": "number",
+          "sourceIds": [
+            "helix-cbc-example"
+          ]
+        },
+        {
+          "id": "mchc",
+          "name": "Средняя концентрация Hb в эритроцитах (MCHC)",
+          "unit": "г/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-cbc-example"
+          ]
+        },
+        {
+          "id": "rdw-sd",
+          "name": "Ширина распределения эритроцитов (RDW-SD)",
+          "unit": "фл",
+          "type": "number",
+          "sourceIds": [
+            "helix-cbc-example"
+          ]
+        },
+        {
+          "id": "rdw-cv",
+          "name": "Ширина распределения эритроцитов (RDW-CV)",
+          "unit": "%",
+          "type": "number",
+          "sourceIds": [
+            "helix-cbc-example"
+          ]
+        },
+        {
+          "id": "mpv",
+          "name": "Средний объём тромбоцита (MPV)",
+          "unit": "фл",
+          "type": "number",
+          "sourceIds": [
+            "helix-cbc-example"
+          ]
+        },
+        {
+          "id": "pdw",
+          "name": "Ширина распределения тромбоцитов (PDW)",
+          "unit": "фл",
+          "type": "number",
+          "sourceIds": [
+            "helix-cbc-example"
+          ]
+        },
+        {
+          "id": "p-lcr",
+          "name": "Доля крупных тромбоцитов (P-LCR)",
+          "unit": "%",
+          "type": "number",
+          "sourceIds": [
+            "helix-cbc-example"
+          ]
+        },
+        {
+          "id": "neutrophils-percent",
+          "name": "Нейтрофилы крови, доля (NEUT%)",
+          "unit": "%",
+          "type": "number",
+          "sourceIds": [
+            "helix-cbc-example"
+          ]
+        },
+        {
+          "id": "neutrophils-absolute",
+          "name": "Нейтрофилы крови, абсолютное число (NEUT#)",
+          "unit": "10⁹/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-cbc-example"
+          ]
+        },
+        {
+          "id": "lymphocytes-percent",
+          "name": "Лимфоциты крови, доля (LYM%)",
+          "unit": "%",
+          "type": "number",
+          "sourceIds": [
+            "helix-cbc-example"
+          ]
+        },
+        {
+          "id": "lymphocytes-absolute",
+          "name": "Лимфоциты крови, абсолютное число (LYM#)",
+          "unit": "10⁹/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-cbc-example"
+          ]
+        },
+        {
+          "id": "monocytes-percent",
+          "name": "Моноциты крови, доля (MON%)",
+          "unit": "%",
+          "type": "number",
+          "sourceIds": [
+            "helix-cbc-example"
+          ]
+        },
+        {
+          "id": "monocytes-absolute",
+          "name": "Моноциты крови, абсолютное число (MON#)",
+          "unit": "10⁹/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-cbc-example"
+          ]
+        },
+        {
+          "id": "eosinophils-percent",
+          "name": "Эозинофилы крови, доля (EOS%)",
+          "unit": "%",
+          "type": "number",
+          "sourceIds": [
+            "helix-cbc-example"
+          ]
+        },
+        {
+          "id": "eosinophils-absolute",
+          "name": "Эозинофилы крови, абсолютное число (EOS#)",
+          "unit": "10⁹/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-cbc-example"
+          ]
+        },
+        {
+          "id": "basophils-percent",
+          "name": "Базофилы крови, доля (BAS%)",
+          "unit": "%",
+          "type": "number",
+          "sourceIds": [
+            "helix-cbc-example"
+          ]
+        },
+        {
+          "id": "basophils-absolute",
+          "name": "Базофилы крови, абсолютное число (BAS#)",
+          "unit": "10⁹/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-cbc-example"
+          ]
+        },
+        {
+          "id": "bands",
+          "name": "Палочкоядерные нейтрофилы крови",
+          "unit": "%",
+          "type": "number",
+          "sourceIds": [
+            "invitro-manual-differential"
+          ]
+        },
+        {
+          "id": "segmented",
+          "name": "Сегментоядерные нейтрофилы крови",
+          "unit": "%",
+          "type": "number",
+          "sourceIds": [
+            "invitro-manual-differential"
+          ]
+        },
+        {
+          "id": "metamyelocytes",
+          "name": "Метамиелоциты крови",
+          "unit": "%",
+          "type": "number",
+          "sourceIds": [
+            "invitro-manual-differential"
+          ]
+        },
+        {
+          "id": "myelocytes",
+          "name": "Миелоциты крови",
+          "unit": "%",
+          "type": "number",
+          "sourceIds": [
+            "invitro-manual-differential"
+          ]
+        },
+        {
+          "id": "reticulocytes-percent",
+          "name": "Ретикулоциты крови, доля (RET%)",
+          "unit": "%",
+          "type": "number",
+          "sourceIds": [
+            "helix-reticulocytes"
+          ]
+        },
+        {
+          "id": "reticulocytes-absolute",
+          "name": "Ретикулоциты крови, абсолютное число (RET#)",
+          "unit": "10⁹/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-reticulocytes"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "urinalysis",
+      "title": "Общий анализ мочи",
+      "kind": "lab",
+      "sourceIds": [
+        "minsk1-lab",
+        "helix-urinalysis"
+      ],
+      "note": "Для клеток предложены клет./мкл. Если в бланке подсчёт в поле зрения, замените единицу; автоматического пересчёта нет. Для качественных результатов единица пустая.",
+      "fields": [
+        {
+          "id": "color",
+          "name": "Цвет мочи",
+          "unit": "",
+          "type": "text",
+          "sourceIds": [
+            "helix-urinalysis"
+          ]
+        },
+        {
+          "id": "transparency",
+          "name": "Прозрачность мочи",
+          "unit": "",
+          "type": "text",
+          "sourceIds": [
+            "helix-urinalysis"
+          ]
+        },
+        {
+          "id": "specific-gravity",
+          "name": "Относительная плотность мочи",
+          "unit": "",
+          "type": "number",
+          "sourceIds": [
+            "helix-urinalysis"
+          ]
+        },
+        {
+          "id": "ph",
+          "name": "pH мочи",
+          "unit": "",
+          "type": "number",
+          "sourceIds": [
+            "helix-urinalysis"
+          ]
+        },
+        {
+          "id": "protein",
+          "name": "Белок мочи",
+          "unit": "г/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-urinalysis"
+          ]
+        },
+        {
+          "id": "glucose",
+          "name": "Глюкоза мочи, качественно",
+          "unit": "",
+          "type": "text",
+          "sourceIds": [
+            "helix-urinalysis"
+          ]
+        },
+        {
+          "id": "ketones",
+          "name": "Кетоновые тела мочи, качественно",
+          "unit": "",
+          "type": "text",
+          "sourceIds": [
+            "helix-urinalysis"
+          ]
+        },
+        {
+          "id": "bilirubin",
+          "name": "Билирубин мочи, качественно",
+          "unit": "",
+          "type": "text",
+          "sourceIds": [
+            "helix-urinalysis"
+          ]
+        },
+        {
+          "id": "urobilinogen",
+          "name": "Уробилиноген мочи, качественно",
+          "unit": "",
+          "type": "text",
+          "sourceIds": [
+            "helix-urinalysis"
+          ]
+        },
+        {
+          "id": "nitrites",
+          "name": "Нитриты мочи, качественно",
+          "unit": "",
+          "type": "text",
+          "sourceIds": [
+            "helix-urinalysis"
+          ]
+        },
+        {
+          "id": "blood-reaction",
+          "name": "Реакция мочи на кровь / гемоглобин",
+          "unit": "",
+          "type": "text",
+          "sourceIds": [
+            "helix-urinalysis"
+          ]
+        },
+        {
+          "id": "leukocyte-esterase",
+          "name": "Лейкоцитарная эстераза мочи",
+          "unit": "",
+          "type": "text",
+          "sourceIds": [
+            "helix-urinalysis"
+          ]
+        },
+        {
+          "id": "leukocytes",
+          "name": "Лейкоциты мочи",
+          "unit": "клет./мкл",
+          "type": "text",
+          "sourceIds": [
+            "helix-urinalysis"
+          ]
+        },
+        {
+          "id": "erythrocytes",
+          "name": "Эритроциты мочи",
+          "unit": "клет./мкл",
+          "type": "text",
+          "sourceIds": [
+            "helix-urinalysis"
+          ]
+        },
+        {
+          "id": "squamous-epithelium",
+          "name": "Плоский эпителий мочи",
+          "unit": "клет./мкл",
+          "type": "text",
+          "sourceIds": [
+            "helix-urinalysis"
+          ]
+        },
+        {
+          "id": "casts",
+          "name": "Цилиндры мочи",
+          "unit": "",
+          "type": "text",
+          "sourceIds": [
+            "helix-urinalysis"
+          ]
+        },
+        {
+          "id": "bacteria",
+          "name": "Бактерии мочи",
+          "unit": "",
+          "type": "text",
+          "sourceIds": [
+            "helix-urinalysis"
+          ]
+        },
+        {
+          "id": "mucus",
+          "name": "Слизь мочи",
+          "unit": "",
+          "type": "text",
+          "sourceIds": [
+            "helix-urinalysis"
+          ]
+        },
+        {
+          "id": "crystals",
+          "name": "Кристаллы мочи",
+          "unit": "",
+          "type": "text",
+          "sourceIds": [
+            "helix-urinalysis"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "biochemistry",
+      "title": "Биохимический анализ крови",
+      "kind": "lab",
+      "sourceIds": [
+        "minsk1-lab",
+        "helix-biochemistry",
+        "helix-liver",
+        "helix-urea",
+        "helix-electrolytes",
+        "helix-crp",
+        "helix-lipids",
+        "helix-hba1c"
+      ],
+      "note": "Набор полей для ручного переноса разных биохимических исследований. Наличие всех этих показателей в одном бланке или в конкретной поликлинике не подтверждено. HbA1c переносится только при наличии в бланке.",
+      "fields": [
+        {
+          "id": "glucose",
+          "name": "Глюкоза крови",
+          "unit": "ммоль/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-biochemistry"
+          ]
+        },
+        {
+          "id": "total-protein",
+          "name": "Общий белок крови",
+          "unit": "г/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-biochemistry"
+          ]
+        },
+        {
+          "id": "albumin",
+          "name": "Альбумин крови",
+          "unit": "г/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-liver"
+          ]
+        },
+        {
+          "id": "creatinine",
+          "name": "Креатинин крови",
+          "unit": "мкмоль/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-biochemistry"
+          ]
+        },
+        {
+          "id": "urea",
+          "name": "Мочевина крови",
+          "unit": "ммоль/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-urea"
+          ]
+        },
+        {
+          "id": "uric-acid",
+          "name": "Мочевая кислота крови",
+          "unit": "мкмоль/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-biochemistry"
+          ]
+        },
+        {
+          "id": "bilirubin-total",
+          "name": "Билирубин общий крови",
+          "unit": "мкмоль/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-biochemistry"
+          ]
+        },
+        {
+          "id": "bilirubin-direct",
+          "name": "Билирубин прямой крови",
+          "unit": "мкмоль/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-biochemistry"
+          ]
+        },
+        {
+          "id": "bilirubin-indirect",
+          "name": "Билирубин непрямой крови",
+          "unit": "мкмоль/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-liver"
+          ]
+        },
+        {
+          "id": "alt",
+          "name": "Аланинаминотрансфераза крови (АЛТ)",
+          "unit": "Ед/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-biochemistry"
+          ]
+        },
+        {
+          "id": "ast",
+          "name": "Аспартатаминотрансфераза крови (АСТ)",
+          "unit": "Ед/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-biochemistry"
+          ]
+        },
+        {
+          "id": "alp",
+          "name": "Щелочная фосфатаза крови (ЩФ)",
+          "unit": "Ед/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-liver"
+          ]
+        },
+        {
+          "id": "ggt",
+          "name": "Гамма-глутамилтрансфераза крови (ГГТ)",
+          "unit": "Ед/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-biochemistry"
+          ]
+        },
+        {
+          "id": "amylase-pancreatic",
+          "name": "Амилаза панкреатическая крови",
+          "unit": "Ед/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-biochemistry"
+          ]
+        },
+        {
+          "id": "cholesterol-total",
+          "name": "Холестерин общий крови",
+          "unit": "ммоль/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-biochemistry"
+          ]
+        },
+        {
+          "id": "hdl",
+          "name": "Холестерин ЛПВП крови",
+          "unit": "ммоль/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-lipids"
+          ]
+        },
+        {
+          "id": "ldl",
+          "name": "Холестерин ЛПНП крови",
+          "unit": "ммоль/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-lipids"
+          ]
+        },
+        {
+          "id": "triglycerides",
+          "name": "Триглицериды крови",
+          "unit": "ммоль/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-biochemistry"
+          ]
+        },
+        {
+          "id": "potassium",
+          "name": "Калий крови",
+          "unit": "ммоль/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-electrolytes"
+          ]
+        },
+        {
+          "id": "sodium",
+          "name": "Натрий крови",
+          "unit": "ммоль/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-electrolytes"
+          ]
+        },
+        {
+          "id": "chloride",
+          "name": "Хлор крови",
+          "unit": "ммоль/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-electrolytes"
+          ]
+        },
+        {
+          "id": "calcium-total",
+          "name": "Кальций общий крови",
+          "unit": "ммоль/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-biochemistry"
+          ]
+        },
+        {
+          "id": "iron",
+          "name": "Железо сыворотки",
+          "unit": "мкмоль/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-biochemistry"
+          ]
+        },
+        {
+          "id": "crp",
+          "name": "С-реактивный белок крови, обычная чувствительность (СРБ)",
+          "unit": "мг/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-crp"
+          ]
+        },
+        {
+          "id": "hba1c",
+          "name": "Гликированный гемоглобин крови (HbA1c)",
+          "unit": "%",
+          "type": "number",
+          "sourceIds": [
+            "helix-hba1c"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "coagulation",
+      "title": "Коагулограмма",
+      "kind": "lab",
+      "sourceIds": [
+        "kopyl-lab",
+        "helix-coagulation",
+        "helix-liver",
+        "helix-thrombin-time"
+      ],
+      "note": "Состав — объединённый набор полей ввода, а не единая утверждённая панель. Протромбин по Квику и ПТИ — разные показатели; ПТИ при необходимости вносится отдельно.",
+      "fields": [
+        {
+          "id": "prothrombin-quick",
+          "name": "Протромбин по Квику",
+          "unit": "%",
+          "type": "number",
+          "sourceIds": [
+            "helix-coagulation"
+          ]
+        },
+        {
+          "id": "inr",
+          "name": "Международное нормализованное отношение (МНО)",
+          "unit": "",
+          "type": "number",
+          "sourceIds": [
+            "helix-coagulation"
+          ]
+        },
+        {
+          "id": "prothrombin-time",
+          "name": "Протромбиновое время",
+          "unit": "с",
+          "type": "number",
+          "sourceIds": [
+            "helix-liver"
+          ]
+        },
+        {
+          "id": "aptt",
+          "name": "Активированное частичное тромбопластиновое время (АЧТВ)",
+          "unit": "с",
+          "type": "number",
+          "sourceIds": [
+            "helix-coagulation"
+          ]
+        },
+        {
+          "id": "thrombin-time",
+          "name": "Тромбиновое время",
+          "unit": "с",
+          "type": "number",
+          "sourceIds": [
+            "helix-thrombin-time"
+          ]
+        },
+        {
+          "id": "fibrinogen",
+          "name": "Фибриноген крови",
+          "unit": "г/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-coagulation"
+          ]
+        },
+        {
+          "id": "antithrombin",
+          "name": "Антитромбин III, активность",
+          "unit": "%",
+          "type": "number",
+          "sourceIds": [
+            "helix-coagulation"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "thyroid",
+      "title": "Гормоны щитовидной железы",
+      "kind": "lab",
+      "sourceIds": [
+        "minsk1-lab",
+        "helix-thyroid-units"
+      ],
+      "note": "Результаты и референсы вводятся из бланка; единицы можно изменить.",
+      "fields": [
+        {
+          "id": "tsh",
+          "name": "Тиреотропный гормон крови (ТТГ)",
+          "unit": "мкМЕ/мл",
+          "type": "number",
+          "sourceIds": [
+            "helix-thyroid-units"
+          ]
+        },
+        {
+          "id": "ft4",
+          "name": "Тироксин свободный крови (Т4 свободный)",
+          "unit": "пмоль/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-thyroid-units"
+          ]
+        },
+        {
+          "id": "ft3",
+          "name": "Трийодтиронин свободный крови (Т3 свободный)",
+          "unit": "пмоль/л",
+          "type": "number",
+          "sourceIds": [
+            "helix-thyroid-units"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ecg",
+      "title": "ЭКГ",
+      "kind": "study",
+      "sourceIds": [
+        "minsk1-functional"
+      ],
+      "note": "Название исследования подтверждено перечнем учреждения. Поле заключения — решение интерфейса для ручного переноса текста; официальный протокол исследования не воспроизводится.",
+      "fields": [
+        {
+          "id": "conclusion",
+          "name": "ЭКГ — заключение",
+          "unit": "",
+          "type": "text",
+          "sourceIds": [
+            "minsk1-functional"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "echocardiography",
+      "title": "Эхокардиография",
+      "kind": "study",
+      "sourceIds": [
+        "minsk1-functional"
+      ],
+      "note": "Название исследования подтверждено перечнем учреждения. Поле заключения — решение интерфейса для ручного переноса текста; официальный протокол исследования не воспроизводится.",
+      "fields": [
+        {
+          "id": "conclusion",
+          "name": "Эхокардиография — заключение",
+          "unit": "",
+          "type": "text",
+          "sourceIds": [
+            "minsk1-functional"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "holter",
+      "title": "Холтеровское мониторирование ЭКГ",
+      "kind": "study",
+      "sourceIds": [
+        "minsk1-functional"
+      ],
+      "note": "Название исследования подтверждено перечнем учреждения. Поле заключения — решение интерфейса для ручного переноса текста; официальный протокол исследования не воспроизводится.",
+      "fields": [
+        {
+          "id": "conclusion",
+          "name": "Холтеровское мониторирование ЭКГ — заключение",
+          "unit": "",
+          "type": "text",
+          "sourceIds": [
+            "minsk1-functional"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "abpm",
+      "title": "Суточное мониторирование АД",
+      "kind": "study",
+      "sourceIds": [
+        "minsk1-functional"
+      ],
+      "note": "Название исследования подтверждено перечнем учреждения. Поле заключения — решение интерфейса для ручного переноса текста; официальный протокол исследования не воспроизводится.",
+      "fields": [
+        {
+          "id": "conclusion",
+          "name": "Суточное мониторирование АД — заключение",
+          "unit": "",
+          "type": "text",
+          "sourceIds": [
+            "minsk1-functional"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ultrasound-abdomen",
+      "title": "УЗИ органов брюшной полости",
+      "kind": "study",
+      "sourceIds": [
+        "minsk1-ultrasound"
+      ],
+      "note": "Название исследования подтверждено перечнем учреждения. Поле заключения — решение интерфейса для ручного переноса текста; официальный протокол исследования не воспроизводится.",
+      "fields": [
+        {
+          "id": "conclusion",
+          "name": "УЗИ органов брюшной полости — заключение",
+          "unit": "",
+          "type": "text",
+          "sourceIds": [
+            "minsk1-ultrasound"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ultrasound-kidneys",
+      "title": "УЗИ почек",
+      "kind": "study",
+      "sourceIds": [
+        "minsk1-ultrasound"
+      ],
+      "note": "Название исследования подтверждено перечнем учреждения. Поле заключения — решение интерфейса для ручного переноса текста; официальный протокол исследования не воспроизводится.",
+      "fields": [
+        {
+          "id": "conclusion",
+          "name": "УЗИ почек — заключение",
+          "unit": "",
+          "type": "text",
+          "sourceIds": [
+            "minsk1-ultrasound"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ultrasound-thyroid",
+      "title": "УЗИ щитовидной железы",
+      "kind": "study",
+      "sourceIds": [
+        "minsk1-ultrasound"
+      ],
+      "note": "Название исследования подтверждено перечнем учреждения. Поле заключения — решение интерфейса для ручного переноса текста; официальный протокол исследования не воспроизводится.",
+      "fields": [
+        {
+          "id": "conclusion",
+          "name": "УЗИ щитовидной железы — заключение",
+          "unit": "",
+          "type": "text",
+          "sourceIds": [
+            "minsk1-ultrasound"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "chest-xray",
+      "title": "Рентгенологическое исследование органов грудной клетки",
+      "kind": "study",
+      "sourceIds": [
+        "minsk1-xray"
+      ],
+      "note": "Название исследования подтверждено перечнем учреждения. Поле заключения — решение интерфейса для ручного переноса текста; официальный протокол исследования не воспроизводится.",
+      "fields": [
+        {
+          "id": "conclusion",
+          "name": "Рентгенологическое исследование органов грудной клетки — заключение",
+          "unit": "",
+          "type": "text",
+          "sourceIds": [
+            "minsk1-xray"
+          ]
+        }
+      ]
+    }
+  ]
+}
+

@@ -128,6 +128,36 @@ body{--sidebar-width:236px}
 #investigation-dialog .hint{font-size:12px;margin:3px 0 0}#investigation-dialog .dialog-actions{flex-wrap:wrap}#investigation-dialog .button{white-space:normal}
 #investigation-error{margin:16px 0 0;color:#a12929;background:#fff0ee;padding:10px;border-radius:6px}#investigation-dialog [hidden]{display:none!important}
 @media(max-width:650px){.patient-investigations .card-head{padding:14px}.investigations-content{padding:0 14px 14px}.investigation-dynamics{padding:12px}.investigation-table,.investigation-table tbody{display:block}.investigation-table caption{display:block}.investigation-table thead{display:none}.investigation-table tr{display:block;border-top:1px solid var(--line);padding:10px 0}.investigation-table th,.investigation-table td{display:block;border:0;padding:6px 0}.investigation-table td[data-label]::before{content:attr(data-label);display:block;color:var(--muted);font-size:12px;margin-bottom:4px}.investigation-table .investigation-name{margin-top:3px}.investigation-actions .actions{gap:8px 16px}.investigation-chart text{font-size:14px}#investigation-dialog{padding:20px}#investigation-dialog .field-grid{grid-template-columns:minmax(0,1fr);gap:12px}}
+.investigation-add-actions{margin-bottom:20px}.investigation-add-actions .button,.patient-investigations .card-head .button{white-space:normal;text-align:left}
+#patient-investigation-reports{margin-bottom:22px}.investigation-report{border:1px solid var(--line);border-radius:8px;padding:14px;margin:12px 0;background:#fafcfb;min-width:0}
+.investigation-report-head{display:flex;gap:12px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap}.investigation-report-head>div:first-child{min-width:0;flex:1 1 200px}
+.investigation-report-head h3{font-size:15px;line-height:1.5;margin:0;overflow-wrap:anywhere}.investigation-report-head p{font-size:12px;color:var(--muted);margin:4px 0 0}
+.investigation-report-head .actions{gap:6px 12px}.investigation-report .button{white-space:normal;font-size:12px}
+.report-results{margin-top:12px}.report-results>summary,.report-field-extra>summary,.report-sources>summary{font-size:12px;color:var(--green);cursor:pointer;line-height:1.6}
+.report-result-list{margin:12px 0 0}.report-result-row{display:grid;grid-template-columns:minmax(130px,1fr) minmax(0,1.5fr);gap:10px 18px;border-top:1px solid var(--line);padding:10px 0;line-height:1.55}
+.report-result-row dt{font-size:13px;overflow-wrap:anywhere}.report-result-row dd{font-size:14px;margin:0;overflow-wrap:anywhere;white-space:pre-wrap}
+.report-result-unit{font-weight:400;font-size:13px;color:var(--muted)}.report-result-reference,.report-result-note{display:block;color:var(--muted);font-size:12px;margin-top:5px}
+#visit-investigations>.hint,#visit-investigation-list>.hint{font-size:12px;line-height:1.6;color:var(--muted)}
+#investigation-report-dialog{width:min(860px,calc(100vw - 32px));max-width:860px;max-height:calc(100dvh - 32px);overflow-y:auto}
+#investigation-report-dialog p{overflow-wrap:anywhere;line-height:1.6}#investigation-report-dialog .hint{font-size:12px}
+#investigation-report-form>.field{margin:16px 0}#investigation-report-form>.field-grid{grid-template-columns:minmax(150px,.7fr) minmax(0,1.3fr);gap:16px}
+#investigation-report-form input,#investigation-report-form textarea,#investigation-report-form select{min-width:0;max-width:100%;box-sizing:border-box}
+.report-sources{margin:14px 0}.report-sources p,.report-sources li{font-size:12px!important;line-height:1.6;overflow-wrap:anywhere}.report-sources ul{padding-left:20px}.report-sources a{color:var(--green)}
+.report-field{border-top:1px solid var(--line);padding:13px 0}.report-field-main{display:grid;grid-template-columns:minmax(130px,1.3fr) minmax(100px,1fr) minmax(90px,.65fr);gap:12px;align-items:center}
+.report-field-name label{line-height:1.5}.report-field-value textarea{min-height:42px;height:42px;padding:9px 10px;line-height:1.5}
+.report-field-unit{position:relative}.report-field-unit label{font-size:10px;color:var(--muted);font-weight:400;margin-bottom:-4px}
+.report-field-unit input{min-height:38px;padding:7px 9px;font-size:13px}.report-field-extra{margin-top:7px}.report-field-extra .field-grid{margin-top:10px;gap:12px}
+.report-field-extra label{font-size:12px}.report-field-extra textarea{min-height:70px;font-size:13px}
+#investigation-report-error,#investigation-attach-error{margin:16px 0 0;color:#a12929;background:#fff0ee;padding:10px;border-radius:6px}
+#investigation-report-dialog .dialog-actions,#investigation-attach-dialog .dialog-actions{position:sticky;bottom:-28px;background:white;padding:12px 0;margin-top:12px;flex-wrap:wrap;z-index:1;border-top:1px solid var(--line)}
+#investigation-report-dialog .button,#investigation-attach-dialog .button{white-space:normal}
+#investigation-attach-dialog{width:min(680px,calc(100vw - 32px));max-width:680px;max-height:calc(100dvh - 32px);overflow-y:auto}
+.investigation-attach-row{display:flex;gap:10px;align-items:flex-start;padding:10px 0;font-size:13px;line-height:1.5;cursor:pointer;overflow-wrap:anywhere}
+.investigation-attach-row>input{width:18px;height:18px;flex:0 0 18px;margin:2px 0 0;accent-color:var(--green)}.investigation-attach-row>span{min-width:0}.investigation-attach-row strong{display:block}.investigation-attach-row>span>span{display:block;font-size:12px;color:var(--muted);white-space:pre-wrap;margin-top:3px}
+.investigation-attach-group{border:1px solid var(--line);border-radius:8px;padding:3px 12px 10px;margin-bottom:12px}.investigation-attach-group details{margin-left:28px}.investigation-attach-group summary{font-size:12px;color:var(--green);cursor:pointer;line-height:1.5}
+.report-field .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.visit-context .tab-bar{max-width:100%;overflow-x:auto}.visit-context .tab{flex-shrink:0}
+@media(max-width:650px){#investigation-report-dialog,#investigation-attach-dialog{padding:20px}#investigation-report-form>.field-grid,.report-field-extra .field-grid{grid-template-columns:minmax(0,1fr)}.report-field-main{grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);gap:8px 10px}.report-field-name{grid-column:1/-1}.report-field-value{align-self:end}.report-field-extra summary{font-size:11px}.report-result-row{grid-template-columns:minmax(0,1fr);gap:4px}.investigation-report{padding:12px}.investigation-report-head h3{font-size:14px}#investigation-report-dialog .dialog-actions,#investigation-attach-dialog .dialog-actions{bottom:-20px}.investigation-attach-group details{margin-left:0}}
 /* Linked sick leave actions within a visit. */
 .visit-sick-leave{margin:20px 0;padding:18px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);min-width:0}
 .visit-sick-leave h3{font-size:16px;margin:0 0 12px}

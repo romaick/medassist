@@ -28,7 +28,7 @@
     <p id="investigation-description">Перепишите сведения из бланка. Дата, название и результат обязательны. Нормы и единицы указывайте для этого результата.</p>
     <form id="investigation-form" novalidate>
       <div class="field-grid">
-        <div class="field"><label for="investigation-kind">Тип</label><select id="investigation-kind"><option value="lab">Анализ</option><option value="study">Исследование</option></select></div>
+        <div class="field"><label for="investigation-kind">Тип</label><select id="investigation-kind"><option value="lab">Другое лабораторное исследование</option><option value="study">Другое инструментальное исследование</option></select></div>
         <div class="field"><label for="investigation-date">Дата из бланка</label><input id="investigation-date" type="date" required aria-describedby="investigation-error"></div>
       </div>
       <div class="field"><label for="investigation-name">Название показателя или исследования</label><input id="investigation-name" type="text" maxlength="200" autocomplete="off" required aria-describedby="investigation-name-hint investigation-error"><p id="investigation-name-hint" class="hint">Для динамики используйте одинаковое название и единицы.</p></div>
@@ -38,6 +38,32 @@
       <div class="field"><label for="investigation-note">Примечание</label><textarea id="investigation-note" rows="2" maxlength="1000"></textarea></div>
       <p id="investigation-error" class="field-error" role="alert" hidden></p>
       <div class="dialog-actions"><button id="investigation-cancel" class="button secondary" type="button">Отмена</button><button id="investigation-save" class="button primary" type="submit">Сохранить результат</button></div>
+    </form>
+  </dialog>
+  <dialog id="investigation-report-dialog" aria-labelledby="investigation-report-heading" aria-describedby="investigation-report-description">
+    <h2 id="investigation-report-heading">Добавить бланк</h2>
+    <p id="investigation-report-patient"></p>
+    <p id="investigation-report-description">Перепишите только выполненные показатели. Строки без результата не сохраняются и не попадут в запись. Единицы можно исправить по бланку; нормы вводятся вручную.</p>
+    <form id="investigation-report-form" novalidate>
+      <div class="field"><label for="investigation-report-template">Бланк исследования</label><select id="investigation-report-template"></select></div>
+      <div class="field-grid">
+        <div class="field"><label for="investigation-report-date">Дата из бланка</label><input id="investigation-report-date" type="date" required aria-describedby="investigation-report-error"></div>
+        <div class="field"><label for="investigation-report-title">Название бланка</label><input id="investigation-report-title" type="text" maxlength="200" required aria-describedby="investigation-report-error"></div>
+      </div>
+      <div id="investigation-report-sources"></div>
+      <p class="hint">Изменение связанного результата вернёт проверенные приёмы в черновики. Сохранённый текст записи остаётся для вашей проверки.</p>
+      <div id="investigation-report-rows"></div>
+      <p id="investigation-report-error" role="alert" hidden></p>
+      <div class="dialog-actions"><button id="investigation-report-cancel" class="button secondary" type="button">Отмена</button><button id="investigation-report-save" class="button primary" type="submit">Сохранить бланк</button></div>
+    </form>
+  </dialog>
+  <dialog id="investigation-attach-dialog" aria-labelledby="investigation-attach-heading">
+    <h2 id="investigation-attach-heading">Исследования из карточки</h2>
+    <p>Отметьте результаты, которые нужно включить в этот приём и новый черновик. Снятие флажка убирает связь с приёмом; результат остаётся в карточке.</p>
+    <form id="investigation-attach-form" novalidate>
+      <div id="investigation-attach-options"></div>
+      <p id="investigation-attach-error" role="alert" hidden></p>
+      <div class="dialog-actions"><button id="investigation-attach-cancel" class="button secondary" type="button">Отмена</button><button id="investigation-attach-save" class="button primary" type="submit">Применить выбор</button></div>
     </form>
   </dialog>
   <dialog id="prescription-dialog" aria-labelledby="prescription-title" aria-describedby="prescription-description">

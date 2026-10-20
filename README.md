@@ -1,6 +1,14 @@
 # МедАссистент
 
-Поликлинический офлайн-прототип для Windows: структурированный приём, анамнез, осмотр и редактируемый черновик врачебной записи. Версия 0.14.0.
+Поликлинический офлайн-прототип для Windows: структурированный приём, анамнез, осмотр и редактируемый черновик врачебной записи. Версия 0.15.0.
+
+В 0.15.0 бланки исследований доступны во время первичного и повторного приёма во вкладке «Исследования», а также в карточке пациента. Названия показателей и единицы подготовлены, единицы можно изменить по исходному бланку. Введите результаты и сохраните: пустые показатели пропускаются, ноль сохраняется. В итоговом бланке и новом черновике видны только внесённые значения. Доступны: Общий анализ крови; Общий анализ мочи; Биохимический анализ крови; Коагулограмма; Гормоны щитовидной железы; ЭКГ; Эхокардиография; Холтеровское мониторирование ЭКГ; Суточное мониторирование АД; УЗИ органов брюшной полости; УЗИ почек; УЗИ щитовидной железы; Рентгенологическое исследование органов грудной клетки.
+
+Для специфических анализов остаются «Другое лабораторное исследование» и «Другое инструментальное исследование» с ручным названием, результатом/заключением и единицами. Результат, внесённый в приёме, сразу сохраняется в карточке. В повторе прежние результаты выбираются явно через «Выбрать из карточки» без создания дубликатов; «Убрать из приёма» сохраняет результат в карточке.
+
+Изменение или удаление связанных результатов возвращает затронутые проверенные записи в черновики, сохраняя их ручной текст. Для нового текста нажмите «Сформировать черновик». Исследования располагаются перед заключением; повторная явка остаётся последней. Поиск, динамика и резервное копирование включают бланки. Копии с ними или связями приёма требуют0.15.0+, schema4 и старые данные сохраняются без миграции.
+
+Шаблоны предназначены для ввода и не заявляются едиными нормативными формами Беларуси. Доступность категорий исследований проверена по государственным учреждениям Беларуси, состав и единицы — также по первичным лабораторным источникам. Полные ссылки и ограничения: [источники исследований](medassist/research/INVESTIGATION-SOURCES.md). Нормы вводятся из конкретного бланка, готовые нормальные результаты и клинические выводы не подставляются.
 
 В 0.14.0 добавлены анализы и исследования в карточку пациента. Кнопка в шапке ведёт к разделу ниже истории приёмов. Нажмите «Добавить результат»: тип, дата, название, результат, единицы, нормы из бланка и примечание вводятся вручную. Дата, название и результат обязательны. Отмена ничего не сохраняет; каждую строку можно изменить или удалить после подтверждения.
 
@@ -129,7 +137,7 @@
 
 ```powershell
 $env:MEDASSIST_PLAYWRIGHT = 'C:\tools\node_modules\playwright'
-node --test medassist/tests/core.test.cjs medassist/tests/icd.test.cjs medassist/tests/icd-catalog.test.cjs medassist/tests/ui-patient.test.cjs medassist/tests/ui-workflow.test.cjs medassist/tests/ui-icd.test.cjs medassist/tests/sick-leave.test.cjs medassist/tests/ui-sick-leave.test.cjs medassist/tests/workflow-tools.test.cjs medassist/tests/ui-visit-tools.test.cjs medassist/tests/prescriptions.test.cjs medassist/tests/ui-prescriptions.test.cjs medassist/tests/investigations.test.cjs medassist/tests/ui-investigations.test.cjs
+node --test medassist/tests/core.test.cjs medassist/tests/icd.test.cjs medassist/tests/icd-catalog.test.cjs medassist/tests/ui-patient.test.cjs medassist/tests/ui-workflow.test.cjs medassist/tests/ui-icd.test.cjs medassist/tests/sick-leave.test.cjs medassist/tests/ui-sick-leave.test.cjs medassist/tests/workflow-tools.test.cjs medassist/tests/ui-visit-tools.test.cjs medassist/tests/prescriptions.test.cjs medassist/tests/ui-prescriptions.test.cjs medassist/tests/investigations.test.cjs medassist/tests/ui-investigations.test.cjs medassist/tests/investigation-reports.test.cjs medassist/tests/investigation-catalog.test.cjs medassist/tests/ui-investigation-reports.test.cjs
 powershell.exe -NoProfile -File medassist/tests/update.test.ps1
 powershell.exe -NoProfile -File medassist/tests/update-link.test.ps1
 ```

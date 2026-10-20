@@ -460,7 +460,9 @@ test("patient full name is shared by card and visits without renaming a differen
   const first = (await saved(page)).encounters[0];
   await tab(page, "draft"); await page.locator("#draft-text").fill("ДЕМО: ручной текст, сохранить дословно.");
   const original = (await saved(page)).encounters[0];
-  await click(page, "new"); await fullName().fill("Тестов Борис Демонстрационный");
+  await click(page, "patients");
+  await page.locator('.patients-page [data-action="new"]').click();
+  await fullName().fill("Тестов Борис Демонстрационный");
   const second = (await saved(page)).encounters[1];
 
   await click(page, "home"); await openVisit(page, first.id); await tab(page, "basic");

@@ -237,6 +237,9 @@ test("an actual confirmed repeat visit keeps all five animated sections and foot
   await page.locator('#followup-list [data-followup-id="nav-visit-main"] [data-action="start-followup"]').click();
   await page.locator("#repeat-create").click();
   await selected(visitTab(page, "basic"));
+  assert.equal(await page.locator('#main-navigation [data-action="new"]').count(), 0);
+  assert.equal(await page.locator('#main-navigation [data-action="visit"]').count(), 1);
+  assert.equal(await page.locator("#main-navigation button").nth(2).getAttribute("data-action"), "visit");
   const created = (await saved(page)).encounters.find(entry => !original.encounters.some(old => old.id === entry.id));
   assert.ok(created);
   await page.locator('[data-field="age"]').fill("41");
@@ -397,6 +400,43 @@ test("global menu stays above the workspace and the clock sits left, with usable
   assert.equal(await page.locator("#current-date").textContent(), "19 апреля(04) 2032");
   assert.equal(await page.locator(".visit-action-bar").evaluate(node => node.getBoundingClientRect().left), 0);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+});
+
+test("New patient becomes Current visit in the same menu slot and returns to the saved encounter", {timeout: 18000}, async t => {
+  const page = await openApp(t);
+  const menu = page.locator("#main-navigation");
+  const actions = () => menu.locator("button").evaluateAll(nodes => nodes.map(node => node.dataset.action));
+  const initial = await actions();
+  assert.equal(initial[2], "new");
+  const currentMenu = initial.map(name => name === "new" ? "visit" : name);
+  await click(page, "new");
+  assert.deepEqual(await actions(), currentMenu, "one slot changes, without adding a button");
+  assert.equal(await menu.locator('[data-action="visit"]').innerText(), "Текущий приём");
+  await click(page, "visit");
+  assert.equal(await raw(page), null, "opening the empty current form creates no stored records");
+  await click(page, "home");
+  assert.deepEqual(await actions(), initial, "discarded empty form restores New patient");
+  await click(page, "new");
+  await page.locator("#patient-label").fill("Тестов Один Пункт Меню");
+  await choose(visitTab(page, "draft"));
+  await page.locator("#draft-text").fill("ДЕМО: текст текущего приёма");
+  const before = await raw(page);
+  const original = JSON.parse(before);
+  await click(page, "patients");
+  assert.deepEqual(await actions(), currentMenu);
+  await click(page, "visit");
+  await selected(visitTab(page, "draft"));
+  assert.equal(await page.locator("#draft-text").inputValue(), "ДЕМО: текст текущего приёма");
+  assert.equal(await raw(page), before, "returning to Current visit never adds an encounter");
+  await click(page, "patients");
+  await page.locator('.patients-page [data-action="new"]').click();
+  await page.locator("#patient-label").fill("Тестов Следующий Пациент");
+  assert.deepEqual(await actions(), currentMenu);
+  const after = await saved(page);
+  assert.equal(after.patients.length, 2);
+  assert.equal(after.encounters.length, 2);
+  assert.deepEqual(after.encounters[0], original.encounters[0]);
+  assert.deepEqual(after.patients[0], original.patients[0]);
 });
 
 test("new visit keeps entered identity, history and manual draft through rapid forward and backward tab changes", {timeout: 25000}, async t => {

@@ -119,6 +119,10 @@ async function patientFilterFixture(page) {
   return initial;
 }
 const patientCategory = (page, category) => page.locator('[data-action="patient-category"][data-category="' + category + '"]');
+async function choosePatientCategory(page, category) {
+  await patientCategory(page, category).click();
+  await page.waitForFunction(category => document.querySelector('[data-action="patient-category"][data-category="' + category + '"]')?.getAttribute('aria-selected') === 'true', category);
+}
 const patientIds = page => page.locator('.patient-row').evaluateAll(rows => rows.map(row => row.dataset.patientId.replace('patient-', '')));
 const patientFilter = (page, key) => page.locator('#patient-filter-' + key);
 
@@ -129,7 +133,7 @@ test("patient categories count unique patients; sick leave filters use inclusive
   for (const [category, count] of [['all', 9], ['sick', 5], ['return', 5], ['draft', 4]]) {
     assert.match(await patientCategory(page, category).innerText(), new RegExp('· ' + count + '$'));
   }
-  await patientCategory(page, 'sick').click();
+  await choosePatientCategory(page, 'sick');
   assert.deepEqual(await patientIds(page), ['a', 'c', 'd', 'b', 'u']);
   assert.equal(await patientFilter(page, 'sort').inputValue(), 'sick');
   const rowB = page.locator('.patient-row[data-patient-id="patient-b"]');
@@ -168,24 +172,24 @@ test("patient filters combine search, return dates, latest visit and review stat
   const {page} = await openApp(t);
   const initial = await patientFilterFixture(page);
   await click(page, 'patient-toggle-filters');
-  await patientCategory(page, 'draft').click();
+  await choosePatientCategory(page, 'draft');
   assert.deepEqual((await patientIds(page)).sort(), ['b', 'c', 'no', 'u']);
-  await patientCategory(page, 'return').click();
+  await choosePatientCategory(page, 'return');
   assert.equal((await patientIds(page)).length, 5);
-  await patientCategory(page, 'all').click();
+  await choosePatientCategory(page, 'all');
   await patientFilter(page, 'return').selectOption('today');
   assert.deepEqual(await patientIds(page), ['a']);
   await patientFilter(page, 'return').selectOption('week');
   assert.deepEqual(await patientIds(page), ['a', 'future', 'b']);
   await patientFilter(page, 'review').selectOption('draft');
   assert.deepEqual(await patientIds(page), ['b']);
-  await patientCategory(page, 'sick').click();
+  await choosePatientCategory(page, 'sick');
   assert.deepEqual(await patientIds(page), ['b'], 'shared filters persist across categories');
   assert.match(await page.locator('#patient-filter-summary').innerText(), /Есть черновики/);
   await patientFilter(page, 'sick').selectOption('soon');
   assert.deepEqual(await patientIds(page), [], 'all conditions must hold for a patient');
   assert.match(await page.locator('#patient-list').innerText(), /не найдены/);
-  await click(page, 'patient-reset-filters'); await patientCategory(page, 'all').click();
+  await click(page, 'patient-reset-filters'); await choosePatientCategory(page, 'all');
   await patientFilter(page, 'return').selectOption('range');
   await patientFilter(page, 'returnFrom').fill('2032-04-21');
   await patientFilter(page, 'returnTo').fill('2032-04-21');
@@ -297,7 +301,7 @@ test("patient search finds historical encounters and dates; collapsed filters re
   assert.match(await page.locator('#patient-filter-summary').innerText(), /Явка: Сегодня/);
   assert.match(await page.locator('#patient-filter-summary').innerText(), /Все записи проверены врачом/);
   assert.match(await page.locator('#patient-filter-summary').innerText(), /По ФИО/);
-  await patientCategory(page, 'sick').click();
+  await choosePatientCategory(page, 'sick');
   assert.equal(await panel.isVisible(), false, 'rubric change does not expose filters');
   assert.deepEqual(await patientIds(page), ['a']);
   await toggle.click();
@@ -592,9 +596,11 @@ test('compact patient card edits identity with keyboard, preserves drafts and sh
     const header = document.querySelector('.patient-card-header').getBoundingClientRect();
     const history = document.querySelector('#patient-history').getBoundingClientRect();
     const first = document.querySelector('#patient-history [data-visit-id]').getBoundingClientRect();
-    return { gap: history.top - header.bottom, firstTop: first.top, firstBottom: first.bottom, height: innerHeight };
+    const tabs = document.querySelector('.patient-tabs').getBoundingClientRect();
+    return { gap: history.top - tabs.bottom, tabGap: tabs.top - header.bottom, firstTop: first.top, firstBottom: first.bottom, height: innerHeight };
   });
-  assert.ok(layout.gap >= 0 && layout.gap <= 32, 'history follows the compact header directly');
+  assert.ok(layout.tabGap >= 0 && layout.tabGap <= 32, 'module tabs follow the compact header');
+  assert.ok(layout.gap >= 0 && layout.gap <= 32, 'history follows its module tabs directly');
   assert.ok(layout.firstTop >= 0 && layout.firstBottom <= layout.height, 'a complete history row fits at 1366×768');
   await edit.focus(); await page.keyboard.press('Enter');
   assert.equal(await edit.getAttribute('aria-expanded'), 'true');

@@ -67,6 +67,7 @@ async function seed(page, investigations = [], withVisit = true) {
 async function openCard(page) {
   await action(page, "patients").click();
   await page.locator('.patient-row[data-patient-id="' + patientId + '"] [data-action="patient"]').click();
+  await page.locator('.patient-tabs [data-card-tab="investigations"]').click();
 }
 async function fillForm(page, data = values) {
   await page.locator("#investigation-kind").selectOption(data.kind);

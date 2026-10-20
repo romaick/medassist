@@ -1,6 +1,10 @@
 # МедАссистент
 
-Поликлинический офлайн-прототип для Windows: структурированный приём, анамнез, осмотр и редактируемый черновик врачебной записи. Версия 0.15.2.
+Поликлинический офлайн-прототип для Windows: структурированный приём, анамнез, осмотр и редактируемый черновик врачебной записи. Версия 0.16.0.
+
+В 0.16.0 вкладки приёма, рубрики пациентов и разделы карточки переключаются с боковой анимацией и перемещаемым выделением. Доступны нажатие, стрелки/Home/End на полосе вкладок и горизонтальный свайп по содержимому на сенсорном экране. Поля ввода сохраняют обычные жесты и выделение. При системном уменьшении анимации переход мгновенный.
+
+Карточка пациента разделена на вкладки «История приёмов», «Анализы и исследования», «Журнал больничных». Одновременно виден один раздел; шапка с ФИО, ближайшей явкой и основными действиями остаётся сверху. Сохранение внутри модуля оставляет его открытым. На узких экранах верхняя полоса вкладок прокручивается горизонтально.
 
 В 0.15.2 гликированный гемоглобин (HbA1c, %) вынесен в отдельный лабораторный анализ. В БАК добавлены ферритин (мкг/л) и витамин D, 25(OH)D (нг/мл). Всего 14 шаблонов. Прежние значения HbA1c в сохранённых биохимических бланках остаются доступными, в том числе при редактировании и просмотре динамики.
 
@@ -141,7 +145,7 @@
 
 ```powershell
 $env:MEDASSIST_PLAYWRIGHT = 'C:\tools\node_modules\playwright'
-node --test medassist/tests/core.test.cjs medassist/tests/icd.test.cjs medassist/tests/icd-catalog.test.cjs medassist/tests/ui-patient.test.cjs medassist/tests/ui-workflow.test.cjs medassist/tests/ui-icd.test.cjs medassist/tests/sick-leave.test.cjs medassist/tests/ui-sick-leave.test.cjs medassist/tests/workflow-tools.test.cjs medassist/tests/ui-visit-tools.test.cjs medassist/tests/prescriptions.test.cjs medassist/tests/ui-prescriptions.test.cjs medassist/tests/investigations.test.cjs medassist/tests/ui-investigations.test.cjs medassist/tests/investigation-reports.test.cjs medassist/tests/investigation-catalog.test.cjs medassist/tests/ui-investigation-reports.test.cjs
+node --test medassist/tests/core.test.cjs medassist/tests/icd.test.cjs medassist/tests/icd-catalog.test.cjs medassist/tests/ui-patient.test.cjs medassist/tests/ui-workflow.test.cjs medassist/tests/ui-icd.test.cjs medassist/tests/sick-leave.test.cjs medassist/tests/ui-sick-leave.test.cjs medassist/tests/workflow-tools.test.cjs medassist/tests/ui-visit-tools.test.cjs medassist/tests/prescriptions.test.cjs medassist/tests/ui-prescriptions.test.cjs medassist/tests/investigations.test.cjs medassist/tests/ui-investigations.test.cjs medassist/tests/investigation-reports.test.cjs medassist/tests/investigation-catalog.test.cjs medassist/tests/ui-investigation-reports.test.cjs medassist/tests/ui-navigation.test.cjs
 powershell.exe -NoProfile -File medassist/tests/update.test.ps1
 powershell.exe -NoProfile -File medassist/tests/update-link.test.ps1
 ```

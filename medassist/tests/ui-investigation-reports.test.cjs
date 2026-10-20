@@ -63,9 +63,11 @@ async function seed(page, {report = true, linked = true, checked = true, custom 
 async function openCard(page) {
   await action(page, "patients").click();
   await page.locator('.patient-row[data-patient-id="' + patientId + '"] [data-action="patient"]').click();
+  await page.locator('.patient-tabs [data-card-tab="investigations"]').click();
 }
 async function openVisit(page) {
   await openCard(page);
+  await page.locator('.patient-tabs [data-card-tab="history"]').click();
   await page.locator('#patient-history [data-action="open"][data-id="' + visitId + '"]').click();
   await page.locator('[data-action="tab"][data-tab="investigations"]').click();
 }

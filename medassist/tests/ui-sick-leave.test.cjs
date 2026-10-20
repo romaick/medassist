@@ -135,6 +135,7 @@ async function seed(page, { existingLeave = false, legacy = false } = {}) {
 async function openCard(page) {
   await click(page, "patients");
   await page.locator('.patient-row[data-patient-id="' + patientId + '"] [data-action="patient"]').click();
+  await page.locator('.patient-tabs [data-card-tab="sick"]').click();
   await page.locator("#sick-leave-journal").waitFor();
 }
 
@@ -324,6 +325,7 @@ for (const operation of ["issue", "extend", "close"]) {
     }
     const second = await newPage();
     await openCard(second);
+    await second.locator('.patient-tabs [data-card-tab="history"]').click();
     await second.locator('[data-action="open"][data-id="' + visitId + '"]').click();
     await second.locator('[data-action="tab"][data-tab="history"]').first().click();
     await second.locator('[data-field="history.complaints"]').fill("ДЕМО: новые жалобы введены в другом окне.");
@@ -351,8 +353,10 @@ test("journal numbers are searchable and the patient sick-leave category respond
   await page.locator('#patient-search').fill("искать-932");
   assert.equal(await page.locator('.patient-row[data-patient-id="' + patientId + '"]').count(), 1);
   await page.locator('[data-action="patient-category"][data-category="sick"]').click();
+  await page.waitForFunction(() => document.querySelector('[data-action="patient-category"][data-category="sick"]')?.getAttribute("aria-selected") === "true");
   assert.equal(await page.locator('.patient-row[data-patient-id="' + patientId + '"]').count(), 1);
   await page.locator('.patient-row [data-action="patient"]').click();
+  await page.locator('.patient-tabs [data-card-tab="sick"]').click();
   await row(page, id).locator('[data-action="sick-number"]').click();
   await page.locator("#sick-leave-number").fill("ДЕМО-УТОЧНЁННЫЙ-932");
   await saveDialog(page);
@@ -361,8 +365,10 @@ test("journal numbers are searchable and the patient sick-leave category respond
   await closeLeave(page, id, "2032-04-14");
   await click(page, "patients");
   await page.locator('[data-action="patient-category"][data-category="sick"]').click();
+  await page.waitForFunction(() => document.querySelector('[data-action="patient-category"][data-category="sick"]')?.getAttribute("aria-selected") === "true");
   assert.equal(await page.locator('.patient-row[data-patient-id="' + patientId + '"]').count(), 0);
   await page.locator('[data-action="patient-category"][data-category="all"]').click();
+  await page.waitForFunction(() => document.querySelector('[data-action="patient-category"][data-category="all"]')?.getAttribute("aria-selected") === "true");
   await page.locator('#patient-search').fill("уточнённый-932");
   assert.equal(await page.locator('.patient-row[data-patient-id="' + patientId + '"]').count(), 1, "closed journal numbers remain searchable");
 });

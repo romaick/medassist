@@ -13,7 +13,11 @@ const key = "medassist.demo.v4";
 const now = "2032-04-15T07:00:00.000Z";
 const today = "2032-04-15";
 const click = (page, action) => page.locator('[data-action="' + action + '"]').first().click();
-const tab = (page, name) => page.locator('[data-action="tab"][data-tab="' + name + '"]').first().click();
+const tab = async (page, name) => {
+  const selector = '[data-action="tab"][data-tab="' + name + '"]';
+  await page.locator(selector).first().click();
+  await page.locator(selector + '[aria-selected="true"]').waitFor({state: "visible"});
+};
 const saved = page => page.evaluate(key => JSON.parse(localStorage.getItem(key)), key);
 const raw = page => page.evaluate(key => localStorage.getItem(key), key);
 const openVisit = (page, id) => page.locator('[data-action="open"][data-id="' + id + '"]').click();

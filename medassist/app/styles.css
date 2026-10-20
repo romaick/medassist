@@ -260,3 +260,33 @@ html[data-pager-direction="previous"]::view-transition-new(medassist-pager){anim
 @media(max-width:650px){.pager-tabs .pager-tab,.visit-context .pager-tabs .tab,.patients-card .pager-tabs .button{padding:10px 12px;min-height:42px;font-size:13px}.patient-card-page .patient-tabs{margin-bottom:12px}.patient-card-page .patient-tabs .pager-tab{font-size:13px}.patients-card .workflow-filters.pager-tabs{padding-bottom:3px}}
 @media(prefers-reduced-motion:reduce){html.medassist-pager-transition::view-transition-old(medassist-pager),html.medassist-pager-transition::view-transition-new(medassist-pager){animation:none}.pager-tabs{scroll-behavior:auto}}
 @media print{.patient-tabs,.pager-indicator{display:none!important}.pager-viewport{overflow:visible}}
+
+.report-field-main.report-field-study{grid-template-columns:minmax(130px,1fr) minmax(0,2fr)}
+@media(max-width:650px){.report-field-main.report-field-study{grid-template-columns:minmax(0,1fr)}}
+
+/* Global navigation above the workspace; clock and context beside it. */
+body{--sidebar-width:220px}
+.shell{grid-template-columns:var(--sidebar-width) minmax(0,1fr);grid-template-rows:auto 1fr}
+.navigation-header{grid-column:1/-1;display:flex;align-items:center;gap:20px;min-width:0;padding:10px 18px;background:var(--nav);color:#d7e6e3}
+.navigation-header .brand{flex:0 0 194px;gap:9px;padding:0}
+.navigation-header .brand img{width:32px;height:32px}
+.navigation-header .brand strong{font-size:17px}
+.navigation-header .brand small{font-size:9px}
+.navigation-header .nav{display:flex;flex-wrap:nowrap;gap:3px;min-width:0;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scrollbar-width:thin;scrollbar-color:#527973 transparent}
+.navigation-header .nav button{flex:0 0 auto;gap:7px;padding:10px 11px;min-height:40px;font-size:12px;white-space:nowrap}
+.navigation-header .nav .icon{width:17px;height:17px}
+.navigation-header .nav .tiny-dot{display:none}
+.navigation-header .nav button:focus-visible{outline:2px solid #87dac0;outline-offset:-3px}
+.context-sidebar.topbar{position:sticky;top:0;align-self:start;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;flex-wrap:nowrap;gap:26px;min-width:0;min-height:calc(100dvh - 60px);padding:26px 20px;border:0;border-right:1px solid var(--line);background:#edf3f0}
+.context-sidebar .current-datetime{display:flex;flex-direction:column;align-items:flex-start;gap:6px;white-space:normal;font-size:16px;line-height:1.45}
+.context-sidebar #current-date{max-width:100%;color:#4e6367}
+.context-sidebar #current-time{font-size:38px;font-weight:650;line-height:1.2;letter-spacing:-1px}
+.context-sidebar .topbar-left{display:flex;flex-direction:column;align-items:flex-start;gap:7px;min-width:0;color:var(--ink)}
+.context-sidebar .context-mode{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+.context-sidebar .topbar-left strong{font-size:17px;font-weight:600;line-height:1.45;overflow-wrap:anywhere}
+.context-sidebar .side-bottom{display:block;margin-top:0;padding:0}
+.context-sidebar .version{font-size:11px;line-height:1.5;color:#657b72;margin-top:12px}
+.workspace>main{padding-top:26px}
+@media(max-width:1150px){body{--sidebar-width:190px}.navigation-header{gap:14px;padding:10px 14px}.navigation-header .brand{flex-basis:162px}.navigation-header .brand strong{font-size:15px}.navigation-header .brand img{width:28px;height:28px}.navigation-header .brand small{font-size:8px}.context-sidebar.topbar{padding:24px 16px}.context-sidebar #current-time{font-size:34px}.context-sidebar .current-datetime{font-size:15px}}
+@media(max-width:650px){body{--sidebar-width:0px}.shell{display:block}.navigation-header{display:block;padding:12px 12px 8px}.navigation-header .brand{padding:0 4px 10px}.navigation-header .brand strong{font-size:17px}.navigation-header .brand small{font-size:9px}.navigation-header .brand img{width:30px;height:30px}.navigation-header .nav{max-width:100%;gap:3px}.navigation-header .nav button{font-size:12px;min-height:40px}.context-sidebar.topbar{position:static;display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);align-items:center;gap:10px 16px;min-height:0;padding:14px 18px;border-right:0;border-bottom:1px solid var(--line)}.context-sidebar .current-datetime{font-size:13px;gap:4px}.context-sidebar #current-time{font-size:27px}.context-sidebar .topbar-left{gap:4px}.context-sidebar .topbar-left strong{font-size:14px}.context-sidebar .context-mode{font-size:10px}.context-sidebar .side-bottom{display:none}.workspace>main{padding-top:20px}}
+@media print{.navigation-header,.context-sidebar{display:none!important}.shell{display:block}.workspace>main{padding-top:0}}

@@ -87,6 +87,7 @@ async function openVisit(page, id = firstId) {
   await openCard(page);
   await page.locator('#patient-history [data-action="open"][data-id="' + id + '"]').click();
   await page.locator('[data-action="tab"][data-tab="draft"]').first().click();
+  await page.locator("#prescription-list").waitFor({state: "visible"});
 }
 
 async function fillForm(page, values) {

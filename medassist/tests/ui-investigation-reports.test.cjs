@@ -315,7 +315,8 @@ test("unit overrides and both custom investigation types are entered during a vi
     await page.locator("#investigation-kind").selectOption(kind);
     await page.locator("#investigation-name").fill(kind === "lab" ? "ДЕМО специальный показатель" : "ДЕМО специальное исследование");
     await page.locator("#investigation-result").fill(kind === "lab" ? "7,8" : "ДЕМО текстовое заключение");
-    await page.locator("#investigation-unit").fill(kind === "lab" ? "демо/мл" : "");
+    if (kind === "lab") await page.locator("#investigation-unit").fill("демо/мл");
+    else assert.equal(await page.locator("#investigation-unit").isVisible(), false);
     await page.locator("#investigation-save").click();
     await page.locator("#investigation-dialog").waitFor({state: "hidden"});
   }
@@ -327,6 +328,71 @@ test("unit overrides and both custom investigation types are entered during a vi
   await openCard(page);
   assert.equal(core.getInvestigationReports(await patient(page)).length, 1);
   assert.equal(await page.locator("#investigation-series option").count(), 3);
+});
+
+test("instrumental manual input hides units across kind changes and keeps laboratory units", {timeout: 24000}, async t => {
+  const {page} = await openApp(t);
+  await seed(page, {report: false}); await openVisit(page);
+  await action(page, "investigation-add").click();
+  await page.locator("#investigation-kind").selectOption("lab");
+  await page.locator("#investigation-unit").fill("ДЕМО-ЕДИНИЦА");
+  await page.locator("#investigation-kind").selectOption("study");
+  assert.equal(await page.locator("#investigation-unit").isVisible(), false);
+  assert.doesNotMatch(await page.locator("#investigation-dialog").innerText(), /единиц/i);
+  await page.locator("#investigation-kind").selectOption("lab");
+  assert.equal(await page.locator("#investigation-unit").inputValue(), "ДЕМО-ЕДИНИЦА");
+  await page.locator("#investigation-kind").selectOption("study");
+  await page.locator("#investigation-name").fill("ДЕМО инструментальное исследование");
+  await page.locator("#investigation-result").fill("ДЕМО заключение");
+  await page.locator("#investigation-save").click();
+  await page.locator("#investigation-dialog").waitFor({state:"hidden"});
+  assert.equal((await patient(page)).investigations[0].unit, "", "hidden lab unit must not leak into a study");
+  assert.doesNotMatch(await generate(page), /ДЕМО-ЕДИНИЦА|единиц/i);
+  await openCard(page);
+  assert.doesNotMatch(await page.locator("#patient-investigations").innerText(), /единиц/i);
+  await page.reload(); await openCard(page);
+  await action(page, "investigation-edit").click();
+  assert.equal(await page.locator("#investigation-unit").isVisible(), false);
+  await page.locator("#investigation-cancel").click();
+  await action(page, "investigation-add").click();
+  await page.locator("#investigation-kind").selectOption("lab");
+  assert.equal(await page.locator("#investigation-unit").isVisible(), true);
+});
+
+test("all instrumental templates omit units and legacy study values survive editing without unit output", {timeout: 24000}, async t => {
+  const {page} = await openApp(t);
+  await seed(page, {custom: reportValues({panelId:"ecg", kind:"study", title:"ДЕМО ЭКГ",
+    rows:[{fieldId:"conclusion", name:"ДЕМО заключение ЭКГ", result:"ДЕМО текст", unit:"ДЕМО-ЕДИНИЦА", reference:"", note:""}]})});
+  await openCard(page);
+  const before = await patient(page), reportId = before.investigations[0].reportId;
+  assert.doesNotMatch(await page.locator("#patient-investigations").innerText(), /единиц/i);
+  await reportRow(page, reportId).locator('[data-action="investigation-report-edit"]').click();
+  assert.equal(await field(page, "conclusion", "unit").isVisible(), false);
+  assert.doesNotMatch(await page.locator("#investigation-report-dialog").innerText(), /единиц/i);
+  await field(page, "conclusion").fill("ДЕМО изменённое заключение");
+  await saveReport(page);
+  assert.equal((await patient(page)).investigations[0].unit, "ДЕМО-ЕДИНИЦА", "legacy metadata is not erased");
+  assert.equal((await patient(page)).investigations[0].id, before.investigations[0].id);
+  assert.equal((await entry(page)).draft.text, "ДЕМО: сохранённая ручная запись");
+  await openVisit(page);
+  const draft = await generate(page);
+  assert.match(draft, /ДЕМО изменённое заключение/); assert.doesNotMatch(draft, /ДЕМО-ЕДИНИЦА/);
+  await openCard(page); await openReport(page);
+  for (const id of ["ecg","echocardiography","holter","abpm","ultrasound-abdomen","ultrasound-kidneys","ultrasound-thyroid","chest-xray"]) {
+    await page.locator("#investigation-report-template").selectOption(id);
+    assert.equal(await field(page, "conclusion", "unit").isVisible(), false, id);
+    assert.doesNotMatch(await page.locator("#investigation-report-dialog").innerText(), /единиц/i, id);
+  }
+  await page.locator("#investigation-report-template").selectOption("cbc");
+  assert.equal(await field(page, "hemoglobin", "unit").isVisible(), true);
+  assert.equal(await field(page, "hemoglobin", "unit").inputValue(), "г/л");
+  await field(page, "hemoglobin").fill("ДЕМО 123");
+  await page.locator("#investigation-report-template").selectOption("ecg");
+  await field(page, "conclusion").fill("ДЕМО новый результат");
+  await saveReport(page);
+  assert.equal((await patient(page)).investigations.at(-1).unit, "");
+  await page.reload(); await openCard(page);
+  assert.ok((await patient(page)).investigations.some(item => item.result === "ДЕМО новый результат"));
 });
 
 test("report save failure retains every entered value and a stale second window cannot duplicate the report", {timeout: 25000}, async t => {

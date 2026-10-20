@@ -96,6 +96,61 @@ async function activeKeys(page, selector, attribute) {
   return page.locator(selector + '[aria-selected="true"]').evaluateAll((nodes, attribute) => nodes.map(node => node.getAttribute(attribute)), attribute);
 }
 
+test("global menu stays above the workspace and the clock sits left, with usable narrow navigation and fixed visit controls", {timeout: 25000}, async t => {
+  const page = await openApp(t, {reducedMotion: "reduce"});
+  await page.setViewportSize({width: 1366, height: 768});
+  const menu = page.locator('.navigation-header .nav');
+  const desktop = await page.evaluate(() => {
+    const rect = selector => {
+      const box = document.querySelector(selector).getBoundingClientRect();
+      return {left: box.left, right: box.right, top: box.top, bottom: box.bottom, height: box.height};
+    };
+    return {header: rect('.navigation-header'), sidebar: rect('.context-sidebar'), main: rect('main'),
+      menuRows: [...document.querySelectorAll('.navigation-header .nav button')].map(node => node.getBoundingClientRect().top)};
+  });
+  assert.ok(desktop.header.bottom <= desktop.sidebar.top + 1);
+  assert.ok(desktop.sidebar.right <= desktop.main.left + 1);
+  assert.ok(desktop.header.height <= 80, "the horizontal menu does not add an empty tall header");
+  assert.equal(new Set(desktop.menuRows).size, 1, "all navigation entries occupy one horizontal row");
+  assert.equal(await page.locator("#current-date").textContent(), "19 апреля(04) 2032");
+  assert.equal(await page.locator("#current-time").textContent(), "11:00");
+  for (const name of ["patients", "followups", "modules", "help", "home"]) {
+    await menu.locator('[data-action="' + name + '"]').click();
+    assert.equal(await menu.locator('[data-action="' + name + '"]').getAttribute("aria-current"), "page");
+    assert.equal(await page.locator("#current-time").textContent(), "11:00");
+  }
+  await menu.locator('[data-action="new"]').click();
+  await page.locator("#patient-label").fill("Тестов Верхнее Меню");
+  await choose(visitTab(page, "exam"));
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  const pinned = await page.evaluate(() => {
+    const head = document.querySelector(".visit-context").getBoundingClientRect();
+    const actions = document.querySelector(".visit-action-bar").getBoundingClientRect();
+    const side = document.querySelector(".context-sidebar").getBoundingClientRect();
+    return {headTop: head.top, sideTop: side.top, actionBottom: actions.bottom, actionLeft: actions.left, sideRight: side.right};
+  });
+  assert.ok(pinned.headTop >= -1 && pinned.headTop <= 1, "visit identity stays at the viewport top");
+  assert.ok(pinned.sideTop >= -1 && pinned.sideTop <= 1, "clock stays visible while scrolling");
+  assert.equal(pinned.actionBottom, 768);
+  assert.equal(pinned.actionLeft, pinned.sideRight);
+  await page.setViewportSize({width: 390, height: 844});
+  await menu.locator('[data-action="help"]').click();
+  const narrow = await page.evaluate(() => {
+    const nav = document.querySelector(".navigation-header .nav");
+    const selected = nav.querySelector('[aria-current="page"]').getBoundingClientRect();
+    const box = nav.getBoundingClientRect();
+    return {overflow: document.documentElement.scrollWidth > innerWidth, scrollable: nav.scrollWidth > nav.clientWidth,
+      visible: selected.left >= box.left - 1 && selected.right <= box.right + 1};
+  });
+  assert.equal(narrow.overflow, false);
+  assert.equal(narrow.scrollable, true);
+  assert.equal(narrow.visible, true, "active navigation remains visible after rendering");
+  await menu.locator('[data-action="visit"]').click();
+  assert.equal(await page.locator("#current-date").textContent(), "19 апреля(04) 2032");
+  assert.equal(await page.locator(".visit-action-bar").evaluate(node => node.getBoundingClientRect().left), 0);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+});
+
 test("new visit keeps entered identity, history and manual draft through rapid forward and backward tab changes", {timeout: 25000}, async t => {
   const page = await openApp(t);
   await action(page, "new").click();

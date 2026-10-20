@@ -1139,7 +1139,7 @@
       if (report.title) lines.push(report.title.trim() + " от " + date + ":");
       for (const item of report.results) {
         lines.push((report.title ? "" : date + " — ") + item.name.trim() + ": " + item.result.trim()
-          + (item.unit.trim() ? " " + item.unit.trim() : "")
+          + (item.kind === "lab" && item.unit.trim() ? " " + item.unit.trim() : "")
           + (item.reference.trim() ? "; нормы из бланка: " + item.reference.trim() : "")
           + (item.note.trim() ? "; примечание: " + item.note.trim() : ""));
       }

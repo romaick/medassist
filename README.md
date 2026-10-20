@@ -1,6 +1,10 @@
 # МедАссистент
 
-Поликлинический офлайн-прототип для Windows: структурированный приём, анамнез, осмотр и редактируемый черновик врачебной записи. Версия 0.12.0.
+Поликлинический офлайн-прототип для Windows: структурированный приём, анамнез, осмотр и редактируемый черновик врачебной записи. Версия 0.13.0.
+
+В 0.13.0 добавлены структурированные назначения препаратов. В разделе «Запись» нажмите «Добавить препарат»: название, дозировка/доза на приём, способ приёма, кратность, длительность и примечание вводятся врачом. Несколько назначений можно редактировать или удалять по отдельности. Название обязательно; незаполненные основные параметры явно обозначаются, без подстановки доз и сроков. Новый черновик включает список назначений, а ручной текст сохраняется.
+
+В повторном приёме переносится только список явно отмеченных назначений после нажатия «Создать приём». По умолчанию отметок нет, при смене источника они сбрасываются. Постоянные препараты, аллергии и заболевания подтверждаются отдельно. История и поиск включают назначения; они сохраняются в резервной копии. Личные шаблоны рекомендаций по-прежнему содержат только свободный текст и не меняют назначения. Копии с назначениями требуют версии 0.13.0 или новее. Старые данные читаются без миграции, схема остаётся4, работа офлайн.
 
 В 0.12.0 больничный можно выдать, продлить или закрыть прямо в разделе «Запись». При продлении и закрытии врач явно выбирает существующий листок. Сохранение одновременно обновляет приём и журнал; номер подставляется из выбранного листка. Прежнюю отметку из истории можно выбрать с переносом в журнал при сохранении. Пересечения считаются один раз: 19–23 + 23–27 дают 9 дней, текущий отрезок — 5. Связанное действие нельзя повторно добавить из того же приёма; последнее можно отменить и ввести заново. Более ранние действия исправляются после отмены последующих. Ручные тексты не переписываются.
 
@@ -119,7 +123,7 @@
 
 ```powershell
 $env:MEDASSIST_PLAYWRIGHT = 'C:\tools\node_modules\playwright'
-node --test medassist/tests/core.test.cjs medassist/tests/icd.test.cjs medassist/tests/icd-catalog.test.cjs medassist/tests/ui-patient.test.cjs medassist/tests/ui-workflow.test.cjs medassist/tests/ui-icd.test.cjs medassist/tests/sick-leave.test.cjs medassist/tests/ui-sick-leave.test.cjs medassist/tests/workflow-tools.test.cjs medassist/tests/ui-visit-tools.test.cjs
+node --test medassist/tests/core.test.cjs medassist/tests/icd.test.cjs medassist/tests/icd-catalog.test.cjs medassist/tests/ui-patient.test.cjs medassist/tests/ui-workflow.test.cjs medassist/tests/ui-icd.test.cjs medassist/tests/sick-leave.test.cjs medassist/tests/ui-sick-leave.test.cjs medassist/tests/workflow-tools.test.cjs medassist/tests/ui-visit-tools.test.cjs medassist/tests/prescriptions.test.cjs medassist/tests/ui-prescriptions.test.cjs
 powershell.exe -NoProfile -File medassist/tests/update.test.ps1
 powershell.exe -NoProfile -File medassist/tests/update-link.test.ps1
 ```

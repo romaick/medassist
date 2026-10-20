@@ -149,4 +149,27 @@ body{--sidebar-width:236px}
 @media(max-width:940px){.has-previous .exam-vitals-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:650px){.visit-heading>.actions{flex-wrap:wrap;gap:6px}.visit-comparison.has-previous{gap:12px}.previous-visit-panel{padding:16px;max-height:360px}.has-previous .exam-vitals-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.has-previous .exam-group-content .field-grid,.has-previous .field-grid.three{grid-template-columns:minmax(0,1fr)}#template-dialog{padding:20px}.template-apply-actions .button{font-size:13px}.visit-tools-heading .button{font-size:12px}}
 @media print{.previous-visit-panel{display:none!important}.visit-comparison.has-previous{display:block}}
+.visit-prescriptions{margin:20px 0;padding:18px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);min-width:0}
+.visit-prescriptions h3{margin:0;font-size:16px}.visit-prescriptions>.hint{font-size:12px;line-height:1.55;color:var(--muted);margin:10px 0 14px}
+.prescription-row{border:1px solid var(--line);border-radius:8px;padding:12px;margin-top:10px;min-width:0;background:#fafcfb}
+.prescription-row-head{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px}
+.prescription-row h4{font-size:14px;line-height:1.55;margin:0;overflow-wrap:anywhere;min-width:0;flex:1 1 180px}
+.prescription-row .actions{gap:6px 10px}.prescription-row .button{font-size:12px;white-space:normal}
+.prescription-parameters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px;margin:12px 0 0}
+.prescription-parameters>div{min-width:0}.prescription-parameters dt{font-size:11px;color:var(--muted);line-height:1.45;margin-bottom:3px}
+.prescription-parameters dd{font-size:13px;line-height:1.5;margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.prescription-parameters .prescription-missing{color:#855218}
+.prescription-note{font-size:13px;line-height:1.55;margin:12px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.prescription-empty{font-size:13px;color:var(--muted);margin:0}
+#prescription-dialog{width:min(620px,calc(100vw - 32px));max-width:620px;max-height:calc(100dvh - 32px);overflow-y:auto}
+#prescription-dialog p{overflow-wrap:anywhere;line-height:1.55}
+#prescription-dialog .field-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:16px 0}
+#prescription-dialog input,#prescription-dialog textarea{min-width:0;max-width:100%}
+#prescription-dialog .dialog-actions{flex-wrap:wrap}
+#prescription-dialog .button{white-space:normal}
+#prescription-error{margin-top:16px;color:#a12929;background:#fff0ee;padding:10px;border-radius:6px}
+#prescription-dialog [hidden],#repeat-dialog [hidden]{display:none!important}
+#repeat-prescriptions-section{border-top:1px solid var(--line);margin-top:12px;padding-top:18px}
+#repeat-prescriptions-section>.hint{font-size:12px;line-height:1.55}
+@media(max-width:650px){#prescription-dialog{padding:20px}#prescription-dialog .field-grid{grid-template-columns:minmax(0,1fr)}.prescription-parameters{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:650px){.sick-leave-summary{margin:0 14px 14px}.sick-leave-summary>div{align-items:flex-start}.sick-leave-list,.sick-leave-legacy-list{padding-left:14px;padding-right:14px}.sick-leave-footnote{padding:14px}.sick-leave-entry-head{align-items:flex-start}.sick-leave-journal .card-head{padding:14px}#sick-leave-dialog{padding:20px}#sick-leave-dialog .field-grid{grid-template-columns:minmax(0,1fr)}#sick-leave-dialog .dialog-actions{flex-wrap:wrap}.sick-leave-actions .button{white-space:normal;text-align:left}}

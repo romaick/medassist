@@ -22,6 +22,22 @@
     <h2 id="dialog-title"></h2><p id="dialog-message"></p>
     <div class="dialog-actions"><button id="dialog-cancel" class="button secondary" type="button">Отмена</button><button id="dialog-accept" class="button primary" type="button">Продолжить</button></div>
   </dialog>
+  <dialog id="prescription-dialog" aria-labelledby="prescription-title" aria-describedby="prescription-description">
+    <h2 id="prescription-title">Добавить препарат</h2>
+    <p id="prescription-description">Все назначения и параметры вводит врач. Обязательно название; незаполненные параметры будут отмечены в списке и черновике.</p>
+    <form id="prescription-form" novalidate>
+      <div class="field"><label for="prescription-name">Название препарата</label><input id="prescription-name" type="text" maxlength="200" autocomplete="off" required aria-describedby="prescription-error"></div>
+      <div class="field-grid">
+        <div class="field"><label for="prescription-dose">Дозировка / доза на приём</label><input id="prescription-dose" type="text" maxlength="200" autocomplete="off"></div>
+        <div class="field"><label for="prescription-route">Способ применения</label><input id="prescription-route" type="text" maxlength="200" autocomplete="off"></div>
+        <div class="field"><label for="prescription-frequency">Кратность / режим приёма</label><input id="prescription-frequency" type="text" maxlength="200" autocomplete="off"></div>
+        <div class="field"><label for="prescription-duration">Длительность</label><input id="prescription-duration" type="text" maxlength="200" autocomplete="off"></div>
+      </div>
+      <div class="field"><label for="prescription-note">Примечание</label><textarea id="prescription-note" rows="3" maxlength="1000"></textarea></div>
+      <p id="prescription-error" class="field-error" role="alert" hidden></p>
+      <div class="dialog-actions"><button id="prescription-cancel" class="button secondary" type="button">Отмена</button><button id="prescription-save" class="button primary" type="submit">Сохранить назначение</button></div>
+    </form>
+  </dialog>
   <input type="file" id="import-file" accept="application/json,.json" hidden>
   <dialog id="sick-leave-dialog" aria-labelledby="sick-leave-title" aria-describedby="sick-leave-description">
     <h2 id="sick-leave-title"></h2>
@@ -55,9 +71,12 @@
   <dialog id="repeat-dialog" aria-labelledby="repeat-title" aria-describedby="repeat-description">
     <h2 id="repeat-title">Повторный приём</h2>
     <p id="repeat-patient"></p>
-    <p id="repeat-description">Отметьте только сведения, которые хотите перенести, и подтвердите создание приёма. Без отметок анамнез останется пустым. Возраст, пол, жалобы, осмотр, показатели и заключение заполняются заново.</p>
+    <p id="repeat-description">Отметьте только сведения анамнеза и назначения препаратов, которые хотите перенести, и подтвердите создание приёма. Без отметок они останутся пустыми. Возраст, пол, жалобы, осмотр, показатели, диагноз и свободные рекомендации заполняются заново.</p>
     <div id="repeat-source-wrap" class="field"><label for="repeat-source">Перенести из приёма</label><select id="repeat-source"></select><p class="hint">При выборе другой записи отметки сбрасываются. Проверьте актуальность сведений.</p></div>
-    <div id="repeat-fields"></div>
+    <div id="repeat-fields">
+      <div id="repeat-history-fields"></div>
+      <section id="repeat-prescriptions-section" hidden aria-labelledby="repeat-prescriptions-title"><h3 id="repeat-prescriptions-title">Назначения препаратов из выбранного приёма</h3><p class="hint">Каждое назначение переносится только по вашей отметке. Проверьте параметры и актуальность назначения.</p><div id="repeat-prescriptions"></div></section>
+    </div>
     <div class="dialog-actions"><button id="repeat-cancel" class="button secondary" type="button">Отмена</button><button id="repeat-create" class="button primary" type="button">Создать приём</button></div>
   </dialog>
   <dialog id="update-help" aria-labelledby="update-help-title" aria-describedby="update-help-message">

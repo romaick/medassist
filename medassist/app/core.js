@@ -15,6 +15,9 @@
   const MAX_SICK_LEAVE_NUMBER_LENGTH = 120;
   const MAX_TEMPLATES = 100;
   const MAX_TEMPLATE_NAME_LENGTH = 120;
+  const MAX_PRESCRIPTIONS = 50;
+  const MAX_PRESCRIPTION_FIELD_LENGTH = 200;
+  const MAX_PRESCRIPTION_NOTE_LENGTH = 1000;
   const MAX_TEXT_LENGTH = 10000;
   const MAX_DRAFT_LENGTH = 100000;
   const MAX_FINGERPRINT_LENGTH = 350000;
@@ -22,6 +25,8 @@
   const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/;
   const PATIENT_FIELDS = ["id", "label", "createdAt", "updatedAt"];
   const CARRY_HISTORY_FIELDS = ["conditions", "medications", "allergies"];
+  const PRESCRIPTION_VALUE_FIELDS = ["name", "dose", "route", "frequency", "duration", "note"];
+  const PRESCRIPTION_FIELDS = ["id", ...PRESCRIPTION_VALUE_FIELDS];
   const LEGACY_GROUPS = {
     history: ["complaints", "onset", "course", "conditions", "medications", "allergies", "context"],
     exam: ["general", "cardiovascular", "respiratory", "abdomen", "neurological", "other"],
@@ -526,10 +531,90 @@
     if (!Array.isArray(fields) || Array.from(fields).some(field => !CARRY_HISTORY_FIELDS.includes(field))) {
       throw new Error("Можно перенести только явно выбранные заболевания, препараты и аллергии.");
     }
+    const prescriptionIds = options.carryPrescriptionIds === undefined ? [] : options.carryPrescriptionIds;
+    if (!Array.isArray(prescriptionIds) || new Set(prescriptionIds).size !== prescriptionIds.length || Array.from(prescriptionIds).some(id => typeof id !== "string" || !(source.prescriptions || []).some(item => item.id === id))) {
+      throw new Error("Для переноса назначений выберите существующие препараты без повторений.");
+    }
     const encounter = createEncounter({ id: options.id, now: options.now, patientId: source.patientId });
     if (encounter.id === source.id) throw new Error("У повторного приёма должен быть новый идентификатор.");
     for (const field of fields) encounter.history[field] = source.history[field];
+    if (prescriptionIds.length) {
+      encounter.prescriptions = source.prescriptions.filter(item => prescriptionIds.includes(item.id)).map(item => ({ ...item, id: newId("prescription") }));
+      assertEncounter(encounter);
+    }
     return encounter;
+  }
+
+  function validatePrescriptions(prescriptions) {
+    if (!Array.isArray(prescriptions)) return [{ field: "prescriptions", message: "Назначения препаратов должны быть массивом." }];
+    const errors = [];
+    const ids = new Set();
+    if (prescriptions.length > MAX_PRESCRIPTIONS) errors.push({ field: "prescriptions", message: "Допускается не более 50 назначений в одном приёме." });
+    for (let index = 0; index < prescriptions.length; index += 1) {
+      const item = prescriptions[index];
+      const prefix = "prescriptions." + index;
+      if (!isObject(item)) {
+        errors.push({ field: prefix, message: "Ожидается объект назначения препарата." });
+        continue;
+      }
+      for (const field of PRESCRIPTION_FIELDS) {
+        if (!Object.prototype.hasOwnProperty.call(item, field)) errors.push({ field: prefix + "." + field, message: "Обязательное поле отсутствует." });
+        else if (typeof item[field] !== "string") errors.push({ field: prefix + "." + field, message: "Значение должно быть строкой." });
+      }
+      for (const field of Object.keys(item)) {
+        if (!PRESCRIPTION_FIELDS.includes(field)) errors.push({ field: prefix + "." + field, message: "Неизвестное поле назначения препарата." });
+      }
+      if (typeof item.id === "string") {
+        if (!ID_PATTERN.test(item.id) || ids.has(item.id)) errors.push({ field: prefix + ".id", message: "Некорректный или повторяющийся идентификатор назначения." });
+        ids.add(item.id);
+      }
+      for (const field of PRESCRIPTION_VALUE_FIELDS) {
+        const limit = field === "note" ? MAX_PRESCRIPTION_NOTE_LENGTH : MAX_PRESCRIPTION_FIELD_LENGTH;
+        if (typeof item[field] === "string" && item[field].length > limit) errors.push({ field: prefix + "." + field, message: "Превышен лимит: " + limit + " символов." });
+      }
+      if (typeof item.name === "string" && !item.name.trim()) errors.push({ field: prefix + ".name", message: "Укажите название препарата." });
+    }
+    return errors;
+  }
+
+  function prescriptionChangeTime(options, fields) {
+    if (!isObject(options) || Object.keys(options).some(field => !fields.includes(field))) throw new Error("Некорректные параметры изменения назначения.");
+    const now = options.now === undefined ? new Date() : new Date(options.now);
+    if (!Number.isFinite(now.getTime()) || now.getUTCFullYear() < 1 || now.getUTCFullYear() > 9999) throw new Error("Некорректное время изменения назначения.");
+    return now.toISOString();
+  }
+
+  function upsertPrescription(encounter, values, options = {}) {
+    assertEncounter(encounter);
+    const updatedAt = prescriptionChangeTime(options, ["id", "now"]);
+    if (!isObject(values) || Object.keys(values).some(field => !PRESCRIPTION_VALUE_FIELDS.includes(field)) || PRESCRIPTION_VALUE_FIELDS.some(field => !Object.prototype.hasOwnProperty.call(values, field))) throw new Error("Неверная структура назначения препарата.");
+    const existing = encounter.prescriptions || [];
+    if (options.id !== undefined && (typeof options.id !== "string" || !existing.some(item => item.id === options.id))) throw new Error("Назначение для изменения не найдено.");
+    const prescription = { id: options.id === undefined ? newId("prescription") : options.id, ...values };
+    const prescriptions = options.id === undefined ? [...existing, prescription] : existing.map(item => item.id === options.id ? prescription : item);
+    return setReviewStatus({ ...encounter, prescriptions, updatedAt }, "draft");
+  }
+
+  function removePrescription(encounter, id, options = {}) {
+    assertEncounter(encounter);
+    const updatedAt = prescriptionChangeTime(options, ["now"]);
+    if (typeof id !== "string" || !(encounter.prescriptions || []).some(item => item.id === id)) throw new Error("Назначение для удаления не найдено.");
+    const result = { ...encounter, updatedAt };
+    const prescriptions = encounter.prescriptions.filter(item => item.id !== id);
+    if (prescriptions.length) result.prescriptions = prescriptions;
+    else delete result.prescriptions;
+    return setReviewStatus(result, "draft");
+  }
+
+  function formatPrescription(prescription) {
+    const errors = validatePrescriptions([prescription]);
+    if (errors.length) throw new Error("Некорректное назначение препарата: " + errors[0].message);
+    const text = value => value.trim() || "не указано";
+    return prescription.name.trim() + ". Дозировка: " + text(prescription.dose)
+      + "; способ приёма: " + text(prescription.route)
+      + "; кратность: " + text(prescription.frequency)
+      + "; длительность: " + text(prescription.duration)
+      + (prescription.note.trim() ? "; примечание: " + prescription.note.trim() : "") + ".";
   }
 
   function validateTemplates(templates) {
@@ -672,7 +757,7 @@
     const rootFields = version === 1 ? LEGACY_ROOT_FIELDS : version === 2 ? V2_ROOT_FIELDS : version === 3 ? V3_ROOT_FIELDS : ROOT_FIELDS;
     const errors = [];
     function problem(field, message) { errors.push({ field, message }); }
-    function shape(value, fields, prefix) {
+    function shape(value, fields, prefix, optionalFields = []) {
       if (!isObject(value)) {
         problem(prefix || "encounter", "Ожидается объект с полями приёма.");
         return false;
@@ -681,7 +766,7 @@
         if (!Object.prototype.hasOwnProperty.call(value, field)) problem(prefix ? prefix + "." + field : field, "Обязательное поле отсутствует.");
       }
       for (const field of Object.keys(value)) {
-        if (!fields.includes(field)) problem(prefix ? prefix + "." + field : field, "Неизвестное поле для версии данных " + version + ".");
+        if (!fields.includes(field) && !optionalFields.includes(field)) problem(prefix ? prefix + "." + field : field, "Неизвестное поле для версии данных " + version + ".");
       }
       return true;
     }
@@ -705,7 +790,8 @@
         problem(field, "Значение не может быть отрицательным.");
       }
     }
-    if (!shape(encounter, rootFields, "")) return errors;
+    if (!shape(encounter, rootFields, "", version >= 4 ? ["prescriptions"] : [])) return errors;
+    if (version >= 4 && Object.prototype.hasOwnProperty.call(encounter, "prescriptions")) errors.push(...validatePrescriptions(encounter.prescriptions));
     for (const field of ["id", "createdAt", "updatedAt", "visitDate", "age", "sex", "reason"]) string(encounter[field], field);
     if (typeof encounter.id === "string" && !ID_PATTERN.test(encounter.id)) {
       problem("id", "Идентификатор должен содержать 1–80 латинских букв, цифр, дефисов или подчёркиваний и начинаться с буквы или цифры.");
@@ -783,6 +869,7 @@
     for (const group of ["history", "exam", "examSelections", "vitals", "assessment"]) {
       source[group] = Object.fromEntries(GROUPS[group].map(field => [field, encounter[group][field]]));
     }
+    if (encounter.prescriptions?.length) source.prescriptions = encounter.prescriptions.map(item => Object.fromEntries(PRESCRIPTION_VALUE_FIELDS.map(field => [field, item[field]])));
     return source;
   }
 
@@ -880,6 +967,7 @@
       "Диагноз: " + text(encounter.assessment.summary),
       ...optional("Рекомендации", encounter.assessment.plan),
       ...optional("Наблюдение (из предыдущей версии)", encounter.assessment.followUp),
+      ...(encounter.prescriptions?.length ? ["Назначения препаратов:", ...encounter.prescriptions.map((item, index) => (index + 1) + ". " + formatPrescription(item))] : []),
       ...sickLeave(),
       ...optional("Повторный приём", encounter.assessment.returnVisitDate ? formatDate(encounter.assessment.returnVisitDate) : "")
     ].join("\n");
@@ -896,6 +984,7 @@
         ? Object.fromEntries(groups[field].map(key => [key, encounter[field][key]]))
         : encounter[field];
     }
+    if (version >= 4 && encounter.prescriptions?.length) result.prescriptions = encounter.prescriptions.map(item => Object.fromEntries(PRESCRIPTION_FIELDS.map(field => [field, item[field]])));
     return result;
   }
 
@@ -990,5 +1079,5 @@
     return validateBundle(parsed);
   }
 
-  return Object.freeze({ createPatient, createEncounter, createRepeatEncounter, createDemoEncounter, setReviewStatus, setReturnVisitStatus, linkReturnVisit, getReturnVisits, calculateBmi, calculateSickLeaveDays, calculateSickLeaveTotalDays, getSickLeaveJournal, getEncounterSickLeaveSummary, getEncounterSickLeaveAction, applyEncounterSickLeave, undoEncounterSickLeave, issueSickLeave, extendSickLeave, closeSickLeave, undoSickLeaveAction, createVisitTemplate, applyVisitTemplate, validateTemplates, generateDraft, fingerprint, validatePatient, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_PATIENTS, MAX_PATIENT_LABEL_LENGTH, MAX_SICK_LEAVES, MAX_SICK_LEAVE_EVENTS, MAX_SICK_LEAVE_NUMBER_LENGTH, MAX_TEMPLATES, MAX_TEMPLATE_NAME_LENGTH, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
+  return Object.freeze({ createPatient, createEncounter, createRepeatEncounter, createDemoEncounter, upsertPrescription, removePrescription, formatPrescription, validatePrescriptions, setReviewStatus, setReturnVisitStatus, linkReturnVisit, getReturnVisits, calculateBmi, calculateSickLeaveDays, calculateSickLeaveTotalDays, getSickLeaveJournal, getEncounterSickLeaveSummary, getEncounterSickLeaveAction, applyEncounterSickLeave, undoEncounterSickLeave, issueSickLeave, extendSickLeave, closeSickLeave, undoSickLeaveAction, createVisitTemplate, applyVisitTemplate, validateTemplates, generateDraft, fingerprint, validatePatient, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_PATIENTS, MAX_PATIENT_LABEL_LENGTH, MAX_SICK_LEAVES, MAX_SICK_LEAVE_EVENTS, MAX_SICK_LEAVE_NUMBER_LENGTH, MAX_TEMPLATES, MAX_TEMPLATE_NAME_LENGTH, MAX_PRESCRIPTIONS, MAX_PRESCRIPTION_FIELD_LENGTH, MAX_PRESCRIPTION_NOTE_LENGTH, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
 });

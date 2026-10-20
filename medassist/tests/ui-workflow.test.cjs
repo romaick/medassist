@@ -943,7 +943,7 @@ test("patient context and encounter actions remain visible while scrolling, upda
       assert.equal(await visibleInViewport(page.locator('#visit-record-status')), true, name + ' record status visible at ' + end);
       assert.equal(await visibleInViewport(page.locator('#save-status')), true, name + ' save status visible at ' + end);
       assert.equal(await visibleInViewport(page.locator('.visit-action-bar')), true, name + ' actions visible at ' + end);
-      if (name === 'draft') for (const action of ['generate', 'copy', 'download-text', 'review-record']) {
+      if (name === 'draft') for (const action of ['generate', 'copy', 'download-text', 'review-record', 'finish-visit']) {
         const control = page.locator('[data-action="' + action + '"]');
         assert.equal(await control.count(), 1, 'one ' + action + ' button');
         assert.equal(await visibleInViewport(control), true, action + ' visible at ' + end);

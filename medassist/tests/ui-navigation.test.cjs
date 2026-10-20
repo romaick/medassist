@@ -260,6 +260,12 @@ test("an actual confirmed repeat visit keeps all five animated sections and foot
   assert.equal(after.patients.length, original.patients.length);
   assert.equal(after.encounters.find(entry => entry.id === created.id).age, "41");
   assert.equal(after.encounters.find(entry => entry.id === "nav-visit-main").draft.text, original.encounters[0].draft.text);
+  await click(page, "finish-visit");
+  await page.locator("#patient-history").waitFor();
+  assert.equal(await page.locator('#main-navigation [data-action="visit"]').count(), 0);
+  assert.equal(await page.locator('#main-navigation [data-action="new"]').count(), 1);
+  assert.equal(await page.locator('#patient-history [data-action="open"][data-id="' + created.id + '"]').count(), 1);
+  assert.deepEqual((await saved(page)).encounters, after.encounters);
 });
 
 test("main navigation animates complete pages, preserves current input and cancels pending New without stray cards", {timeout: 26000}, async t => {
@@ -466,6 +472,90 @@ test("new visit keeps entered identity, history and manual draft through rapid f
   assert.equal(await raw(page), before, "view changes must not write or duplicate patient data");
   assert.equal((await saved(page)).patients.length, 1);
   assert.equal((await saved(page)).encounters.length, 1);
+});
+
+for (const status of ["draft", "reviewed"]) {
+  test("finishing a " + status + " visit preserves history and frees the main menu without changing review status", {timeout: 18000}, async t => {
+    const page = await openApp(t);
+    await seed(page);
+    const id = status === "draft" ? "main" : "return";
+    await openCard(page, id);
+    await page.locator('#patient-history [data-action="open"][data-id="nav-visit-' + id + '"]').click();
+    await choose(visitTab(page, "draft"));
+    const before = await saved(page);
+    assert.equal(await action(page, "finish-visit").count(), 1);
+    await action(page, "finish-visit").evaluate(node => { node.click(); node.click(); });
+    await page.locator("#patient-history").waitFor();
+    assert.equal(await page.locator('#main-navigation [data-action="visit"]').count(), 0);
+    assert.equal(await page.locator('#main-navigation [data-action="new"]').count(), 1);
+    const after = await saved(page);
+    assert.deepEqual(after.encounters, before.encounters);
+    assert.deepEqual(after.patients, before.patients);
+    await click(page, "home");
+    assert.equal(await page.locator("#home-current-heading").innerText(), "Последний сохранённый черновик");
+    await page.reload();
+    await openCard(page, id);
+    await page.locator('#patient-history [data-action="open"][data-id="nav-visit-' + id + '"]').click();
+    await choose(visitTab(page, "draft"));
+    assert.equal(await page.locator("#draft-text").inputValue(), before.encounters.find(entry => entry.id === "nav-visit-" + id).draft.text);
+    assert.equal(await page.locator('#main-navigation [data-action="visit"]').count(), 1);
+  });
+}
+
+test("finishing retains unsaved input on storage failure and commits a pending patient exactly once after recovery", {timeout: 18000}, async t => {
+  const page = await openApp(t);
+  await click(page, "new");
+  await page.evaluate(key => {
+    const original = Storage.prototype.setItem;
+    window.restoreDemoStorage = () => { Storage.prototype.setItem = original; };
+    Storage.prototype.setItem = function(name, value) {
+      if (name === key) throw new DOMException("ДЕМО: сохранение недоступно", "QuotaExceededError");
+      return original.call(this, name, value);
+    };
+  }, key);
+  await page.locator("#patient-label").fill("Тестов Завершение Приёма");
+  await choose(visitTab(page, "draft"));
+  await page.locator("#draft-text").fill("ДЕМО: текст, который нельзя потерять");
+  await click(page, "finish-visit");
+  assert.equal(await raw(page), null);
+  assert.equal(await page.locator("#draft-text").inputValue(), "ДЕМО: текст, который нельзя потерять");
+  assert.equal(await page.locator('#main-navigation [data-action="visit"]').count(), 1);
+  assert.match(await page.locator("#toast").innerText(), /[Нн]е удалось сохранить/);
+  await page.evaluate(() => window.restoreDemoStorage());
+  await click(page, "finish-visit");
+  await page.locator("#patient-history").waitFor();
+  const after = await saved(page);
+  assert.equal(after.patients.length, 1);
+  assert.equal(after.encounters.length, 1);
+  assert.equal(after.encounters[0].draft.text, "ДЕМО: текст, который нельзя потерять");
+  assert.equal(after.encounters[0].workflow.reviewStatus, "draft");
+  assert.equal(await page.locator('#main-navigation [data-action="new"]').count(), 1);
+});
+
+test("finishing in a stale window keeps the current form and never overwrites a newer record", {timeout: 18000}, async t => {
+  const page = await openApp(t);
+  await seed(page); await openVisit(page); await choose(visitTab(page, "draft"));
+  const other = await page.context().newPage();
+  await other.goto(url); await openVisit(other); await choose(visitTab(other, "history"));
+  await other.locator('[data-field="history.complaints"]').fill("ДЕМО: изменение во втором окне");
+  await page.waitForFunction(() => document.getElementById("storage-banner").textContent.includes("другом окне"));
+  const latest = await raw(page);
+  const text = await page.locator("#draft-text").inputValue();
+  await click(page, "finish-visit");
+  assert.equal(await raw(page), latest);
+  assert.equal(await page.locator("#draft-text").inputValue(), text);
+  assert.equal(await page.locator('#main-navigation [data-action="visit"]').count(), 1);
+  assert.match(await page.locator("#toast").innerText(), /другом окне/);
+});
+
+test("finishing an untouched form restores New patient without creating an empty card", {timeout: 12000}, async t => {
+  const page = await openApp(t);
+  await click(page, "new"); await choose(visitTab(page, "draft"));
+  await click(page, "finish-visit");
+  assert.equal(await raw(page), null);
+  assert.equal(await page.locator('#main-navigation [data-action="visit"]').count(), 0);
+  assert.equal(await page.locator('#main-navigation [data-action="new"]').count(), 1);
+  assert.equal(await page.locator(".home-page").count(), 1);
 });
 
 for (const fallback of [false, true]) {

@@ -147,10 +147,10 @@
     app.innerHTML = '<div class="shell"><header class="navigation-header"><div class="brand"><img src="icon.svg" alt=""><div><strong>МедАссистент</strong><small>ПОЛИКЛИНИЧЕСКИЙ РЕЖИМ</small></div></div><nav id="main-navigation" class="nav pager-tabs" aria-label="Главная навигация">' +
       navButton('home', 'Обзор', 'home') + navButton('patients', 'Пациенты', 'user') +
       (current ? navButton('visit', 'Текущий приём', 'document') : navButton('new', 'Новый пациент', 'plus')) + navButton('followups', 'Повторные приёмы', 'calendar') + navButton('modules', 'Модули', 'grid') + navButton('help', 'Помощь и данные', 'help') + navButton('check-updates', 'Проверить обновления', 'download') +
-      '</nav></header><aside class="topbar context-sidebar" aria-label="Дата, время и текущий раздел"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><div class="topbar-left"><span class="context-mode">Поликлиника</span><strong>' + sectionName + '</strong></div><div class="side-bottom"><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><div class="version">Прототип 0.17.2 · Демонстрация</div></div></aside><div class="workspace"><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
+      '</nav></header><aside class="topbar context-sidebar" aria-label="Дата, время и текущий раздел"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><div class="topbar-left"><span class="context-mode">Поликлиника</span><strong>' + sectionName + '</strong></div><div class="side-bottom"><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><div class="version">Прототип 0.17.3 · Демонстрация</div></div></aside><div class="workspace"><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
       (state.migrated ? '<div class="migration-notice">Прежние записи доступны со статусом «Черновик». Карточки, данные и ручные тексты сохранены. Исходное сохранение предыдущей версии не изменяется.</div>' : '') +
       ({home: renderHome, patients: renderPatients, followups: renderFollowups, patient: renderPatient, visit: renderVisit, modules: renderModules, help: renderHelp}[state.view])() +
-      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.17.2</span></footer></main></div></div>';
+      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.17.3</span></footer></main></div></div>';
     updateClock();
     updateSaveStatus();
     if (state.view === 'visit') { updateValidation(); updateDraftState(); updateReviewState(); }
@@ -268,9 +268,9 @@
     const todayDrafts = state.encounters.filter(entry => entry.workflow.reviewStatus === 'draft' && entry.visitDate === state.homeDay).length;
     const listHeading = state.recordFilter === 'draft' ? 'Записи для проверки' : state.recordFilter === 'reviewed' ? 'Проверенные записи' : 'Все записи';
     return '<div class="home-page"><div class="page-heading"><div><h1>Сегодня</h1><p class="home-demo-note">Деморежим · только вымышленные данные</p></div>' + button('start-visit', 'Начать приём', 'plus', 'primary') + '</div>' +
-      '<section id="home-current" class="card home-current" aria-labelledby="home-current-heading"><div class="home-current-content"><h2 id="home-current-heading">Текущий незавершённый приём</h2>' +
+      '<section id="home-current" class="card home-current" aria-labelledby="home-current-heading"><div class="home-current-content"><h2 id="home-current-heading">' + (current && current.id !== state.activeId ? 'Последний сохранённый черновик' : 'Текущий приём') + '</h2>' +
       (current ? '<div class="home-current-patient"><strong>' + escape(patientLabel(current)) + '</strong>' + recordStatus(current) + '</div><p class="home-current-meta">' + escape(dateText(current.visitDate)) + (current.id !== state.activeId ? ' · Последний изменённый черновик' : '') + '</p><p class="home-current-complaint">' + escape(current.history.complaints.trim() || 'Жалобы пока не указаны') + '</p>' : '<p class="home-current-empty">Незавершённого приёма нет. Выберите пациента, чтобы начать новый.</p>') + '</div>' +
-      (current ? button('resume-visit', 'Продолжить приём', 'arrow', 'primary', 'data-id="' + escape(current.id) + '"') : !state.encounters.length ? button('example', 'Открыть вымышленный пример', 'document', 'secondary compact') : '') + '</section>' +
+      (current ? button('resume-visit', current.id === state.activeId ? 'Продолжить приём' : 'Открыть черновик', 'arrow', 'primary', 'data-id="' + escape(current.id) + '"') : !state.encounters.length ? button('example', 'Открыть вымышленный пример', 'document', 'secondary compact') : '') + '</section>' +
       '<div class="home-dashboard"><section class="card home-followups" aria-labelledby="home-followup-heading"><div class="card-head"><h2 id="home-followup-heading">Явки сегодня <span id="home-followup-count" class="home-count">' + todayFollowups + '</span></h2>' + button('home-followups', 'План явок', 'arrow', 'ghost') + '</div><div id="home-followup-list" class="list">' + renderFollowupList('today', true) + '</div></section>' +
       '<section class="card home-records" aria-labelledby="home-record-heading"><div class="card-head"><h2 id="home-record-heading">' + listHeading + '</h2><p class="home-today-summary">Черновиков сегодня: <strong id="home-review-today-count">' + todayDrafts + '</strong></p></div><div id="record-filters" class="workflow-filters pager-tabs" role="tablist" aria-label="Статус записи">' + recordFilters() + '</div><div class="search-wrap"><label class="home-search-label" for="visit-search">Найти запись</label><input class="search-field" id="visit-search" type="search" placeholder="ФИО, код, дата или жалобы" value="' + escape(state.search) + '"></div><div id="visit-list" class="list pager-viewport" role="tabpanel" aria-labelledby="record-filter-' + state.recordFilter + '" tabindex="0">' + renderList() + '</div></section></div></div>';
   }
@@ -1340,7 +1340,7 @@
       '<div class="visit-comparison' + (previous ? ' has-previous' : '') + '"><div id="visit-form-panel" class="current-visit-form pager-viewport" role="tabpanel" aria-labelledby="visit-tab-' + state.tab + '" tabindex="0">' + ({basic: renderBasic, history: renderHistory, exam: renderExam, investigations: renderVisitInvestigations, draft: renderDraft}[state.tab])() + '</div><aside id="previous-visit-panel" class="card previous-visit-panel" aria-labelledby="previous-visit-title"' + (previous ? '' : ' hidden') + '>' + (previous ? renderPreviousVisit() : '') + '</aside></div>' + renderVisitActions();
   }
   function renderVisitActions() {
-    const controls = state.tab === 'draft' ? button('generate', 'Сформировать черновик', 'document', 'primary') + button('copy', 'Копировать', 'copy') + button('download-text', 'Скачать .txt', 'download') + '<div id="record-review-actions"></div>' :
+    const controls = state.tab === 'draft' ? button('generate', 'Сформировать черновик', 'document', 'secondary') + button('copy', 'Копировать', 'copy') + button('download-text', 'Скачать .txt', 'download') + '<div id="record-review-actions"></div>' + button('finish-visit', 'Завершить приём', 'check', 'primary', 'title="Сохранить запись и открыть историю пациента"') :
       state.tab === 'basic' ? nextFooter(null, 'history', 'Перейти к анамнезу') : state.tab === 'history' ? nextFooter('basic', 'exam', 'Перейти к осмотру') : state.tab === 'exam' ? nextFooter('history', 'investigations', 'Перейти к исследованиям') : nextFooter('exam', 'draft', 'Перейти к записи');
     return '<div class="visit-action-bar" role="group" aria-label="Действия приёма">' + controls + '</div>';
   }
@@ -1672,6 +1672,28 @@
     if (result.ok && state.pendingNew) { state.encounters = encounters; state.patients = patients; state.pendingNew = null; }
     updateSaveStatus();
   }
+  function finishVisit() {
+    const entry = active();
+    if (state.view !== 'visit' || !entry || !requireFreshState()) return;
+    pager.invalidate();
+    if (state.pendingNew && !pendingHasContent()) {
+      discardEmptyForm();
+      navigate('home');
+      toast('Пустой приём закрыт. Карточка пациента не создана.');
+      return;
+    }
+    persist();
+    if (!state.saved) {
+      toast(state.error || 'Не удалось сохранить приём. Оставьте форму открытой и повторите попытку.', true);
+      return;
+    }
+    state.activeId = null;
+    state.patientId = entry.patientId;
+    state.patientTab = 'history';
+    state.patientEditOpen = false;
+    navigate('patient');
+    toast('Приём сохранён в истории пациента.');
+  }
   function toast(message, error = false) {
     const target = document.getElementById('toast');
     clearTimeout(toast.timeout);
@@ -1859,6 +1881,7 @@
   }
   async function handleAction(action, target) {
     if (target.closest('#main-navigation') && action !== 'check-updates') return switchMainPage(action);
+    if (action === 'finish-visit') { finishVisit(); return; }
     if (action === 'patient-history') { switchPatientTab('history'); return; }
     if (action === 'investigations') { switchPatientTab('investigations'); return; }
     if (action === 'investigation-add') { openInvestigationForm(); return; }

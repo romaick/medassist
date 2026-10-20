@@ -224,7 +224,7 @@ test("backup preview counts records, result rows, templates and leaves without l
   const before = JSON.stringify(bundle);
   const summary = summarizeBackup(bundle);
   assert.deepEqual(summary, {
-    patientCount: 3, encounterCount: 3, templateCount: 1, investigationCount: 2, sickLeaveCount: 2,
+    patientCount: 3, encounterCount: 3, templateCount: 1, shortcutCount: 0, investigationCount: 2, sickLeaveCount: 2,
     firstVisitDate: "2032-03-29", lastVisitDate: "2032-04-21", exportedAt: NOW,
     patients: [
       { id: "fictional-patient", label: "Вымышленный Пациент", encounterCount: 2, lastVisitDate: "2032-04-21" },
@@ -240,7 +240,7 @@ test("backup preview counts records, result rows, templates and leaves without l
 
 test("empty backup preview has zero counts and no invented visit dates", () => {
   assert.deepEqual(summarizeBackup(freeze(parsedBundle())), {
-    patientCount: 0, encounterCount: 0, templateCount: 0, investigationCount: 0, sickLeaveCount: 0,
+    patientCount: 0, encounterCount: 0, templateCount: 0, shortcutCount: 0, investigationCount: 0, sickLeaveCount: 0,
     firstVisitDate: "", lastVisitDate: "", exportedAt: NOW, patients: []
   });
 });

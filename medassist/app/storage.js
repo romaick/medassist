@@ -106,6 +106,7 @@
       patientCount: bundle.patients.length,
       encounterCount: bundle.encounters.length,
       templateCount: (bundle.templates || []).length,
+      shortcutCount: (bundle.shortcuts || []).length,
       investigationCount: bundle.patients.reduce((count, patient) => count + (patient.investigations || []).length, 0),
       sickLeaveCount: bundle.patients.reduce((count, patient) => {
         const journal = core.getSickLeaveJournal(patient, bundle.encounters);
@@ -122,6 +123,7 @@
     let checked = false;
     let blocked = null;
     let storedTemplates = [];
+    let storedShortcuts = [];
 
     function target() {
       const result = typeof storage === "function" ? storage() : storage;
@@ -143,11 +145,12 @@
             break;
           }
         }
-        const { patients, encounters, templates = [] } = raw === null ? { patients: [], encounters: [] } : core.parseBundle(raw);
+        const { patients, encounters, templates = [], shortcuts = [] } = raw === null ? { patients: [], encounters: [] } : core.parseBundle(raw);
         storedTemplates = core.validateTemplates(templates);
+        storedShortcuts = core.validateShortcuts(shortcuts);
         checked = true;
         blocked = null;
-        return { patients, encounters, ...(templates.length ? { templates } : {}), error: null, ...(migrated ? { migrated: true } : {}) };
+        return { patients, encounters, ...(templates.length ? { templates } : {}), ...(shortcuts.length ? { shortcuts } : {}), error: null, ...(migrated ? { migrated: true } : {}) };
       } catch (error) {
         checked = true;
         blocked = "Не удалось прочитать локальное сохранение. Автоматическая запись остановлена, исходные данные не изменены. " + describe(error);
@@ -155,24 +158,28 @@
       }
     }
 
-    function save(encounters, patients, templates) {
+    function save(encounters, patients, templates, shortcuts) {
       if (!checked) load();
       if (blocked) return { ok: false, error: blocked };
       try {
         const nextTemplates = templates === undefined ? storedTemplates : core.validateTemplates(templates);
-        target().setItem(KEY, core.serializeBundle(encounters, patients, nextTemplates));
+        const nextShortcuts = shortcuts === undefined ? storedShortcuts : core.validateShortcuts(shortcuts);
+        target().setItem(KEY, core.serializeBundle(encounters, patients, nextTemplates, nextShortcuts));
         storedTemplates = core.validateTemplates(nextTemplates);
+        storedShortcuts = core.validateShortcuts(nextShortcuts);
         return { ok: true, error: null };
       } catch (error) {
         return { ok: false, error: "Не удалось сохранить данные в браузере. " + describe(error) };
       }
     }
 
-    function reset(encounters = [], patients = [], templates = []) {
+    function reset(encounters = [], patients = [], templates = [], shortcuts = []) {
       try {
         const nextTemplates = core.validateTemplates(templates);
-        target().setItem(KEY, core.serializeBundle(encounters, patients, nextTemplates));
+        const nextShortcuts = core.validateShortcuts(shortcuts);
+        target().setItem(KEY, core.serializeBundle(encounters, patients, nextTemplates, nextShortcuts));
         storedTemplates = nextTemplates;
+        storedShortcuts = nextShortcuts;
         checked = true;
         blocked = null;
         return { ok: true, error: null };

@@ -16,6 +16,9 @@
   const MAX_SICK_LEAVE_NUMBER_LENGTH = 120;
   const MAX_TEMPLATES = 100;
   const MAX_TEMPLATE_NAME_LENGTH = 120;
+  const MAX_SHORTCUTS = 100;
+  const MAX_SHORTCUT_CODE_LENGTH = 40;
+  const MAX_SHORTCUT_TEXT_LENGTH = 10000;
   const MAX_PRESCRIPTIONS = 50;
   const MAX_PRESCRIPTION_FIELD_LENGTH = 200;
   const MAX_PRESCRIPTION_NOTE_LENGTH = 1000;
@@ -1010,6 +1013,77 @@
       + (prescription.note.trim() ? "; примечание: " + prescription.note.trim() : "") + ".";
   }
 
+  function validateShortcuts(shortcuts) {
+    if (!Array.isArray(shortcuts) || shortcuts.length > MAX_SHORTCUTS) throw new Error("Допускается не более 100 текстовых сокращений.");
+    const ids = new Set();
+    const codes = new Set();
+    return Array.from(shortcuts, shortcut => {
+      const fields = ["id", "code", "text"];
+      if (!isObject(shortcut) || Object.keys(shortcut).some(field => !fields.includes(field)) || fields.some(field => !Object.prototype.hasOwnProperty.call(shortcut, field))) throw new Error("Неверная структура текстового сокращения.");
+      if (typeof shortcut.id !== "string" || !ID_PATTERN.test(shortcut.id) || ids.has(shortcut.id)) throw new Error("Некорректный или повторяющийся идентификатор сокращения.");
+      if (typeof shortcut.code !== "string") throw new Error("Обозначение сокращения должно быть текстом.");
+      const code = shortcut.code.trim();
+      if (!code || code.length > MAX_SHORTCUT_CODE_LENGTH || !/^[\p{L}\p{N}._-]+$/u.test(code)) throw new Error("Обозначение сокращения должно содержать от 1 до 40 букв, цифр или символов . _ - без пробелов.");
+      const key = code.toLocaleLowerCase("ru-RU");
+      if (codes.has(key)) throw new Error("Такое обозначение сокращения уже существует.");
+      if (typeof shortcut.text !== "string" || !shortcut.text.trim() || shortcut.text.length > MAX_SHORTCUT_TEXT_LENGTH) throw new Error("Текст сокращения должен содержать от 1 до 10000 символов.");
+      ids.add(shortcut.id);
+      codes.add(key);
+      return { id: shortcut.id, code, text: shortcut.text };
+    });
+  }
+
+  function upsertShortcut(shortcuts, values, options = {}) {
+    const existing = validateShortcuts(shortcuts);
+    if (!isObject(options) || Object.keys(options).some(field => field !== "id")) throw new Error("Некорректные параметры текстового сокращения.");
+    if (!isObject(values) || Object.keys(values).some(field => !["code", "text"].includes(field)) || !Object.prototype.hasOwnProperty.call(values, "code") || !Object.prototype.hasOwnProperty.call(values, "text")) throw new Error("Укажите обозначение и текст сокращения.");
+    if (options.id !== undefined && (typeof options.id !== "string" || !existing.some(item => item.id === options.id))) throw new Error("Сокращение для изменения не найдено.");
+    const shortcut = { id: options.id === undefined ? newId("shortcut") : options.id, code: values.code, text: values.text };
+    return validateShortcuts(options.id === undefined ? [...existing, shortcut] : existing.map(item => item.id === options.id ? shortcut : item));
+  }
+
+  function removeShortcut(shortcuts, id) {
+    const existing = validateShortcuts(shortcuts);
+    if (typeof id !== "string" || !existing.some(item => item.id === id)) throw new Error("Сокращение для удаления не найдено.");
+    return existing.filter(item => item.id !== id);
+  }
+
+  function assertShortcutSelection(value, start, end) {
+    if (typeof value !== "string" || !Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start || end > value.length) throw new Error("Некорректное выделение текста для вставки сокращения.");
+  }
+
+  function shortcutToken(value, start, end) {
+    if (/^[\p{L}\p{N}._-]/u.test(value.slice(end))) return null;
+    if (start !== end) {
+      if (/[\p{L}\p{N}._-]$/u.test(value.slice(0, start))) return null;
+      return { text: value.slice(start, end), start };
+    }
+    const token = value.slice(0, start).match(/[\p{L}\p{N}._-]+$/u);
+    return token ? { text: token[0], start: start - token[0].length } : null;
+  }
+
+  function findShortcutAtCaret(value, start, end, shortcuts) {
+    assertShortcutSelection(value, start, end);
+    const existing = validateShortcuts(shortcuts);
+    const token = shortcutToken(value, start, end);
+    return token ? existing.find(item => item.code.toLocaleLowerCase("ru-RU") === token.text.toLocaleLowerCase("ru-RU")) || null : null;
+  }
+
+  function shortcutReplacement(value, start, end, shortcut, maxLength) {
+    assertShortcutSelection(value, start, end);
+    if (!Number.isInteger(maxLength) || maxLength < 0) throw new Error("Некорректное ограничение длины поля.");
+    const saved = validateShortcuts([shortcut])[0];
+    let replacementStart = start;
+    if (start === end) {
+      const token = shortcutToken(value, start, end);
+      if (token && saved.code.toLocaleLowerCase("ru-RU") === token.text.toLocaleLowerCase("ru-RU")) replacementStart = token.start;
+    }
+    const result = value.slice(0, replacementStart) + saved.text + value.slice(end);
+    if (result.length > maxLength) throw new Error("После вставки текст превышает допустимую длину поля. Сократите текст или выделите фрагмент для замены.");
+    const caret = replacementStart + saved.text.length;
+    return { value: result, selectionStart: caret, selectionEnd: caret };
+  }
+
   function validateTemplates(templates) {
     if (!Array.isArray(templates) || templates.length > MAX_TEMPLATES) throw new Error("Допускается не более 100 личных шаблонов.");
     const ids = new Set();
@@ -1504,13 +1578,14 @@
   function validateBundleVersion(value, version) {
     if (!isObject(value)) throw new Error("Резервная копия должна быть объектом JSON.");
     const fields = ["format", "schemaVersion", "exportedAt", ...(version >= 3 ? ["patients"] : []), "encounters"];
-    if (Object.keys(value).some(field => !fields.includes(field) && !(version >= 4 && field === "templates")) || fields.some(field => !Object.prototype.hasOwnProperty.call(value, field))) {
+    if (Object.keys(value).some(field => !fields.includes(field) && !(version >= 4 && ["templates", "shortcuts"].includes(field))) || fields.some(field => !Object.prototype.hasOwnProperty.call(value, field))) {
       throw new Error("Неверная структура резервной копии: ожидаются " + fields.join(", ") + ".");
     }
     if (value.format !== FORMAT) throw new Error("Этот файл не является резервной копией МедАссистента.");
     if (value.schemaVersion !== version) throw new Error("Неподдерживаемая версия данных. Поддерживается версия 4 и импорт резервных копий версий 1, 2 и 3.");
     if (typeof value.exportedAt !== "string" || !validTimestamp(value.exportedAt)) throw new Error("В резервной копии указана некорректная дата экспорта.");
     const templates = Object.prototype.hasOwnProperty.call(value, "templates") ? validateTemplates(value.templates) : [];
+    const shortcuts = Object.prototype.hasOwnProperty.call(value, "shortcuts") ? validateShortcuts(value.shortcuts) : [];
     const patientIds = new Set();
     let patients;
     if (version >= 3) {
@@ -1568,11 +1643,11 @@
         }
       }
     }
-    return { format: FORMAT, schemaVersion: version, exportedAt: value.exportedAt, ...(version >= 3 ? { patients } : {}), encounters, ...(templates.length ? { templates } : {}) };
+    return { format: FORMAT, schemaVersion: version, exportedAt: value.exportedAt, ...(version >= 3 ? { patients } : {}), encounters, ...(templates.length ? { templates } : {}), ...(shortcuts.length ? { shortcuts } : {}) };
   }
 
-  function serializeBundle(encounters, patients, templates) {
-    return JSON.stringify(validateBundle({ format: FORMAT, schemaVersion: SCHEMA_VERSION, exportedAt: new Date().toISOString(), patients, encounters, ...(templates === undefined ? {} : { templates }) }), null, 2);
+  function serializeBundle(encounters, patients, templates, shortcuts) {
+    return JSON.stringify(validateBundle({ format: FORMAT, schemaVersion: SCHEMA_VERSION, exportedAt: new Date().toISOString(), patients, encounters, ...(templates === undefined ? {} : { templates }), ...(shortcuts === undefined ? {} : { shortcuts }) }), null, 2);
   }
 
   function parseBundle(text) {
@@ -1597,5 +1672,5 @@
     return validateBundle(parsed);
   }
 
-  return Object.freeze({ DEFAULT_RECORD_FORMAT, RECORD_SECTIONS, validateRecordFormat, setPatientNote, MAX_PERSONAL_NOTE_LENGTH, calculateAge, encounterAge, getDiagnoses, formatDiagnoses, upsertDiagnosis, removeDiagnosis, moveDiagnosis, validateDiagnoses, MAX_DIAGNOSES, MAX_DIAGNOSIS_TEXT_LENGTH, MAX_DIAGNOSIS_SUMMARY_LENGTH, DIAGNOSIS_LABELS, createPatient, createEncounter, createRepeatEncounter, createDemoEncounter, upsertInvestigation, removeInvestigation, validateInvestigations, getInvestigationSeries, getInvestigationReports, upsertInvestigationReport, removeInvestigationReport, setEncounterInvestigations, reconcileInvestigationReferences, upsertPrescription, removePrescription, formatPrescription, validatePrescriptions, setReviewStatus, setReturnVisitStatus, linkReturnVisit, getReturnVisits, getPatientBriefing, calculateBmi, calculateSickLeaveDays, calculateSickLeaveTotalDays, getSickLeaveJournal, getEncounterSickLeaveSummary, getEncounterSickLeaveAction, applyEncounterSickLeave, undoEncounterSickLeave, issueSickLeave, extendSickLeave, closeSickLeave, undoSickLeaveAction, createVisitTemplate, applyVisitTemplate, validateTemplates, generateDraft, fingerprint, validatePatient, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_PATIENTS, MAX_PATIENT_LABEL_LENGTH, MAX_SICK_LEAVES, MAX_SICK_LEAVE_EVENTS, MAX_SICK_LEAVE_NUMBER_LENGTH, MAX_TEMPLATES, MAX_TEMPLATE_NAME_LENGTH, MAX_PRESCRIPTIONS, MAX_PRESCRIPTION_FIELD_LENGTH, MAX_PRESCRIPTION_NOTE_LENGTH, MAX_INVESTIGATIONS, MAX_INVESTIGATION_REPORT_FIELDS, INVESTIGATION_FIELD_LIMITS, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
+  return Object.freeze({ validateShortcuts, upsertShortcut, removeShortcut, findShortcutAtCaret, shortcutReplacement, MAX_SHORTCUTS, MAX_SHORTCUT_CODE_LENGTH, MAX_SHORTCUT_TEXT_LENGTH, DEFAULT_RECORD_FORMAT, RECORD_SECTIONS, validateRecordFormat, setPatientNote, MAX_PERSONAL_NOTE_LENGTH, calculateAge, encounterAge, getDiagnoses, formatDiagnoses, upsertDiagnosis, removeDiagnosis, moveDiagnosis, validateDiagnoses, MAX_DIAGNOSES, MAX_DIAGNOSIS_TEXT_LENGTH, MAX_DIAGNOSIS_SUMMARY_LENGTH, DIAGNOSIS_LABELS, createPatient, createEncounter, createRepeatEncounter, createDemoEncounter, upsertInvestigation, removeInvestigation, validateInvestigations, getInvestigationSeries, getInvestigationReports, upsertInvestigationReport, removeInvestigationReport, setEncounterInvestigations, reconcileInvestigationReferences, upsertPrescription, removePrescription, formatPrescription, validatePrescriptions, setReviewStatus, setReturnVisitStatus, linkReturnVisit, getReturnVisits, getPatientBriefing, calculateBmi, calculateSickLeaveDays, calculateSickLeaveTotalDays, getSickLeaveJournal, getEncounterSickLeaveSummary, getEncounterSickLeaveAction, applyEncounterSickLeave, undoEncounterSickLeave, issueSickLeave, extendSickLeave, closeSickLeave, undoSickLeaveAction, createVisitTemplate, applyVisitTemplate, validateTemplates, generateDraft, fingerprint, validatePatient, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_PATIENTS, MAX_PATIENT_LABEL_LENGTH, MAX_SICK_LEAVES, MAX_SICK_LEAVE_EVENTS, MAX_SICK_LEAVE_NUMBER_LENGTH, MAX_TEMPLATES, MAX_TEMPLATE_NAME_LENGTH, MAX_PRESCRIPTIONS, MAX_PRESCRIPTION_FIELD_LENGTH, MAX_PRESCRIPTION_NOTE_LENGTH, MAX_INVESTIGATIONS, MAX_INVESTIGATION_REPORT_FIELDS, INVESTIGATION_FIELD_LIMITS, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
 });

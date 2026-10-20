@@ -14,6 +14,7 @@ const now = "2032-04-19T08:00:00.000Z", patientId = "fictional-record-patient", 
 const manual = "ДЕМО: ручная запись врача, которую нельзя менять автоматически.";
 const note = "ДЕМО: на следующем приёме уточнить название документа. Личная пометка <буквально>.";
 const labText = "Показатель\tРезультат\tЕдиницы\tНорма\nДЕМО Альфа\t0\tдемо/л\t0–1\nДЕМО Бета\t5,1\t\t";
+const labPastePaused = "Пользователь отложил сверку анализов по тексту до доработки; кнопки временно недоступны.";
 const raw = page => page.evaluate(key => localStorage.getItem(key), key);
 const rawFormat = page => page.evaluate(key => localStorage.getItem(key), formatKey);
 const saved = async page => JSON.parse(await raw(page));
@@ -269,7 +270,27 @@ test("personal note conflict is visible in two windows and cannot overwrite the 
   assert.equal(await other.locator("#personal-note-text").inputValue(), "ДЕМО: устаревшая заметка");
 });
 
-test("paste preview keeps zero and comma values, leaves rows unselected and persists only selected corrected rows", {timeout: 24000}, async t => {
+test("text import is visibly in progress and disabled in the patient card and visit", {timeout: 24000}, async t => {
+  const {page} = await openApp(t); await seed(page); await openCard(page);
+  await page.locator('.patient-tabs [data-card-tab="investigations"]').click();
+  const before = await raw(page);
+  async function assertUnavailable() {
+    const button = page.locator('[data-action="lab-paste"]');
+    await button.waitFor({state: "visible"});
+    assert.equal(await button.count(), 1);
+    assert.equal(await button.isVisible(), true);
+    assert.equal(await button.isDisabled(), true);
+    assert.match(await button.innerText(), /Из текста.*В работе/);
+    await button.evaluate(element => element.dispatchEvent(new MouseEvent("click", {bubbles: true})));
+    assert.equal(await page.locator("#lab-paste-dialog").isVisible(), false, "the action is blocked even for a dispatched click");
+    assert.equal(await raw(page), before, "unavailable import leaves saved patient and visit data unchanged");
+  }
+  await assertUnavailable();
+  await openVisit(page, "investigations");
+  await assertUnavailable();
+});
+
+test("paste preview keeps zero and comma values, leaves rows unselected and persists only selected corrected rows", {timeout: 24000, skip: labPastePaused}, async t => {
   const {page} = await openApp(t); const original = await seed(page); await openCard(page);
   await page.locator('.patient-tabs [data-card-tab="investigations"]').click(); const before = await raw(page);
   await openPaste(page); assert.equal(await pasteRows(page).count(), 2);
@@ -291,7 +312,7 @@ test("paste preview keeps zero and comma values, leaves rows unselected and pers
   assert.deepEqual(await savedVisit(page), original.visit, "card import is not attached to an old visit automatically");
 });
 
-test("paste requires a date, selected row and physician approval before any data is saved", {timeout: 24000}, async t => {
+test("paste requires a date, selected row and physician approval before any data is saved", {timeout: 24000, skip: labPastePaused}, async t => {
   const {page} = await openApp(t); await seed(page); await openVisit(page, "investigations"); await openPaste(page);
   const before = await raw(page);
   await page.locator("#lab-paste-save").click(); assert.equal(await raw(page), before);
@@ -309,7 +330,7 @@ test("paste requires a date, selected row and physician approval before any data
   assert.equal(data.encounters[0].workflow.reviewStatus, "draft");
 });
 
-test("editing parsed rows or source invalidates approval and reparsing requires a fresh review", {timeout: 24000}, async t => {
+test("editing parsed rows or source invalidates approval and reparsing requires a fresh review", {timeout: 24000, skip: labPastePaused}, async t => {
   const {page} = await openApp(t); await seed(page); await openVisit(page, "investigations"); await openPaste(page);
   const before = await raw(page); await approvePaste(page);
   await pasteField(pasteRows(page).first(), "result").fill("0,2");
@@ -326,7 +347,7 @@ test("editing parsed rows or source invalidates approval and reparsing requires 
   assert.equal((await savedPatient(page)).investigations[0].result, "7");
 });
 
-test("uncertain lines remain visible for manual review and never receive guessed units or normal ranges", {timeout: 22000}, async t => {
+test("uncertain lines remain visible for manual review and never receive guessed units or normal ranges", {timeout: 22000, skip: labPastePaused}, async t => {
   const {page} = await openApp(t); await seed(page); await openVisit(page, "investigations");
   const source = "ДЕМО: свободная строка без распознаваемого результата\nДЕМО показатель: 5,1";
   await openPaste(page, source);
@@ -341,7 +362,7 @@ test("uncertain lines remain visible for manual review and never receive guessed
   assert.equal((await savedPatient(page)).investigations, undefined);
 });
 
-test("cancelled text import creates no empty patient, while approved import creates one linked visit", {timeout: 24000}, async t => {
+test("cancelled text import creates no empty patient, while approved import creates one linked visit", {timeout: 24000, skip: labPastePaused}, async t => {
   const {page} = await openApp(t); await click(page, "new");
   await page.locator('[data-action="tab"][data-tab="investigations"]').first().click(); const before = await raw(page);
   await openPaste(page); await approvePaste(page); await page.locator("#lab-paste-cancel").click();
@@ -353,7 +374,7 @@ test("cancelled text import creates no empty patient, while approved import crea
   assert.equal(data.encounters[0].draft.text, "");
 });
 
-test("a failed multirow import is atomic and retry or double click creates just one report", {timeout: 24000}, async t => {
+test("a failed multirow import is atomic and retry or double click creates just one report", {timeout: 24000, skip: labPastePaused}, async t => {
   const {page} = await openApp(t); await seed(page); await openVisit(page, "investigations");
   await openPaste(page); await approvePaste(page, [0, 1]); const before = await raw(page);
   await failWrites(page, key); await page.locator("#lab-paste-save").click();
@@ -367,7 +388,7 @@ test("a failed multirow import is atomic and retry or double click creates just 
   assert.equal((await saved(page)).encounters.length, 1);
 });
 
-test("another window's import prevents a stale paste form from saving duplicate rows", {timeout: 24000}, async t => {
+test("another window's import prevents a stale paste form from saving duplicate rows", {timeout: 24000, skip: labPastePaused}, async t => {
   const {page, newPage} = await openApp(t); await seed(page); await openVisit(page, "investigations");
   const other = await newPage(); await openVisit(other, "investigations");
   await openPaste(other); await approvePaste(other, [0, 1]);
@@ -379,7 +400,7 @@ test("another window's import prevents a stale paste form from saving duplicate 
   assert.equal(await other.locator("#lab-paste-source").inputValue(), labText);
 });
 
-test("format, personal note and pasted result controls fit a narrow screen with literal long text", {timeout: 30000}, async t => {
+test("format and personal note controls fit a narrow screen with literal long text", {timeout: 30000}, async t => {
   const {page} = await openApp(t); await seed(page); await page.setViewportSize({width: 390, height: 844});
   async function fits(id) {
     const bounds = await page.locator(id).boundingBox();
@@ -391,9 +412,16 @@ test("format, personal note and pasted result controls fit a narrow screen with 
   await page.locator("#personal-note-save").click();
   await openVisit(page); await click(page, "record-format"); await fits("#record-format-dialog");
   await page.locator("#record-format-cancel").click();
-  await page.locator('[data-action="tab"][data-tab="investigations"]').first().click();
+});
+
+test("pasted result controls fit a narrow screen with literal long text", {timeout: 30000, skip: labPastePaused}, async t => {
+  const {page} = await openApp(t); await seed(page); await page.setViewportSize({width: 390, height: 844});
+  await openVisit(page, "investigations");
   await openPaste(page); await pasteField(pasteRows(page).first(), "name").fill('ДЕМО <img src="missing" onerror="throw 1"> ' + "я".repeat(300));
-  await fits("#lab-paste-dialog"); assert.equal(await page.locator("#lab-paste-dialog img").count(), 0);
+  const bounds = await page.locator("#lab-paste-dialog").boundingBox();
+  assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= 391, "#lab-paste-dialog fits the viewport");
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true, "page does not overflow");
+  assert.equal(await page.locator("#lab-paste-dialog img").count(), 0);
   await approvePaste(page); await savePaste(page);
   assert.equal((await savedPatient(page)).investigations.length, 1);
 });

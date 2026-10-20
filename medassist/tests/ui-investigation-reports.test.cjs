@@ -98,7 +98,7 @@ test("Add result offers every ready-made investigation in the patient card and s
   const before = await raw(page);
   await action(page, "investigation-add").click();
   const options = await page.locator("#investigation-kind option").evaluateAll(items => items.map(item => ({value: item.value, label: item.textContent})));
-  assert.equal(options.filter(item => item.value.startsWith("report:")).length, 13);
+  assert.equal(options.filter(item => item.value.startsWith("report:")).length, 14);
   for (const [id, shortName] of [["cbc", "ОАК"], ["urinalysis", "ОАМ"], ["biochemistry", "БАК"]]) {
     assert.match(options.find(item => item.value === "report:" + id).label, new RegExp(shortName));
   }
@@ -182,6 +182,44 @@ test("returning from a ready-made form preserves manual input and editing a save
   assert.equal(await page.locator("#investigation-kind").inputValue(), "lab");
   for (const [key, value] of Object.entries(values)) assert.equal(await page.locator("#investigation-" + key).inputValue(), value);
   await page.locator("#investigation-cancel").click();
+});
+
+test("standalone HbA1c and expanded biochemistry preserve old results and their shared numeric history", {timeout: 24000}, async t => {
+  const {page} = await openApp(t);
+  const legacy = {fieldId: "hba1c", name: "Гликированный гемоглобин крови (HbA1c)", result: "5,8", unit: "%", reference: "ДЕМО норма", note: "ДЕМО прежний бланк"};
+  const original = await seed(page, {custom: reportValues({panelId: "biochemistry", title: "Биохимический анализ крови", rows: [legacy]})});
+  await openCard(page);
+  const oldReportId = core.getInvestigationReports(original.card)[0].id;
+  await reportRow(page, oldReportId).locator('[data-action="investigation-report-edit"]').click();
+  assert.equal(await field(page, "hba1c").inputValue(), legacy.result);
+  assert.equal(await field(page, "ferritin", "unit").inputValue(), "мкг/л");
+  assert.equal(await field(page, "vitamin-d-25oh", "unit").inputValue(), "нг/мл");
+  await saveReport(page);
+  assert.deepEqual((await patient(page)).investigations, original.card.investigations, "resaving the old report retains the existing HbA1c and its ID");
+  assert.equal((await entry(page)).workflow.reviewStatus, "reviewed");
+
+  await openVisit(page);
+  await action(page, "investigation-add").click();
+  await page.locator("#investigation-kind").selectOption("report:hba1c");
+  assert.equal(await page.locator("#investigation-report-rows .report-field").count(), 1);
+  assert.equal(await field(page, "hba1c", "unit").inputValue(), "%");
+  assert.equal(await field(page, "hba1c").inputValue(), "");
+  await field(page, "hba1c").fill("5,6"); await saveReport(page);
+  await action(page, "investigation-add").click();
+  await page.locator("#investigation-kind").selectOption("report:biochemistry");
+  assert.equal(await page.locator('.report-field[data-field-id="hba1c"]').count(), 0, "new BAK no longer offers HbA1c");
+  await field(page, "ferritin").fill("42");
+  await field(page, "vitamin-d-25oh").fill("28,5"); await saveReport(page);
+  const card = await patient(page);
+  assert.equal(card.investigations.length, 4, "blank BAK indicators are omitted");
+  const series = core.getInvestigationSeries(card).find(item => item.name === legacy.name);
+  assert.equal(series.results.length, 2, "new standalone HbA1c shares the old result history");
+  assert.equal(series.numeric, true);
+  assert.ok(Math.abs(series.delta + 0.2) < 1e-9);
+  const draft = await generate(page);
+  assert.match(draft, /5,6 %/); assert.match(draft, /42 мкг\/л/); assert.match(draft, /28,5 нг\/мл/);
+  await page.reload(); await openCard(page);
+  assert.deepEqual((await patient(page)).investigations, card.investigations);
 });
 
 test("new encounter accepts a preset report atomically and omits every blank indicator, retaining zero", {timeout: 24000}, async t => {

@@ -43,6 +43,17 @@ test("CBC basic indicators keep their documented units and common reports have s
   assert.match(cbc.fields.find(field => field.id === "leukocytes").unit, /10.*9|10⁹/);
   assert.ok(catalog.panels.some(panel => panel.id === "urinalysis"));
   assert.ok(catalog.panels.some(panel => panel.id === "biochemistry"));
+  const biochemistry = catalog.panels.find(panel => panel.id === "biochemistry");
+  const hba1c = catalog.panels.find(panel => panel.id === "hba1c");
+  assert.equal(hba1c.kind, "lab");
+  assert.equal(hba1c.fields.length, 1);
+  assert.equal(hba1c.fields[0].id, "hba1c");
+  assert.equal(hba1c.fields[0].unit, "%");
+  assert.equal(hba1c.fields[0].name, "Гликированный гемоглобин крови (HbA1c)");
+  assert.equal(biochemistry.fields.some(field => field.id === "hba1c"), false);
+  assert.equal(biochemistry.fields.find(field => field.id === "ferritin").unit, "мкг/л");
+  assert.equal(biochemistry.fields.find(field => field.id === "vitamin-d-25oh").unit, "нг/мл");
+  assert.match(biochemistry.fields.find(field => field.id === "vitamin-d-25oh").name, /25\(OH\)D/);
   assert.ok(catalog.panels.some(panel => panel.kind === "study"));
   const normalized = name => name.trim().toLocaleLowerCase("ru").replace(/ё/g, "е");
   const urineNames = new Set(catalog.panels.find(panel => panel.id === "urinalysis").fields.map(field => normalized(field.name)));

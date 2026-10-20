@@ -277,6 +277,13 @@ body{--sidebar-width:220px}
 .navigation-header .nav .icon{width:17px;height:17px}
 .navigation-header .nav .tiny-dot{display:none}
 .navigation-header .nav button:focus-visible{outline:2px solid #87dac0;outline-offset:-3px}
+.navigation-header .nav.pager-tabs .pager-tab{color:#bcd0cc;background:transparent;padding:10px 11px 7px;min-height:40px;border-radius:9px;justify-content:flex-start;font-weight:400}
+.navigation-header .nav.pager-tabs .pager-tab:hover{background:#ffffff09;color:white}
+.navigation-header .nav.pager-tabs .pager-tab.active{background:#28504f;color:white}
+.navigation-header .nav.pager-tabs .pager-tab:focus-visible{outline:2px solid #87dac0;outline-offset:-3px}
+.navigation-header .pager-indicator{background:#87dac0}
+.workspace{overflow-x:clip}
+.workflow-filters.pager-tabs:not(#patient-categories){padding-bottom:3px;margin-bottom:12px}
 .context-sidebar.topbar{position:sticky;top:0;align-self:start;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;flex-wrap:nowrap;gap:26px;min-width:0;min-height:calc(100dvh - 60px);padding:26px 20px;border:0;border-right:1px solid var(--line);background:#edf3f0}
 .context-sidebar .current-datetime{display:flex;flex-direction:column;align-items:flex-start;gap:6px;white-space:normal;font-size:16px;line-height:1.45}
 .context-sidebar #current-date{max-width:100%;color:#4e6367}

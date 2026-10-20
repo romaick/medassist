@@ -1,4 +1,5 @@
 "use strict";
+const {clickAction: click} = require("./ui-actions.cjs");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -65,7 +66,7 @@ async function seed(page, entries = [visit()], options = {}) {
 }
 
 async function openCard(page) {
-  await action(page, "patients").click();
+  await click(page, "patients");
   await page.locator('.patient-row[data-patient-id="' + patientId + '"] [data-action="patient"]').click();
 }
 
@@ -89,7 +90,7 @@ async function repeat(page, date) {
   await page.clock.setFixedTime(new Date(date + "T08:00:00.000Z"));
   const before = new Set((await saved(page)).encounters.map(entry => entry.id));
   await openCard(page);
-  await action(page, "repeat").click();
+  await click(page, "repeat");
   await page.locator("#repeat-create").click();
   const entry = (await saved(page)).encounters.find(entry => !before.has(entry.id));
   await page.locator('[data-action="tab"][data-tab="draft"]').first().click();
@@ -105,7 +106,7 @@ async function openTemplates(page, kind) {
 test("visit issuance, overlapping repeat extension and closure persist one journal with 9 unique days", {timeout: 35000}, async t => {
   const {page} = await openApp(t);
   await seed(page); await openVisit(page);
-  await action(page, "visit-sick-issue").click();
+  await click(page, "visit-sick-issue");
   await page.locator("#sick-leave-number").fill("ДЕМО-ЕДИНЫЙ-019");
   await period(page, "2032-04-19", "2032-04-23");
   await saveLeave(page);
@@ -117,7 +118,7 @@ test("visit issuance, overlapping repeat extension and closure persist one journ
   assert.equal(await page.locator("#sickleave-days").innerText(), "5");
   assert.equal(await action(page, "visit-sick-issue").count(), 0, "a linked visit cannot issue twice");
   const secondId = await repeat(page, "2032-04-23");
-  await action(page, "visit-sick-extend").click();
+  await click(page, "visit-sick-extend");
   assert.equal(await page.locator("#sick-leave-select").inputValue(), "", "the clinician chooses the leaf explicitly");
   await page.locator("#sick-leave-select").selectOption("journal:" + leaveId);
   assert.equal(await page.locator("#sick-leave-number").inputValue(), "ДЕМО-ЕДИНЫЙ-019");
@@ -130,16 +131,16 @@ test("visit issuance, overlapping repeat extension and closure persist one journ
   const second = await current(page, secondId);
   assert.equal(second.assessment.sickLeaveNumber, issued.assessment.sickLeaveNumber);
   assert.equal(second.assessment.sickLeaveFrom, "2032-04-23");
-  await action(page, "generate").click();
+  await click(page, "generate");
   assert.match(await page.locator("#draft-text").inputValue(), /[Пп]родл/);
   assert.match(await page.locator("#draft-text").inputValue(), /9/);
   const thirdId = await repeat(page, "2032-04-27");
-  await action(page, "visit-sick-close").click();
+  await click(page, "visit-sick-close");
   await page.locator("#sick-leave-select").selectOption("journal:" + leaveId);
   await page.locator("#sick-leave-close-date").fill("2032-04-27");
   await saveLeave(page);
   await page.locator("#field-assessment-returnVisitDate").fill("2032-05-02");
-  await action(page, "generate").click();
+  await click(page, "generate");
   const text = await page.locator("#draft-text").inputValue();
   assert.match(text, /[Зз]акры/);
   assert.match(text, /9/);
@@ -155,7 +156,7 @@ test("visit issuance, overlapping repeat extension and closure persist one journ
   assert.equal(await page.locator("#sickleave-days").innerText(), "5", "later events do not change old visit count");
   await openVisit(page, thirdId);
   assert.equal(await page.locator("#draft-text").inputValue(), text);
-  await action(page, "visit-sick-undo").click(); await accept(page);
+  await click(page, "visit-sick-undo"); await accept(page);
   assert.equal((await card(page)).sickLeaves[0].events.length, 2);
   assert.equal((await current(page, thirdId)).assessment.sickLeaveIssued, "");
   assert.equal((await current(page, thirdId)).draft.text, text, "undo does not rewrite a draft");
@@ -166,12 +167,12 @@ test("legacy leaf adoption and extension happen together only after explicit sav
   const first = visit("tools-first", "2032-04-19", {sickLeaveIssued: "yes", sickLeaveNumber: "ДЕМО-СТАРЫЙ", sickLeaveFrom: "2032-04-19", sickLeaveTo: "2032-04-23"});
   await seed(page, [first, visit("tools-second", "2032-04-23")]); await openVisit(page, "tools-second");
   const before = await raw(page);
-  await action(page, "visit-sick-extend").click();
+  await click(page, "visit-sick-extend");
   await page.locator("#sick-leave-select").selectOption("legacy:tools-first");
   await period(page, "2032-04-23", "2032-04-27");
   await page.locator("#sick-leave-cancel").click();
   assert.equal(await raw(page), before);
-  await action(page, "visit-sick-extend").click();
+  await click(page, "visit-sick-extend");
   await page.locator("#sick-leave-select").selectOption("legacy:tools-first");
   await period(page, "2032-04-23", "2032-04-27");
   await saveLeave(page);
@@ -188,7 +189,7 @@ test("failed paired save keeps form values and a stale second window cannot add 
   await seed(page); await openVisit(page);
   const other = await newPage(); await openVisit(other);
   for (const target of [page, other]) {
-    await action(target, "visit-sick-issue").click();
+    await click(target, "visit-sick-issue");
     await target.locator("#sick-leave-number").fill("ДЕМО-АТОМАРНО");
     await period(target, "2032-04-19", "2032-04-23");
   }
@@ -227,7 +228,7 @@ test("previous visit panel shows only earlier history of this patient and never 
   const otherVisit = {...visit("tools-other", "2032-04-17"), patientId: stranger.id};
   await seed(page, [older, recent, active, future, otherVisit], {patients: [stranger]}); await openVisit(page);
   const before = await raw(page);
-  await action(page, "previous-visit").click();
+  await click(page, "previous-visit");
   assert.equal(await page.locator("#previous-visit-select").inputValue(), recent.id);
   const values = await page.locator("#previous-visit-select option").evaluateAll(options => options.map(option => option.value));
   assert.deepEqual(new Set(values), new Set([older.id, recent.id]));
@@ -243,7 +244,7 @@ test("previous visit panel shows only earlier history of this patient and never 
     await page.setViewportSize({width, height: 900});
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), true, "no horizontal overflow at " + width);
   }
-  await action(page, "previous-visit").click();
+  await click(page, "previous-visit");
   assert.equal(await raw(page), before);
   assert.equal((await current(page, active.id)).history.medications, "");
 });
@@ -311,16 +312,16 @@ test("recommendation templates survive backup, import and clinical edits; delete
   assert.equal(await page.locator("#field-assessment-summary").inputValue(), "");
   await page.locator("#field-assessment-plan").fill(first.assessment.plan + " — вручную изменено.");
   assert.equal((await saved(page)).templates[0].content.plan, first.assessment.plan);
-  await action(page, "help").click();
+  await click(page, "help");
   const download = page.waitForEvent("download");
-  await action(page, "backup").click();
+  await click(page, "backup");
   const artifact = await download;
   const chunks = [];
   for await (const chunk of await artifact.createReadStream()) chunks.push(chunk);
   const backup = Buffer.concat(chunks);
   assert.equal(core.parseBundle(backup.toString("utf8")).templates[0].id, template.id);
   const restored = await newPage();
-  await action(restored, "help").click();
+  await click(restored, "help");
   await restored.locator("#import-file").setInputFiles({name: "fictional-tools.json", mimeType: "application/json", buffer: backup});
   await accept(restored);
   await openVisit(restored, "tools-target"); await openTemplates(restored, "recommendations");
@@ -335,7 +336,7 @@ test("recommendation templates survive backup, import and clinical edits; delete
 
 test("empty template actions do not save empty patients; stale template windows show visible conflict", {timeout: 20000}, async t => {
   const {page, newPage} = await openApp(t);
-  await action(page, "new").click();
+  await click(page, "new");
   const initial = await raw(page);
   await openTemplates(page, "exam");
   await page.locator("#template-name").fill("Пустой шаблон");
@@ -359,15 +360,15 @@ test("empty template actions do not save empty patients; stale template windows 
 
 test("new patient leaf cancel writes nothing and issuance saves patient, visit and journal together", {timeout: 15000}, async t => {
   const {page} = await openApp(t);
-  await action(page, "new").click();
+  await click(page, "new");
   await page.locator('[data-action="tab"][data-tab="draft"]').first().click();
   const before = await raw(page);
-  await action(page, "visit-sick-issue").click();
+  await click(page, "visit-sick-issue");
   await page.locator("#sick-leave-number").fill("ДЕМО-НОВАЯ-КАРТОЧКА");
   await period(page, "2032-04-19", "2032-04-23");
   await page.locator("#sick-leave-cancel").click();
   assert.equal(await raw(page), before);
-  await action(page, "visit-sick-issue").click();
+  await click(page, "visit-sick-issue");
   await page.locator("#sick-leave-number").fill("ДЕМО-НОВАЯ-КАРТОЧКА");
   await period(page, "2032-04-19", "2032-04-23");
   await saveLeave(page);

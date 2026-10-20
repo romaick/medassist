@@ -1,4 +1,5 @@
 "use strict";
+const {clickAction: click} = require("./ui-actions.cjs");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -79,7 +80,7 @@ async function seed(page, visits = [visit()], templates = []) {
 }
 
 async function openCard(page) {
-  await action(page, "patients").click();
+  await click(page, "patients");
   await page.locator('.patient-row[data-patient-id="' + patientId + '"] [data-action="patient"]').click();
 }
 
@@ -100,21 +101,21 @@ async function saveForm(page) {
 }
 
 async function add(page, values = prescription) {
-  await action(page, "prescription-add").click();
+  await click(page, "prescription-add");
   await fillForm(page, values);
   await saveForm(page);
 }
 
 test("opening and cancelling prescriptions keeps a new card empty; explicit save creates exactly one patient and encounter", {timeout: 18000}, async t => {
   const {page} = await openApp(t);
-  await action(page, "new").click();
+  await click(page, "new");
   await page.locator('[data-action="tab"][data-tab="draft"]').first().click();
   const before = await raw(page);
-  await action(page, "prescription-add").click();
+  await click(page, "prescription-add");
   await fillForm(page, prescription);
   await page.locator("#prescription-cancel").click();
   assert.equal(await raw(page), before);
-  await action(page, "prescription-add").click();
+  await click(page, "prescription-add");
   await fillForm(page, {...prescription, name: "   "});
   await page.locator("#prescription-save").click();
   assert.equal(await raw(page), before);
@@ -170,7 +171,7 @@ test("generated prescription text states entered and missing parameters and leav
   const incompleteRow = (await entry(page)).prescriptions[1];
   assert.equal(await row(page, incompleteRow.id).locator(".prescription-missing").count(), 4, "spaces are visibly missing parameters");
   assert.equal(await row(page, incompleteRow.id).locator(".prescription-note").count(), 0, "blank note is omitted");
-  await action(page, "generate").click(); await accept(page);
+  await click(page, "generate"); await accept(page);
   const draft = await page.locator("#draft-text").inputValue();
   assert.match(draft, /Назначения препаратов/i);
   for (const value of Object.values(prescription)) assert.ok(draft.includes(value), value);
@@ -184,7 +185,7 @@ test("generated prescription text states entered and missing parameters and leav
   }
   assert.equal(Object.hasOwn(await entry(page), "prescriptions"), false);
   assert.equal(await page.locator("#draft-text").inputValue(), draft);
-  await action(page, "generate").click(); await accept(page);
+  await click(page, "generate"); await accept(page);
   assert.doesNotMatch(await page.locator("#draft-text").inputValue(), /Назначения препаратов/i);
 });
 
@@ -194,7 +195,7 @@ test("repeat encounter copies only selected prescriptions after explicit confirm
   source = core.upsertPrescription(source, {...prescription, name: "ДЕМО препарат Бета"});
   let older = core.upsertPrescription(visit("fictional-prescription-older", "2032-04-17"), {...prescription, name: "ДЕМО старое назначение"});
   await seed(page, [source, older]); await openCard(page);
-  await action(page, "repeat").click();
+  await click(page, "repeat");
   assert.equal(await page.locator('#repeat-prescriptions input[name="carry-prescription"]:checked').count(), 0);
   await page.locator('#repeat-prescriptions input[name="carry-prescription"][value="' + source.prescriptions[0].id + '"]').check();
   await page.locator("#repeat-source").selectOption(older.id);
@@ -204,12 +205,12 @@ test("repeat encounter copies only selected prescriptions after explicit confirm
   const beforeCancel = await raw(page);
   await page.locator("#repeat-cancel").click();
   assert.equal(await raw(page), beforeCancel);
-  await action(page, "repeat").click();
+  await click(page, "repeat");
   await page.locator("#repeat-create").click();
   const empty = (await saved(page)).encounters.find(item => item.id !== source.id && item.id !== older.id);
   assert.equal((empty.prescriptions || []).length, 0);
   assert.equal(empty.history.medications, "");
-  await openCard(page); await action(page, "repeat").click();
+  await openCard(page); await click(page, "repeat");
   await page.locator("#repeat-source").selectOption(source.id);
   await page.locator('#repeat-prescriptions input[name="carry-prescription"][value="' + source.prescriptions[1].id + '"]').check();
   await page.locator('#repeat-fields input[name="carry-history"][value="allergies"]').check();
@@ -232,25 +233,25 @@ test("prescriptions are searchable, visible read-only in previous visit and incl
   const source = core.upsertPrescription(visit(), {...prescription, note: "ДЕМО: маркерпоисканазначения"});
   const next = visit("fictional-prescription-next", "2032-04-23");
   await seed(page, [source, next]);
-  await action(page, "patients").click();
+  await click(page, "patients");
   await page.locator("#patient-search").fill("маркерпоисканазначения");
   assert.equal(await page.locator('.patient-row[data-patient-id="' + patientId + '"]').count(), 1);
   await page.locator("#patient-search").fill("");
   await openVisit(page, next.id);
   const before = await raw(page);
-  await action(page, "previous-visit").click();
+  await click(page, "previous-visit");
   assert.match(await page.locator("#previous-visit-panel").innerText(), /ДЕМО препарат Альфа <условный>/);
   assert.equal(await raw(page), before);
   assert.equal((await entry(page, next.id)).history.medications, next.history.medications);
   assert.equal((await entry(page, next.id)).prescriptions, undefined);
-  await action(page, "help").click();
+  await click(page, "help");
   const download = page.waitForEvent("download");
-  await action(page, "backup").click();
+  await click(page, "backup");
   const file = await download;
   const chunks = [];
   for await (const chunk of await file.createReadStream()) chunks.push(chunk);
   const buffer = Buffer.concat(chunks);
-  const restored = await newPage(); await action(restored, "help").click();
+  const restored = await newPage(); await click(restored, "help");
   await restored.locator("#import-file").setInputFiles({name: "fictional-prescriptions.json", mimeType: "application/json", buffer});
   await accept(restored); await openVisit(restored);
   assert.deepEqual((await entry(restored)).prescriptions, source.prescriptions);
@@ -262,7 +263,7 @@ test("failed save retains prescription inputs and stale windows cannot overwrite
   await seed(page); await openVisit(page);
   const other = await newPage(); await openVisit(other);
   for (const target of [page, other]) {
-    await action(target, "prescription-add").click(); await fillForm(target, prescription);
+    await click(target, "prescription-add"); await fillForm(target, prescription);
   }
   const before = await raw(page);
   await page.evaluate(key => {

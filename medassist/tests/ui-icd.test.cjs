@@ -16,7 +16,7 @@ const diagnosis = page => page.locator("#field-assessment-summary");
 const panel = page => page.locator("#diagnosis-suggestions");
 const options = page => page.locator("#diagnosis-options [role=option]");
 const codeOption = (page, code) => page.locator('#diagnosis-options [role=option][data-code="' + code + '"]');
-const click = (page, action) => page.locator('[data-action="' + action + '"]').first().click();
+const {clickAction: click} = require("./ui-actions.cjs");
 const tab = (page, name) => page.locator('[data-action="tab"][data-tab="' + name + '"]').first().click();
 const raw = page => page.evaluate(key => localStorage.getItem(key), key);
 const savedVisit = async page => JSON.parse(await raw(page)).encounters.find(entry => entry.id === visitId);
@@ -48,6 +48,7 @@ async function openApp(t) {
 
 async function openRecord(page) {
   await page.locator('[data-action="record-filter"][data-filter="all"]').click();
+  await page.locator('[data-action="record-filter"][data-filter="all"][aria-selected="true"]').waitFor({state: "visible"});
   await page.locator('[data-action="open"][data-id="' + visitId + '"]').click();
   await tab(page, "draft");
   assert.equal(await diagnosis(page).getAttribute("role"), "combobox", "the bundled ICD catalog is available offline");

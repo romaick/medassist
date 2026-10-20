@@ -1,4 +1,5 @@
 "use strict";
+const {clickAction: click} = require("./ui-actions.cjs");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -61,7 +62,7 @@ async function seed(page, {report = true, linked = true, checked = true, custom 
   return {card, visit};
 }
 async function openCard(page) {
-  await action(page, "patients").click();
+  await click(page, "patients");
   await page.locator('.patient-row[data-patient-id="' + patientId + '"] [data-action="patient"]').click();
   await page.locator('.patient-tabs [data-card-tab="investigations"]').click();
 }
@@ -72,7 +73,7 @@ async function openVisit(page) {
   await page.locator('[data-action="tab"][data-tab="investigations"]').click();
 }
 async function openReport(page, template = "cbc") {
-  await action(page, "investigation-report-add").click();
+  await click(page, "investigation-report-add");
   await page.locator("#investigation-report-template").selectOption(template);
 }
 async function saveReport(page) {
@@ -81,7 +82,7 @@ async function saveReport(page) {
 }
 async function generate(page) {
   await page.locator('.tab-bar [data-action="tab"][data-tab="draft"]').click();
-  await action(page, "generate").click();
+  await click(page, "generate");
   if (await page.locator("#confirmation").isVisible()) await accept(page);
   return page.locator("#draft-text").inputValue();
 }
@@ -98,7 +99,7 @@ test("Add result offers every ready-made investigation in the patient card and s
   const {page} = await openApp(t);
   await seed(page, {report: false}); await openCard(page);
   const before = await raw(page);
-  await action(page, "investigation-add").click();
+  await click(page, "investigation-add");
   const options = await page.locator("#investigation-kind option").evaluateAll(items => items.map(item => ({value: item.value, label: item.textContent})));
   assert.equal(options.filter(item => item.value.startsWith("report:")).length, 14);
   for (const [id, shortName] of [["cbc", "ОАК"], ["urinalysis", "ОАМ"], ["biochemistry", "БАК"]]) {
@@ -123,16 +124,16 @@ test("Add result offers every ready-made investigation in the patient card and s
 
 test("Add result selects urine and biochemistry forms in primary and repeat encounters", {timeout: 24000}, async t => {
   const {page} = await openApp(t);
-  await action(page, "new").click();
+  await click(page, "new");
   await page.locator('[data-action="tab"][data-tab="investigations"]').click();
   const before = await raw(page);
-  await action(page, "investigation-add").click();
+  await click(page, "investigation-add");
   await page.locator("#investigation-kind").selectOption("report:urinalysis");
   assert.equal(await page.locator("#investigation-report-template").inputValue(), "urinalysis");
   await page.locator("#investigation-report-cancel").click();
   await page.locator("#investigation-cancel").click();
   assert.equal(await raw(page), before, "cancel creates neither an empty patient nor a visit");
-  await action(page, "investigation-add").click();
+  await click(page, "investigation-add");
   await page.locator("#investigation-kind").selectOption("report:urinalysis");
   await field(page, "color").fill("ДЕМО: цвет из бланка");
   await saveReport(page);
@@ -142,9 +143,9 @@ test("Add result selects urine and biochemistry forms in primary and repeat enco
   assert.match(await generate(page), /ДЕМО: цвет из бланка/);
 
   await seed(page, {report: false}); await openCard(page);
-  await action(page, "repeat").click(); await page.locator("#repeat-create").click();
+  await click(page, "repeat"); await page.locator("#repeat-create").click();
   await page.locator('[data-action="tab"][data-tab="investigations"]').click();
-  await action(page, "investigation-add").click();
+  await click(page, "investigation-add");
   await page.locator("#investigation-kind").selectOption("report:biochemistry");
   assert.equal(await field(page, "glucose", "unit").inputValue(), "ммоль/л");
   await field(page, "glucose").fill("5,1"); await saveReport(page);
@@ -160,7 +161,7 @@ test("Add result selects urine and biochemistry forms in primary and repeat enco
 test("returning from a ready-made form preserves manual input and editing a saved result keeps its type", {timeout: 24000}, async t => {
   const {page} = await openApp(t);
   await seed(page, {report: false}); await openCard(page);
-  await action(page, "investigation-add").click();
+  await click(page, "investigation-add");
   await page.locator("#investigation-kind").selectOption("lab");
   const values = {date: "2032-04-16", name: "ДЕМО: особый показатель", result: "0", unit: "демо/л", reference: "ДЕМО норма из бланка", note: "ДЕМО примечание"};
   for (const [key, value] of Object.entries(values)) await page.locator("#investigation-" + key).fill(value);
@@ -201,13 +202,13 @@ test("standalone HbA1c and expanded biochemistry preserve old results and their 
   assert.equal((await entry(page)).workflow.reviewStatus, "reviewed");
 
   await openVisit(page);
-  await action(page, "investigation-add").click();
+  await click(page, "investigation-add");
   await page.locator("#investigation-kind").selectOption("report:hba1c");
   assert.equal(await page.locator("#investigation-report-rows .report-field").count(), 1);
   assert.equal(await field(page, "hba1c", "unit").inputValue(), "%");
   assert.equal(await field(page, "hba1c").inputValue(), "");
   await field(page, "hba1c").fill("5,6"); await saveReport(page);
-  await action(page, "investigation-add").click();
+  await click(page, "investigation-add");
   await page.locator("#investigation-kind").selectOption("report:biochemistry");
   assert.equal(await page.locator('.report-field[data-field-id="hba1c"]').count(), 0, "new BAK no longer offers HbA1c");
   await field(page, "ferritin").fill("42");
@@ -226,7 +227,7 @@ test("standalone HbA1c and expanded biochemistry preserve old results and their 
 
 test("new encounter accepts a preset report atomically and omits every blank indicator, retaining zero", {timeout: 24000}, async t => {
   const {page} = await openApp(t);
-  await action(page, "new").click();
+  await click(page, "new");
   await page.locator('[data-action="tab"][data-tab="investigations"]').click();
   const before = await raw(page);
   await openReport(page);
@@ -258,19 +259,19 @@ test("reports entered in the card are attached explicitly to a repeat visit, wit
   const {page} = await openApp(t);
   const original = await seed(page, {linked: false}); await openCard(page);
   assert.equal(await reportRow(page, core.getInvestigationReports(original.card)[0].id).count(), 1);
-  await action(page, "repeat").click(); await page.locator("#repeat-create").click();
+  await click(page, "repeat"); await page.locator("#repeat-create").click();
   let next = (await saved(page)).encounters.find(item => item.id !== visitId);
   assert.equal((next.investigationIds || []).length, 0);
   assert.equal(next.history.medications, "");
   await page.locator('[data-action="tab"][data-tab="investigations"]').click();
-  await action(page, "investigation-attach").click();
+  await click(page, "investigation-attach");
   assert.equal(await page.locator('input[name="attach-investigation"]:checked').count(), 0);
   if (!await page.locator('input[name="attach-investigation"]').first().isVisible()) await page.locator("#investigation-attach-options details summary").first().click();
   await page.locator('input[name="attach-investigation"]').first().check();
   const beforeCancel = await raw(page);
   await page.locator("#investigation-attach-cancel").click();
   assert.equal(await raw(page), beforeCancel);
-  await action(page, "investigation-attach").click();
+  await click(page, "investigation-attach");
   assert.equal(await page.locator('input[name="attach-investigation"]:checked').count(), 0);
   await page.locator('input[name="attach-report"]').first().check();
   await page.locator("#investigation-attach-save").click();
@@ -311,7 +312,7 @@ test("unit overrides and both custom investigation types are entered during a vi
   const unit = await revealField(page, "hemoglobin", "unit"); await unit.fill("ДЕМО другая единица");
   await saveReport(page);
   for (const kind of ["lab", "study"]) {
-    await action(page, "investigation-add").click();
+    await click(page, "investigation-add");
     await page.locator("#investigation-kind").selectOption(kind);
     await page.locator("#investigation-name").fill(kind === "lab" ? "ДЕМО специальный показатель" : "ДЕМО специальное исследование");
     await page.locator("#investigation-result").fill(kind === "lab" ? "7,8" : "ДЕМО текстовое заключение");
@@ -333,7 +334,7 @@ test("unit overrides and both custom investigation types are entered during a vi
 test("instrumental manual input hides units across kind changes and keeps laboratory units", {timeout: 24000}, async t => {
   const {page} = await openApp(t);
   await seed(page, {report: false}); await openVisit(page);
-  await action(page, "investigation-add").click();
+  await click(page, "investigation-add");
   await page.locator("#investigation-kind").selectOption("lab");
   await page.locator("#investigation-unit").fill("ДЕМО-ЕДИНИЦА");
   await page.locator("#investigation-kind").selectOption("study");
@@ -351,10 +352,10 @@ test("instrumental manual input hides units across kind changes and keeps labora
   await openCard(page);
   assert.doesNotMatch(await page.locator("#patient-investigations").innerText(), /единиц/i);
   await page.reload(); await openCard(page);
-  await action(page, "investigation-edit").click();
+  await click(page, "investigation-edit");
   assert.equal(await page.locator("#investigation-unit").isVisible(), false);
   await page.locator("#investigation-cancel").click();
-  await action(page, "investigation-add").click();
+  await click(page, "investigation-add");
   await page.locator("#investigation-kind").selectOption("lab");
   assert.equal(await page.locator("#investigation-unit").isVisible(), true);
 });
@@ -424,7 +425,7 @@ test("report save failure retains every entered value and a stale second window 
 test("detaching a result keeps it in the card, and stale deletion cannot remove an edited report", {timeout: 25000}, async t => {
   const {page, newPage} = await openApp(t);
   const original = await seed(page); await openVisit(page);
-  await action(page, "investigation-detach").click();
+  await click(page, "investigation-detach");
   if (await page.locator("#confirmation").isVisible()) await accept(page);
   assert.equal((await entry(page)).investigationIds, undefined);
   assert.equal((await patient(page)).investigations.length, 1);
@@ -446,11 +447,11 @@ test("report backup restores group and encounter links, and only entered indicat
   await reportRow(page, id).locator("summary").click();
   const text = await reportRow(page, id).innerText();
   assert.match(text, /123/); assert.doesNotMatch(text, /Эритроциты|RBC/);
-  await action(page, "help").click();
-  const download = page.waitForEvent("download"); await action(page, "backup").click();
+  await click(page, "help");
+  const download = page.waitForEvent("download"); await click(page, "backup");
   const file = await download, chunks = [];
   for await (const chunk of await file.createReadStream()) chunks.push(chunk);
-  const restored = await newPage(); await action(restored, "help").click();
+  const restored = await newPage(); await click(restored, "help");
   await restored.locator("#import-file").setInputFiles({name: "fictional-reports.json", mimeType: "application/json", buffer: Buffer.concat(chunks)});
   await accept(restored); await openCard(restored);
   assert.deepEqual(await patient(restored), original.card);

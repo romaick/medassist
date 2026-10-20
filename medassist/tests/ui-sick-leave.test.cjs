@@ -13,7 +13,7 @@ const now = "2032-04-15T07:00:00.000Z";
 const patientId = "demo-leave-patient";
 const visitId = "demo-leave-visit";
 const manualDraft = "ДЕМО: вымышленная запись. Этот текст врач изменил и проверил вручную.";
-const click = (page, action) => page.locator('[data-action="' + action + '"]').first().click();
+const {clickAction: click} = require("./ui-actions.cjs");
 const raw = page => page.evaluate(key => localStorage.getItem(key), key);
 const saved = async page => JSON.parse(await raw(page));
 const savedPatient = async page => (await saved(page)).patients.find(patient => patient.id === patientId);

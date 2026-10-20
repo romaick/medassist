@@ -40,7 +40,9 @@ window.MedAssistPager = (() => {
     const position = indicatorPosition(list);
     indicator.hidden = !position;
     if (!position) return;
-    const previous = updating && current?.indicator;
+    const transitionList = updating && current && (list === current.tabList ||
+      list === current.getTabList?.() || (current.tabListId && list.id === current.tabListId));
+    const previous = transitionList && current.indicator;
     indicator.style.width = `${position.width}px`;
     indicator.style.transform = `translateX(${position.left}px)`;
     if (previous && !reducedMotion() && typeof indicator.animate === 'function') {
@@ -89,6 +91,9 @@ window.MedAssistPager = (() => {
     const record = {
       before: viewport,
       document: viewport?.ownerDocument,
+      tabList,
+      tabListId: tabList?.id,
+      getTabList: typeof getTabList === 'function' ? getTabList : null,
       indicator: indicatorPosition(tabList),
       cancelled: false,
       applied: false

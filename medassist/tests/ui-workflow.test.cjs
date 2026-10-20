@@ -12,7 +12,7 @@ const url = pathToFileURL(path.join(appRoot, "index.html")).href;
 const key = "medassist.demo.v4";
 const now = "2032-04-15T07:00:00.000Z";
 const today = "2032-04-15";
-const click = (page, action) => page.locator('[data-action="' + action + '"]').first().click();
+const {clickAction: click} = require("./ui-actions.cjs");
 const tab = async (page, name) => {
   const selector = '[data-action="tab"][data-tab="' + name + '"]';
   await page.locator(selector).first().click();
@@ -23,7 +23,7 @@ const raw = page => page.evaluate(key => localStorage.getItem(key), key);
 const openVisit = (page, id) => page.locator('[data-action="open"][data-id="' + id + '"]').click();
 const followup = (page, id) => page.locator('#followup-list [data-followup-id="' + id + '"]');
 const followupAction = (page, id, action) => followup(page, id).locator('[data-action="' + action + '"]').click();
-const filter = (page, kind, value) => page.locator('[data-action="' + kind + '-filter"][data-filter="' + value + '"]').click();
+const {selectFilter: filter} = require("./ui-actions.cjs");
 const accept = page => page.locator("#dialog-accept").click();
 const cancel = page => page.locator("#dialog-cancel").click();
 

@@ -1,4 +1,5 @@
 "use strict";
+const {clickAction: click} = require("./ui-actions.cjs");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -13,6 +14,7 @@ const action = (page, name) => page.locator('[data-action="' + name + '"]').firs
 const visitTab = (page, name) => page.locator('.tab-bar [data-tab="' + name + '"]');
 const cardTab = (page, name) => page.locator('.patient-tabs [data-card-tab="' + name + '"]');
 const category = (page, name) => page.locator('#patient-categories [data-category="' + name + '"]');
+const filterTab = (page, kind, name) => page.locator('#' + kind + '-filters [data-filter="' + name + '"]');
 const raw = page => page.evaluate(key => localStorage.getItem(key), key);
 const saved = async page => JSON.parse(await raw(page));
 
@@ -41,6 +43,7 @@ async function selected(locator) {
   await locator.page().waitForFunction(selector => document.querySelector(selector)?.getAttribute("aria-selected") === "true", await locator.evaluate(node => {
     if (node.dataset.cardTab) return '.patient-tabs [data-card-tab="' + node.dataset.cardTab + '"]';
     if (node.dataset.category) return '#patient-categories [data-category="' + node.dataset.category + '"]';
+    if (node.dataset.filter) return '[data-action="' + node.dataset.action + '"][data-filter="' + node.dataset.filter + '"]';
     return '.tab-bar [data-tab="' + node.dataset.tab + '"]';
   }));
   assert.equal(await locator.getAttribute("tabindex"), "0");
@@ -73,7 +76,7 @@ async function seed(page) {
   return {patients, encounters, value};
 }
 async function openCard(page, id = "main") {
-  await action(page, "patients").click();
+  await click(page, "patients");
   await page.locator('.patient-row[data-patient-id="nav-' + id + '"] [data-action="patient"]').click();
   await selected(cardTab(page, "history"));
 }
@@ -95,6 +98,251 @@ async function touchSwipe(page, selector, dx, dy = 0) {
 async function activeKeys(page, selector, attribute) {
   return page.locator(selector + '[aria-selected="true"]').evaluateAll((nodes, attribute) => nodes.map(node => node.getAttribute(attribute)), attribute);
 }
+async function contentAnimation(page, {fallback = false, direction = "next", viewport}) {
+  const handle = await page.waitForFunction(({fallback, direction, viewport}) => {
+    const animations = document.getAnimations().filter(animation => animation.playState === "running");
+    if (!fallback) {
+      const names = animations.map(animation => animation.animationName || "");
+      return names.includes("medassist-pager-new-" + direction) && names.includes("medassist-pager-old-" + direction) ? names : false;
+    }
+    const frames = animations.filter(animation => animation.effect?.target?.matches?.(viewport)).map(animation => animation.effect.getKeyframes());
+    return frames.find(values => values.some(value => value.transform?.includes("translateX"))) || false;
+  }, {fallback, direction, viewport}, {timeout: 2500});
+  const observed = await handle.jsonValue();
+  if (fallback) {
+    const transform = observed.find(frame => frame.transform?.includes("translateX")).transform;
+    assert.equal(/translateX\(-/.test(transform), direction === "previous", transform);
+  }
+}
+
+for (const kind of ["followup", "record"]) {
+  test("previously missing " + kind + " filter animates its content in both directions", {timeout: 13000}, async t => {
+    const page = await openApp(t);
+    await seed(page);
+    if (kind === "followup") await click(page, "followups");
+    await filterTab(page, kind, kind === "followup" ? "today" : "all").waitFor();
+    const first = kind === "followup" ? "today" : "all";
+    const last = kind === "followup" ? "completed" : "reviewed";
+    for (const [value, direction] of [[last, "next"], [first, "previous"]]) {
+      await settle(page);
+      await filterTab(page, kind, value).evaluate(node => node.click());
+      await contentAnimation(page, {direction, viewport: kind === "followup" ? "#followup-list" : "#visit-list"});
+      await selected(filterTab(page, kind, value));
+    }
+  });
+}
+
+async function followupSeed(page) {
+  const fixture = await seed(page);
+  for (const [index, date] of ["2032-04-19", "2032-04-21", "2032-04-18", "2032-04-17"].entries())
+    fixture.encounters[index].assessment.returnVisitDate = date;
+  fixture.encounters[3] = core.setReturnVisitStatus(fixture.encounters[3], "completed", {now});
+  fixture.value = core.serializeBundle(fixture.encounters, fixture.patients);
+  await page.evaluate(({key, value}) => localStorage.setItem(key, value), {key, value: fixture.value});
+  await page.reload();
+  return fixture;
+}
+
+test("followup and record filters retain directional content animations without View Transitions", {timeout: 20000}, async t => {
+  const page = await openApp(t, {fallback: true});
+  await followupSeed(page);
+  for (const [kind, view, first, last, viewport] of [
+    ["followup", "followups", "today", "completed", "#followup-list"],
+    ["record", "home", "all", "reviewed", "#visit-list"]
+  ]) {
+    await click(page, view);
+    for (const [value, direction] of [[last, "next"], [first, "previous"]]) {
+      await settle(page);
+      await filterTab(page, kind, value).evaluate(node => node.click());
+      await contentAnimation(page, {fallback: true, direction, viewport});
+      await selected(filterTab(page, kind, value));
+    }
+  }
+});
+
+test("local transitions move their own indicator while the global navigation indicator remains still", {timeout: 24000}, async t => {
+  const page = await openApp(t);
+  await seed(page);
+  const check = async (locator, local) => {
+    await settle(page);
+    await locator.evaluate(node => node.click());
+    const handle = await page.waitForFunction(local => {
+      const running = document.getAnimations().filter(animation => animation.playState === "running");
+      const localAnimations = running.filter(animation => animation.effect?.target?.matches?.(local + " > .pager-indicator"));
+      if (!localAnimations.length) return false;
+      return running.filter(animation => animation.effect?.target?.matches?.(".pager-indicator")).map(animation => animation.effect.target.parentElement.id || animation.effect.target.parentElement.className);
+    }, local, {timeout: 2500});
+    const owners = await handle.jsonValue();
+    assert.ok(!owners.includes("main-navigation"), "local selection never borrows the global indicator: " + owners);
+    assert.equal(owners.length, 1);
+    await selected(locator);
+  };
+  await check(filterTab(page, "record", "reviewed"), "#record-filters");
+  await click(page, "followups");
+  await check(filterTab(page, "followup", "completed"), "#followup-filters");
+  await openVisit(page);
+  await check(visitTab(page, "draft"), ".tab-bar");
+});
+
+test("followup buckets keep the selected period across midnight and never write patient records", {timeout: 18000}, async t => {
+  const page = await openApp(t);
+  const original = await followupSeed(page);
+  await click(page, "followups");
+  const ids = () => page.locator("#followup-list [data-followup-id]").evaluateAll(nodes => nodes.map(node => node.dataset.followupId).sort());
+  for (const [name, expected] of [["today", ["nav-visit-main"]], ["upcoming", ["nav-visit-return"]], ["past", ["nav-visit-plain"]], ["completed", ["nav-visit-draft"]]]) {
+    await choose(filterTab(page, "followup", name));
+    assert.deepEqual(await ids(), expected);
+  }
+  await choose(filterTab(page, "followup", "past"));
+  await page.clock.setFixedTime(new Date("2032-04-19T21:01:00.000Z"));
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await selected(filterTab(page, "followup", "past"));
+  assert.deepEqual(await ids(), ["nav-visit-main", "nav-visit-plain"]);
+  await choose(filterTab(page, "followup", "today"));
+  assert.deepEqual(await ids(), []);
+  assert.equal(await raw(page), original.value);
+});
+
+test("record search survives rapid filters and a search refresh cancels an obsolete pending transition", {timeout: 20000}, async t => {
+  const page = await openApp(t);
+  const original = await seed(page);
+  await page.locator("#visit-search").fill("Тестов");
+  await page.evaluate(() => {
+    for (const name of ["all", "reviewed", "draft", "all", "reviewed"])
+      document.querySelector('#record-filters [data-filter="' + name + '"]').click();
+  });
+  await selected(filterTab(page, "record", "reviewed"));
+  await settle(page);
+  assert.equal(await page.locator("#visit-search").inputValue(), "Тестов");
+  assert.deepEqual(await page.locator("#visit-list [data-record-id]").evaluateAll(nodes => nodes.map(node => node.dataset.recordId).sort()), ["nav-visit-plain", "nav-visit-return"]);
+  await page.evaluate(() => {
+    document.querySelector('#record-filters [data-filter="draft"]').click();
+    const input = document.getElementById("visit-search");
+    input.focus();
+    input.value = "Борис";
+    input.dispatchEvent(new Event("input", {bubbles: true}));
+  });
+  await settle(page);
+  await selected(filterTab(page, "record", "reviewed"));
+  assert.equal(await page.locator("#visit-search").inputValue(), "Борис");
+  assert.equal(await page.locator("#visit-search").evaluate(node => node === document.activeElement), true);
+  assert.deepEqual(await page.locator("#visit-list [data-record-id]").evaluateAll(nodes => nodes.map(node => node.dataset.recordId)), ["nav-visit-return"]);
+  assert.equal(await raw(page), original.value);
+});
+
+test("an actual confirmed repeat visit keeps all five animated sections and footer navigation without duplicate encounters", {timeout: 23000}, async t => {
+  const page = await openApp(t);
+  const original = await followupSeed(page);
+  await click(page, "followups");
+  await page.locator('#followup-list [data-followup-id="nav-visit-main"] [data-action="start-followup"]').click();
+  await page.locator("#repeat-create").click();
+  await selected(visitTab(page, "basic"));
+  const created = (await saved(page)).encounters.find(entry => !original.encounters.some(old => old.id === entry.id));
+  assert.ok(created);
+  await page.locator('[data-field="age"]').fill("41");
+  for (const name of ["history", "exam", "investigations", "draft"]) {
+    await settle(page);
+    await page.locator('.visit-action-bar [data-action="tab"][data-tab="' + name + '"]').evaluate(node => node.click());
+    await contentAnimation(page, {direction: "next", viewport: ".current-visit-form"});
+    await selected(visitTab(page, name));
+    if (name === "history") await page.locator('[data-field="history.complaints"]').fill("ДЕМО: жалобы повторного приёма.");
+    if (name === "draft") await page.locator("#draft-text").fill("ДЕМО: ручной текст повторного приёма.");
+  }
+  await choose(visitTab(page, "history"));
+  assert.equal(await page.locator('[data-field="history.complaints"]').inputValue(), "ДЕМО: жалобы повторного приёма.");
+  await choose(visitTab(page, "draft"));
+  assert.equal(await page.locator("#draft-text").inputValue(), "ДЕМО: ручной текст повторного приёма.");
+  const after = await saved(page);
+  assert.equal(after.encounters.length, original.encounters.length + 1);
+  assert.equal(after.patients.length, original.patients.length);
+  assert.equal(after.encounters.find(entry => entry.id === created.id).age, "41");
+  assert.equal(after.encounters.find(entry => entry.id === "nav-visit-main").draft.text, original.encounters[0].draft.text);
+});
+
+test("main navigation animates complete pages, preserves current input and cancels pending New without stray cards", {timeout: 26000}, async t => {
+  const page = await openApp(t);
+  const original = await seed(page);
+  const menu = page.locator(".navigation-header .nav");
+  for (const [name, direction] of [["help", "next"], ["home", "previous"]]) {
+    await settle(page);
+    await menu.locator('[data-action="' + name + '"]').evaluate(node => node.click());
+    await contentAnimation(page, {direction, viewport: "#main"});
+    await menu.locator('[data-action="' + name + '"][aria-current="page"]').waitFor();
+  }
+  await page.evaluate(() => {
+    document.querySelector('.navigation-header [data-action="new"]').click();
+    document.querySelector('.navigation-header [data-action="patients"]').click();
+  });
+  await menu.locator('[data-action="patients"][aria-current="page"]').waitFor();
+  await settle(page);
+  assert.equal(await raw(page), original.value, "cancelled pending New makes no patient or encounter");
+  await click(page, "new");
+  await click(page, "home");
+  assert.equal(await raw(page), original.value, "leaving a displayed empty form also creates nothing");
+  await openVisit(page);
+  await choose(visitTab(page, "history"));
+  await page.locator('[data-field="history.complaints"]').fill("ДЕМО: введено перед сменой главного раздела");
+  const before = await raw(page);
+  for (const name of ["patients", "followups", "modules", "help", "home"]) await click(page, name);
+  await click(page, "visit");
+  await selected(visitTab(page, "history"));
+  assert.equal(await page.locator('[data-field="history.complaints"]').inputValue(), "ДЕМО: введено перед сменой главного раздела");
+  assert.equal(await raw(page), before);
+  await click(page, "help");
+  await settle(page);
+  await menu.locator('[data-action="check-updates"]').click();
+  assert.equal(await page.locator("#update-help").isVisible(), true);
+  assert.equal(await menu.locator('[data-action="help"]').getAttribute("aria-current"), "page");
+  assert.equal(await menu.locator('[data-action="check-updates"]').evaluate(node => node.classList.contains("pager-tab")), false);
+  assert.equal(await page.evaluate(() => document.getAnimations().filter(animation => animation.animationName?.startsWith("medassist-pager")).length), 0);
+});
+
+test("new filter menus support keyboard and touch with narrow tabs reachable and vertical gestures ignored", {timeout: 26000}, async t => {
+  const page = await openApp(t);
+  await followupSeed(page);
+  for (const width of [1366, 390]) {
+    await page.setViewportSize({width, height: 844});
+    for (const [kind, view, first, second, last, viewport] of [
+      ["followup", "followups", "today", "upcoming", "completed", "#followup-list"],
+      ["record", "home", "all", "draft", "reviewed", "#visit-list"]
+    ]) {
+      await click(page, view);
+      await choose(filterTab(page, kind, first));
+      await filterTab(page, kind, first).focus();
+      await page.keyboard.press("ArrowRight");
+      await selected(filterTab(page, kind, second));
+      await page.keyboard.press("End");
+      await selected(filterTab(page, kind, last));
+      await settle(page);
+      const reachable = await filterTab(page, kind, last).evaluate(node => {
+        const box = node.getBoundingClientRect(), list = node.parentElement.getBoundingClientRect();
+        return box.left >= list.left - 1 && box.right <= list.right + 1;
+      });
+      assert.equal(reachable, true, kind + " selected tab reachable at " + width);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
+      await page.keyboard.press("Home");
+      await selected(filterTab(page, kind, first));
+      await touchSwipe(page, viewport, -150, 200);
+      await settle(page);
+      await selected(filterTab(page, kind, first));
+      await touchSwipe(page, viewport, -150);
+      await selected(filterTab(page, kind, second));
+      assert.equal(await page.locator('.navigation-header [data-action="' + view + '"]').getAttribute("aria-current"), "page", "local gesture never switches main screens");
+    }
+  }
+});
+
+test("main and newly covered filters honor reduced motion without changing records", {timeout: 16000}, async t => {
+  const page = await openApp(t, {reducedMotion: "reduce"});
+  const original = await followupSeed(page);
+  const noAnimation = async () => assert.equal(await page.evaluate(() => document.getAnimations().filter(animation => animation.playState === "running" && animation.effect.getComputedTiming().duration > 0).length), 0);
+  await click(page, "followups"); await noAnimation();
+  await choose(filterTab(page, "followup", "completed")); await noAnimation();
+  await click(page, "home"); await noAnimation();
+  await choose(filterTab(page, "record", "reviewed")); await noAnimation();
+  await click(page, "patients"); await noAnimation();
+  assert.equal(await raw(page), original.value);
+});
 
 test("global menu stays above the workspace and the clock sits left, with usable narrow navigation and fixed visit controls", {timeout: 25000}, async t => {
   const page = await openApp(t, {reducedMotion: "reduce"});
@@ -153,7 +401,7 @@ test("global menu stays above the workspace and the clock sits left, with usable
 
 test("new visit keeps entered identity, history and manual draft through rapid forward and backward tab changes", {timeout: 25000}, async t => {
   const page = await openApp(t);
-  await action(page, "new").click();
+  await click(page, "new");
   await page.locator("#patient-label").fill("Тестова Навигация Вымышленная");
   await page.locator('[data-field="age"]').fill("42");
   await choose(visitTab(page, "history"));
@@ -183,7 +431,7 @@ test("new visit keeps entered identity, history and manual draft through rapid f
 for (const fallback of [false, true]) {
   test("content moves in the selected direction " + (fallback ? "without View Transitions" : "with View Transitions"), {timeout: 18000}, async t => {
     const page = await openApp(t, {fallback});
-    await action(page, "new").click();
+    await click(page, "new");
     for (const [name, direction] of [["history", "next"], ["basic", "previous"]]) {
       await settle(page);
       await visitTab(page, name).evaluate(node => node.click());
@@ -209,9 +457,9 @@ for (const fallback of [false, true]) {
 test("patient categories preserve search and filtering while showing the correct records", {timeout: 20000}, async t => {
   const page = await openApp(t);
   const original = await seed(page);
-  await action(page, "patients").click();
+  await click(page, "patients");
   await page.locator("#patient-search").fill("Тестов");
-  await action(page, "patient-toggle-filters").click();
+  await click(page, "patient-toggle-filters");
   await page.locator("#patient-filter-review").selectOption("draft");
   const rows = () => page.locator("#patient-list .patient-row").evaluateAll(nodes => nodes.map(node => node.dataset.patientId).sort());
   for (const [name, ids] of [["all", ["nav-draft", "nav-main"]], ["sick", ["nav-main"]], ["return", ["nav-main"]], ["draft", ["nav-draft", "nav-main"]], ["all", ["nav-draft", "nav-main"]]]) {
@@ -234,7 +482,7 @@ test("patient card shows one module, retains edits in its module and starts anot
   assert.equal(await page.locator("#patient-history [data-action=open]").count(), 1);
   await choose(cardTab(page, "investigations"));
   assert.deepEqual(await visible(), ["investigations"]);
-  await action(page, "investigation-add").click();
+  await click(page, "investigation-add");
   await page.locator("#investigation-kind").selectOption("lab");
   await page.locator("#investigation-date").fill("2032-04-19");
   await page.locator("#investigation-name").fill("ДЕМО: новый показатель");
@@ -283,7 +531,7 @@ test("all three tab strips support arrows, Home and End with focus on the select
   });
   await selected(visitTab(page, "exam"));
   assert.equal(await visitTab(page, "exam").evaluate(node => node === document.activeElement), true, "rapid arrows advance from the requested tab while animation is pending");
-  await action(page, "patients").click();
+  await click(page, "patients");
   await check(category(page, "all"), category(page, "sick"), category(page, "draft"));
   await openCard(page);
   await check(cardTab(page, "history"), cardTab(page, "investigations"), cardTab(page, "sick"));
@@ -310,7 +558,7 @@ test("touch swipes navigate content without hijacking vertical gestures or form 
   await touchSwipe(page, ".current-visit-form", -180);
   await settle(page);
   await selected(visitTab(page, "draft"));
-  await action(page, "patients").click();
+  await click(page, "patients");
   await touchSwipe(page, "#patient-list", -180);
   await selected(category(page, "sick"));
   await touchSwipe(page, "#patient-list", 180);
@@ -318,7 +566,7 @@ test("touch swipes navigate content without hijacking vertical gestures or form 
   await openCard(page);
   await touchSwipe(page, "#patient-module-panel", -180);
   await selected(cardTab(page, "investigations"));
-  await action(page, "investigation-add").click();
+  await click(page, "investigation-add");
   await page.locator("#investigation-kind").selectOption("lab");
   await page.locator("#investigation-name").fill("ДЕМО: ещё не сохранено");
   await touchSwipe(page, "#patient-module-panel", -180);
@@ -345,7 +593,7 @@ test("reduced motion switches every surface immediately without content or indic
   };
   await openVisit(page);
   await check(visitTab(page, "draft"));
-  await action(page, "patients").click();
+  await click(page, "patients");
   await check(category(page, "sick"));
   await openCard(page);
   await check(cardTab(page, "sick"));
@@ -369,7 +617,7 @@ test("desktop and narrow navigation stay within the screen and scroll the active
     await openVisit(page);
     await check(visitTab(page, "draft"), width + " visit last");
     await check(visitTab(page, "basic"), width + " visit first");
-    await action(page, "patients").click();
+    await click(page, "patients");
     await check(category(page, "draft"), width + " patients last");
     await check(category(page, "all"), width + " patients first");
     await openCard(page);

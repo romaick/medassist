@@ -1,4 +1,5 @@
 "use strict";
+const {clickAction: click} = require("./ui-actions.cjs");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -65,7 +66,7 @@ async function seed(page, investigations = [], withVisit = true) {
 }
 
 async function openCard(page) {
-  await action(page, "patients").click();
+  await click(page, "patients");
   await page.locator('.patient-row[data-patient-id="' + patientId + '"] [data-action="patient"]').click();
   await page.locator('.patient-tabs [data-card-tab="investigations"]').click();
 }
@@ -78,7 +79,7 @@ async function saveForm(page) {
   await page.locator("#investigation-dialog").waitFor({state: "hidden"});
 }
 async function add(page, data = values) {
-  await action(page, "investigation-add").click();
+  await click(page, "investigation-add");
   await fillForm(page, data);
   await saveForm(page);
 }
@@ -91,12 +92,12 @@ async function chooseSeries(page, predicate) {
 test("result form saves explicitly, validates required input and works for a card without visits", {timeout: 20000}, async t => {
   const {page} = await openApp(t);
   await seed(page, [], false); await openCard(page);
-  await action(page, "investigations").click();
+  await click(page, "investigations");
   const before = await raw(page);
-  await action(page, "investigation-add").click(); await fillForm(page);
+  await click(page, "investigation-add"); await fillForm(page);
   await page.locator("#investigation-cancel").click();
   assert.equal(await raw(page), before);
-  await action(page, "investigation-add").click(); await fillForm(page, {...values, name: "   "});
+  await click(page, "investigation-add"); await fillForm(page, {...values, name: "   "});
   await page.locator("#investigation-save").click();
   assert.equal(await raw(page), before);
   assert.equal(await page.locator("#investigation-error").isVisible(), true);
@@ -173,17 +174,17 @@ test("dynamics separates units and kinds, shows original references, and never c
 test("all manually entered result fields are searchable and preserved in a backup restore", {timeout: 23000}, async t => {
   const {page, newPage} = await openApp(t);
   await seed(page, [{note: "ДЕМО маркерисследования", result: "ДЕМО заключениетест", reference: "ДЕМО нормаизбланкатест"}]);
-  await action(page, "patients").click();
+  await click(page, "patients");
   for (const query of ["маркерисследования", "заключениетест", "нормаизбланкатест", "18.04.2032", "демо/л"]) {
     await page.locator("#patient-search").fill(query);
     assert.equal(await page.locator('.patient-row[data-patient-id="' + patientId + '"]').count(), 1, query);
   }
   const original = await patient(page);
-  await action(page, "help").click();
-  const download = page.waitForEvent("download"); await action(page, "backup").click();
+  await click(page, "help");
+  const download = page.waitForEvent("download"); await click(page, "backup");
   const file = await download, chunks = [];
   for await (const chunk of await file.createReadStream()) chunks.push(chunk);
-  const restored = await newPage(); await action(restored, "help").click();
+  const restored = await newPage(); await click(restored, "help");
   await restored.locator("#import-file").setInputFiles({name: "fictional-investigations.json", mimeType: "application/json", buffer: Buffer.concat(chunks)});
   await accept(restored); await openCard(restored);
   assert.deepEqual((await patient(restored)).investigations, original.investigations);
@@ -195,7 +196,7 @@ test("failed result save retains inputs; stale second window cannot overwrite or
   await seed(page); await openCard(page);
   const other = await newPage(); await openCard(other);
   for (const target of [page, other]) {
-    await action(target, "investigation-add").click(); await fillForm(target);
+    await click(target, "investigation-add"); await fillForm(target);
   }
   const before = await raw(page);
   await page.evaluate(key => {
@@ -241,7 +242,7 @@ test("results, graph and form remain usable at narrow widths; viewing never writ
   const id = (await patient(page)).investigations[0].id;
   for (const width of [1366, 1024, 800, 390]) {
     await page.setViewportSize({width, height: 900});
-    await action(page, "investigations").click();
+    await click(page, "investigations");
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true, "no page overflow at " + width);
     assert.equal(await page.locator(".investigation-chart").count(), 1);
     const graph = await page.locator(".investigation-chart").boundingBox();
@@ -285,7 +286,7 @@ test("a forged imported result is rejected without replacing the current records
   await seed(page, [{}]); const before = await raw(page);
   const invalid = JSON.parse(before);
   invalid.patients[0].investigations[0].date = "2032-02-30";
-  await action(page, "help").click();
+  await click(page, "help");
   await page.locator("#import-file").setInputFiles({name: "fictional-invalid-result.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(invalid))});
   await page.waitForFunction(() => document.querySelector("#toast")?.textContent.trim());
   assert.equal(await raw(page), before);

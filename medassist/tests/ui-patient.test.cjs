@@ -8,7 +8,7 @@ const { chromium } = require(process.env.MEDASSIST_PLAYWRIGHT || "playwright");
 const appRoot = path.resolve(process.env.MEDASSIST_APP_ROOT || path.join(__dirname, "../app"));
 const url = pathToFileURL(path.join(appRoot, "index.html")).href;
 const key = "medassist.demo.v4";
-const click = (page, action) => page.locator('[data-action="' + action + '"]').first().click();
+const {clickAction: click} = require("./ui-actions.cjs");
 const tab = (page, name) => page.locator('[data-action="tab"][data-tab="' + name + '"]').first().click();
 const saved = page => page.evaluate(key => JSON.parse(localStorage.getItem(key)), key);
 const openVisit = (page, id) => page.locator('[data-action="open"][data-id="' + id + '"]').click();
@@ -70,6 +70,7 @@ test("patient list keeps the last visit, prioritizes the nearest pending return 
   assert.equal(await page.evaluate(key => localStorage.getItem(key), key), initial, 'rendering, sorting and search do not write records');
   await click(page, 'followups');
   await page.locator('[data-action="followup-filter"][data-filter="upcoming"]').click();
+  await page.locator('[data-action="followup-filter"][data-filter="upcoming"][aria-selected="true"]').waitFor({state: "visible"});
   await page.locator('[data-followup-id="visit-soon"] [data-action="followup-complete"]').click();
   await page.locator('#dialog-accept').click();
   await click(page, 'patients');

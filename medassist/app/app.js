@@ -144,45 +144,44 @@
     if (state.view === 'patient' && !selectedPatient()) state.view = 'patients';
     document.body.classList.toggle('visit-view', state.view === 'visit');
     const sectionName = {home: 'Обзор', patients: 'Пациенты', followups: 'Повторные приёмы', patient: 'Карточка пациента', visit: 'Демонстрационный приём', modules: 'Модули', help: 'Помощь и данные'}[state.view];
-    app.innerHTML = '<div class="shell"><header class="navigation-header"><div class="brand"><img src="icon.svg" alt=""><div><strong>МедАссистент</strong><small>ПОЛИКЛИНИЧЕСКИЙ РЕЖИМ</small></div></div><nav class="nav" aria-label="Главная навигация">' +
+    app.innerHTML = '<div class="shell"><header class="navigation-header"><div class="brand"><img src="icon.svg" alt=""><div><strong>МедАссистент</strong><small>ПОЛИКЛИНИЧЕСКИЙ РЕЖИМ</small></div></div><nav id="main-navigation" class="nav pager-tabs" aria-label="Главная навигация">' +
       navButton('home', 'Обзор', 'home') + navButton('patients', 'Пациенты', 'user') + navButton('new', 'Новый пациент', 'plus') +
       (current ? navButton('visit', 'Текущий приём', 'document') : '') + navButton('followups', 'Повторные приёмы', 'calendar') + navButton('modules', 'Модули', 'grid') + navButton('help', 'Помощь и данные', 'help') + navButton('check-updates', 'Проверить обновления', 'download') +
-      '</nav></header><aside class="topbar context-sidebar" aria-label="Дата, время и текущий раздел"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><div class="topbar-left"><span class="context-mode">Поликлиника</span><strong>' + sectionName + '</strong></div><div class="side-bottom"><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><div class="version">Прототип 0.17.0 · Демонстрация</div></div></aside><div class="workspace"><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
+      '</nav></header><aside class="topbar context-sidebar" aria-label="Дата, время и текущий раздел"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><div class="topbar-left"><span class="context-mode">Поликлиника</span><strong>' + sectionName + '</strong></div><div class="side-bottom"><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><div class="version">Прототип 0.17.1 · Демонстрация</div></div></aside><div class="workspace"><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
       (state.migrated ? '<div class="migration-notice">Прежние записи доступны со статусом «Черновик». Карточки, данные и ручные тексты сохранены. Исходное сохранение предыдущей версии не изменяется.</div>' : '') +
       ({home: renderHome, patients: renderPatients, followups: renderFollowups, patient: renderPatient, visit: renderVisit, modules: renderModules, help: renderHelp}[state.view])() +
-      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.17.0</span></footer></main></div></div>';
+      '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span><span>МедАссистент · 0.17.1</span></footer></main></div></div>';
     updateClock();
     updateSaveStatus();
     if (state.view === 'visit') { updateValidation(); updateDraftState(); updateReviewState(); }
     observeVisitLayout();
     bindPageNavigation();
-    const navigation = app.querySelector('.navigation-header .nav');
-    const selectedNavigation = navigation.querySelector('[aria-current="page"]');
-    if (selectedNavigation) navigation.scrollLeft = Math.max(0, selectedNavigation.getBoundingClientRect().right - navigation.getBoundingClientRect().right + 8);
   }
   function navButton(view, text, symbol) {
-    return '<button type="button" data-action="' + view + '"' + (state.view === view ? ' class="active" aria-current="page"' : '') + '>' + icon(symbol) + '<span>' + text + '</span>' + (state.view === view ? '<span class="tiny-dot"></span>' : '') + '</button>';
+    const current = view === (state.view === 'patient' ? 'patients' : state.view);
+    return '<button type="button" data-action="' + view + '" class="' + (view === 'check-updates' ? 'nav-command' : 'pager-tab') + (current ? ' active' : '') + '"' + (current ? ' aria-current="page"' : '') + '>' + icon(symbol) + '<span>' + text + '</span>' + (current ? '<span class="tiny-dot"></span>' : '') + '</button>';
   }
   function demoNotice() { return '<div class="demo-notice">' + icon('info') + '<span>Демонстрационный прототип. Используйте только вымышленные данные.</span></div>'; }
   function recordStatus(entry) {
     const reviewed = entry.workflow.reviewStatus === 'reviewed';
     return '<span class="record-status' + (reviewed ? ' reviewed' : '') + '">' + (reviewed ? 'Проверено врачом' : 'Черновик') + '</span>';
   }
-  function filterButtons(action, choices, selected) {
-    return choices.map(([value, label, count]) => button(action, label + ' · ' + count, null, (value === selected ? 'primary' : 'secondary') + ' compact', 'data-filter="' + value + '" aria-pressed="' + (value === selected) + '"')).join('');
+  function filterButtons(action, choices, selected, panelId) {
+    return choices.map(([value, label, count]) => button(action, label + ' · ' + count, null, (value === selected ? 'primary active' : 'secondary') + ' compact pager-tab', 'id="' + action + '-' + value + '" role="tab" data-filter="' + value + '" aria-controls="' + panelId + '" aria-selected="' + (value === selected) + '" aria-pressed="' + (value === selected) + '" tabindex="' + (value === selected ? '0' : '-1') + '"')).join('');
   }
+  const recordBuckets = [['all', 'Все'], ['draft', 'Черновики'], ['reviewed', 'Проверено врачом']];
   function recordFilters() {
-    return filterButtons('record-filter', [['all', 'Все', state.encounters.length], ['draft', 'Черновики', state.encounters.filter(entry => entry.workflow.reviewStatus === 'draft').length], ['reviewed', 'Проверено врачом', state.encounters.filter(entry => entry.workflow.reviewStatus === 'reviewed').length]], state.recordFilter);
+    return filterButtons('record-filter', recordBuckets.map(([key, label]) => [key, label, state.encounters.filter(entry => key === 'all' || entry.workflow.reviewStatus === key).length]), state.recordFilter, 'visit-list');
   }
   const followupBuckets = [['today', 'Сегодня'], ['upcoming', 'Ближайшие'], ['past', 'Дата прошла'], ['completed', 'Состоявшиеся']];
   function followupFilters() {
     const items = core.getReturnVisits(state.encounters, localDate());
-    return filterButtons('followup-filter', followupBuckets.map(([key, label]) => [key, label, items.filter(item => item.bucket === key).length]), state.followupFilter);
+    return filterButtons('followup-filter', followupBuckets.map(([key, label]) => [key, label, items.filter(item => item.bucket === key).length]), state.followupFilter, 'followup-list');
   }
   function renderFollowups() {
     state.followupDay = localDate();
     return '<div class="page-heading"><div><h1>Повторные приёмы</h1><p>Даты, назначенные в разделе «Запись» предыдущих приёмов.</p></div></div>' + demoNotice() +
-      '<section class="card"><div class="card-head"><h2>План повторных приёмов</h2></div><div id="followup-filters" class="workflow-filters" aria-label="Период повторных приёмов">' + followupFilters() + '</div><p class="workflow-hint">«Ближайшие» — все будущие даты. Прошедшая дата не означает неявку. Отметку «Состоялся» ставьте только после подтверждения факта приёма.</p><div id="followup-list" class="list">' + renderFollowupList() + '</div></section>';
+      '<section class="card"><div class="card-head"><h2>План повторных приёмов</h2></div><div id="followup-filters" class="workflow-filters pager-tabs" role="tablist" aria-label="Период повторных приёмов">' + followupFilters() + '</div><p class="workflow-hint">«Ближайшие» — все будущие даты. Прошедшая дата не означает неявку. Отметку «Состоялся» ставьте только после подтверждения факта приёма.</p><div id="followup-list" class="list pager-viewport" role="tabpanel" aria-labelledby="followup-filter-' + state.followupFilter + '" tabindex="0">' + renderFollowupList() + '</div></section>';
   }
   function renderFollowupList(bucket = state.followupFilter, compact = false) {
     const items = core.getReturnVisits(state.encounters, localDate()).filter(item => item.bucket === bucket);
@@ -197,9 +196,14 @@
     }).join('');
   }
   function refreshFollowups() {
+    pager.invalidate();
+    const focusedTab = document.activeElement.closest('#followup-filters [role="tab"]')?.id;
     state.followupDay = localDate();
     document.getElementById('followup-filters').innerHTML = followupFilters();
     document.getElementById('followup-list').innerHTML = renderFollowupList();
+    document.getElementById('followup-list').setAttribute('aria-labelledby', 'followup-filter-' + state.followupFilter);
+    bindPageNavigation();
+    if (focusedTab) document.getElementById(focusedTab)?.focus({preventScroll: true});
   }
   function updateReviewState() {
     const entry = active();
@@ -238,12 +242,24 @@
     return [...state.encounters].filter(entry => entry.workflow.reviewStatus === 'draft').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id))[0];
   }
   function refreshHomeDay() {
+    pager.invalidate();
     const today = localDate();
     state.homeDay = today;
     document.getElementById('home-followup-list').innerHTML = renderFollowupList('today', true);
     document.getElementById('home-followup-count').textContent = String(core.getReturnVisits(state.encounters, today).filter(item => item.bucket === 'today').length);
     document.getElementById('home-review-today-count').textContent = String(state.encounters.filter(entry => entry.workflow.reviewStatus === 'draft' && entry.visitDate === today).length);
     document.getElementById('visit-list').innerHTML = renderList();
+    bindPageNavigation();
+  }
+  function refreshRecords() {
+    pager.invalidate();
+    const focusedTab = document.activeElement.closest('#record-filters [role="tab"]')?.id;
+    document.getElementById('record-filters').innerHTML = recordFilters();
+    document.getElementById('home-record-heading').textContent = {draft: 'Записи для проверки', all: 'Все записи', reviewed: 'Проверенные записи'}[state.recordFilter];
+    document.getElementById('visit-list').innerHTML = renderList();
+    document.getElementById('visit-list').setAttribute('aria-labelledby', 'record-filter-' + state.recordFilter);
+    bindPageNavigation();
+    if (focusedTab) document.getElementById(focusedTab)?.focus({preventScroll: true});
   }
   function renderHome() {
     state.homeDay = localDate();
@@ -256,7 +272,7 @@
       (current ? '<div class="home-current-patient"><strong>' + escape(patientLabel(current)) + '</strong>' + recordStatus(current) + '</div><p class="home-current-meta">' + escape(dateText(current.visitDate)) + (current.id !== state.activeId ? ' · Последний изменённый черновик' : '') + '</p><p class="home-current-complaint">' + escape(current.history.complaints.trim() || 'Жалобы пока не указаны') + '</p>' : '<p class="home-current-empty">Незавершённого приёма нет. Выберите пациента, чтобы начать новый.</p>') + '</div>' +
       (current ? button('resume-visit', 'Продолжить приём', 'arrow', 'primary', 'data-id="' + escape(current.id) + '"') : !state.encounters.length ? button('example', 'Открыть вымышленный пример', 'document', 'secondary compact') : '') + '</section>' +
       '<div class="home-dashboard"><section class="card home-followups" aria-labelledby="home-followup-heading"><div class="card-head"><h2 id="home-followup-heading">Явки сегодня <span id="home-followup-count" class="home-count">' + todayFollowups + '</span></h2>' + button('home-followups', 'План явок', 'arrow', 'ghost') + '</div><div id="home-followup-list" class="list">' + renderFollowupList('today', true) + '</div></section>' +
-      '<section class="card home-records" aria-labelledby="home-record-heading"><div class="card-head"><h2 id="home-record-heading">' + listHeading + '</h2><p class="home-today-summary">Черновиков сегодня: <strong id="home-review-today-count">' + todayDrafts + '</strong></p></div><div id="record-filters" class="workflow-filters" aria-label="Статус записи">' + recordFilters() + '</div><div class="search-wrap"><label class="home-search-label" for="visit-search">Найти запись</label><input class="search-field" id="visit-search" type="search" placeholder="ФИО, код, дата или жалобы" value="' + escape(state.search) + '"></div><div id="visit-list" class="list">' + renderList() + '</div></section></div></div>';
+      '<section class="card home-records" aria-labelledby="home-record-heading"><div class="card-head"><h2 id="home-record-heading">' + listHeading + '</h2><p class="home-today-summary">Черновиков сегодня: <strong id="home-review-today-count">' + todayDrafts + '</strong></p></div><div id="record-filters" class="workflow-filters pager-tabs" role="tablist" aria-label="Статус записи">' + recordFilters() + '</div><div class="search-wrap"><label class="home-search-label" for="visit-search">Найти запись</label><input class="search-field" id="visit-search" type="search" placeholder="ФИО, код, дата или жалобы" value="' + escape(state.search) + '"></div><div id="visit-list" class="list pager-viewport" role="tabpanel" aria-labelledby="record-filter-' + state.recordFilter + '" tabindex="0">' + renderList() + '</div></section></div></div>';
   }
   function renderList() {
     const query = state.search.toLocaleLowerCase('ru').trim();
@@ -1583,7 +1599,7 @@
       '<p class="section-intro">Во вкладке «Исследования» приёма и в карточке пациента доступны бланки и ручной ввод результатов. В карточке также доступны история и динамика. ИМТ рассчитывается в разделе «Осмотр». Отдельные калькуляторы, диспансерное наблюдение и официальные формы остаются в плане развития.</p><div class="module-grid">' + window.MedAssistModules.map((module) => '<section class="card module-card"><div class="module-head"><div class="icon-tile">' + icon(module.icon) + '</div><span class="pill neutral">' + (module.status === 'available' ? 'Доступно' : module.status === 'verification' ? 'После проверки источников' : 'Запланировано') + '</span></div><h2>' + escape(module.title) + '</h2><p>' + escape(module.description) + '</p><details><summary>' + (module.status === 'available' ? 'Как пользоваться' : 'Что потребуется для добавления') + '</summary><p>' + escape(module.requirements) + '</p></details></section>').join('') + '</div>';
   }
   function renderHelp() {
-    return '<div class="page-heading"><div><h1>Помощь и данные</h1><p>Первый запуск, сохранение и границы прототипа.</p></div></div><div class="help-layout"><section class="card help-card"><h2>Анализы и исследования</h2><p>В первичном или повторном приёме откройте вкладку «Исследования»; в карточке пациента — раздел «Анализы и исследования». Нажмите «Добавить результат» и выберите ОАК, ОАМ, БАК или другое исследование. Откроется готовая форма; укажите дату и результаты. Единицы измерения заполняются только для лабораторных анализов. «Бланки анализов» открывает готовые формы напрямую. Предложенные единицы можно исправить по выданному бланку; нормы вводятся вручную. Пустые результаты не сохраняются и не попадают в запись, значение 0 сохраняется. В том же списке доступны «Другое лабораторное исследование» и «Другое инструментальное исследование» с ручным вводом названия, результата и примечания; поле единиц есть только у лабораторного исследования. Кнопка «Назад» из выбранного бланка возвращает к форме выбора, сохраняя прежний ручной ввод. Формы сохраняются только по нажатию кнопки.</p><p>Результаты, добавленные во время приёма, сохраняются и в карточке пациента. Для включения прежних результатов в приём нажмите «Выбрать из карточки» и отметьте нужные бланки или показатели; автоматического переноса в повторный приём нет. Изменение или удаление связанного результата снимает отметку проверки у связанных записей. Сохранённый текст остаётся для вашей проверки; чтобы включить актуальные результаты, заново сформируйте черновик. «Убрать из приёма» сохраняет результат в карточке.</p><p>В карточке выберите показатель, чтобы увидеть историю и динамику. График и разность доступны для числовых результатов с одинаковым названием и единицами на разные даты. Единицы не пересчитываются; текстовые результаты и результаты одного дня показываются таблицей. Нормы берутся из соответствующей строки, медицинская интерпретация не выполняется. Результаты доступны в поиске пациентов и резервной копии. Для копий с бланками или связями с приёмами нужна версия 0.15.0 или новее; отдельные результаты прежнего формата поддерживаются с 0.14.0.</p><h2>Назначения препаратов</h2><p>В разделе «Запись» нажмите «Добавить препарат». Введите название, дозировку, способ приёма, кратность, длительность и примечание, затем сохраните. Название обязательно; остальные параметры врач заполняет самостоятельно. Каждое назначение можно изменить или удалить. Новые назначения включаются при формировании черновика; сохранённый ручной текст остаётся.</p><p>При создании повторного приёма отметьте отдельные назначения для переноса. По умолчанию они выключены; постоянные препараты анамнеза, аллергии и заболевания подтверждаются отдельно. Назначения входят в резервную копию; копии с ними требуют версии 0.13.0 или новее. Шаблоны рекомендаций сохраняют только свободный текст рекомендаций.</p><h2>Возможности приёма</h2><p>В разделе «Запись» больничный можно выдать, продлить или закрыть с одновременным сохранением в журнале. При продлении и закрытии выберите конкретный листок. Чтобы исправить последнее связанное действие, отмените его в этом приёме и внесите заново.</p><p>«Предыдущий приём» открывает сведения из истории только для просмотра. «Мои шаблоны» возле осмотра и рекомендаций сохраняют ваши формулировки и применяются по нажатию. Шаблоны входят в резервную копию; копии с шаблонами или связанными действиями больничного требуют версии 0.12.0 или новее.</p><h2>Как пройти демонстрационный приём</h2><ol><li>Нажмите «Начать приём» и найдите пациента либо выберите «Новый пациент». Пустая новая форма не сохраняется; карточка появляется после первого ввода сведений. На главной также доступен вымышленный пример.</li><li>Заполните сведения о приёме, анамнез и осмотр. Вводите только вымышленные данные.</li><li>В разделе «Запись» заполните диагноз, при необходимости рекомендации, дату повторного приёма и отметку о больничном. Нажмите «Сформировать черновик».</li><li>Проверьте и отредактируйте текст. Скачайте .txt или скопируйте его.</li></ol><h2>Перелистывание разделов</h2><p>Вкладки приёма, рубрики списка пациентов и разделы карточки переключаются в верхней строке с боковым перелистыванием. В карточке открывается один раздел: «История приёмов», «Анализы и исследования» или «Журнал больничных». Для перехода нажмите вкладку, используйте стрелки влево и вправо, Home или End на выбранной вкладке либо проведите пальцем вбок по свободной области содержимого. Ввод в полях и вертикальная прокрутка сохраняются. При включённом уменьшении анимации в системе переход происходит сразу.</p><h2>Карточка и повторный приём</h2><p>Раздел «Пациенты» содержит карточки с историей по датам. В списке видны последний приём и ближайшая предстоящая повторная явка. Пациенты с явкой сегодня или позже идут первыми, от ближайшей даты к дальней; только с прошедшей незакрытой датой — следом, без назначений — в конце. Состоявшиеся приёмы не участвуют в этом порядке. ФИО пациента можно ввести в начале вкладки «Приём» или изменить в карточке. Это одно общее поле; используйте только вымышленные фамилию, имя и отчество. Кнопка «Повторный приём» создаёт отдельную запись того же пациента. Выберите исходный приём и отметьте нужные препараты, аллергии и заболевания; нажмите «Создать приём» для подтверждения. Без отметок перенос не выполняется. При смене источника отметки сбрасываются. Возраст, пол, жалобы, осмотр, показатели и заключение заполните заново.</p><h2>Журнал больничных</h2><p>В карточке пациента откройте вкладку «Журнал больничных». Выдача, продление и закрытие сохраняются явно; автоматически по прошедшей дате больничный не закрывается. Можно изменить номер или отменить последнее действие. Общий счётчик объединяет все внесённые календарные периоды пациента: обе даты включены, пересечения учитываются один раз. Закрытие исключает дни после выбранной даты; для более позднего закрытия сначала внесите продление.</p><p>Прежние отметки видны под журналом и уже входят в общий подсчёт. Перенесите отметку в журнал, чтобы продлевать или закрывать её. Исходный приём и текст сохраняются; дальнейшие изменения ведутся отдельно. Неполные даты исключены из счётчика с предупреждением. Журнал входит в резервную копию; для её открытия нужна версия 0.11.0 или новее.</p><h2>Повторные даты и проверка записи</h2><p>Дата в конце раздела «Запись» появляется в списке «Повторные приёмы». Там доступны сегодняшние, все будущие и прошедшие даты. Прошедшая дата не означает неявку. «Начать повторный приём» создаёт связанную запись после подтверждения переноса; повторное нажатие открывает её. Отдельно отметьте «Состоялся» после фактического приёма. Изменение назначенной даты сбрасывает отметку и связь, но сохраняет запись в истории.</p><p>На вкладке «Запись» нажмите «Отметить: проверено врачом» после проверки непустого текста. Это личная отметка, не электронная подпись. Правки сведений, текста или ФИО снимают её. На главной фильтр «Черновики» показывает незавершённые записи. Статус записи и факт состоявшегося приёма независимы.</p><h2>Режимы работы</h2><p>Сейчас доступен поликлинический режим. Стационарный режим запланирован отдельно; его формы и функции будут определены на следующем этапе.</p><h2>Что делает прототип</h2><p>Собирает введённые сведения в свободный текст. Работает из локальных файлов, без аккаунта, сервера, МИС и внешних запросов приложения.</p><p>Диагноз и рекомендации вводит врач. Программа не назначает лечение и не оформляет больничные документы. Варианты осмотра — вспомогательные формулировки; источники и ограничения перечислены в EXAM-SOURCES.md. Нормативные формы Беларуси не реализованы.</p><h2>Запуск в Windows</h2><p>Распакуйте архив в постоянную папку и откройте <span class="code-path">Start-MedAssist.cmd</span>. Приложение использует установленный Edge или Chrome. Также можно открыть <span class="code-path">app/index.html</span>.</p></section><section class="card help-card"><h2>Сохранение на этом компьютере</h2><p>Изменения автоматически сохраняются в локальном хранилище текущего браузера. Статус сохранения показан в приёме. При ошибке вы увидите сообщение.</p><p>Хранение локальных HTML-файлов зависит от браузера. Перемещение папки, другой профиль или очистка данных браузера могут сделать записи недоступными. Перед этим скачайте резервную копию.</p><p>Резервная копия содержит карточки с анализами и исследованиями, связанные приёмы, отредактированные черновики и личные шаблоны. Восстановление заменит все карточки и приёмы после подтверждения.</p><div class="backup-actions">' + button('backup', 'Резервная копия', 'download', 'primary') + button('import', 'Восстановить', 'upload') + button('reset', 'Очистить демонстрационные записи', null, 'secondary') + '</div><h2>Обновление программы через интернет</h2><p>Нажмите «Проверить обновления» в верхнем меню. Откроется окно проверки; браузер может попросить разрешить его запуск. Если доступна новая версия, сохраните резервную копию, закройте окна МедАссистента и подтвердите установку в окне обновления.</p><p>Для работы кнопки запускайте программу через <span class="code-path">Start-MedAssist.cmd</span> или обычный ярлык <span class="code-path">MedAssist</span>. При открытии файла index.html напрямую потребуется повторный запуск через ярлык. Отдельный <span class="code-path">Update-MedAssist.cmd</span> остаётся запасным способом.</p><p>Обновления загружаются из публичного проекта romaick/medassist на GitHub. Скачивать и распаковывать архивы вручную не понадобится. Без интернета приёмы работают как раньше.</p><h2>Перенос записей из прежней папки</h2><p>Сначала скачайте резервную копию в старой версии. Новая версия принимает её через «Восстановить» и сохраняет старые тексты. Если файлы обновлены в той же папке и браузере, доступные старые записи загрузятся автоматически. Новые копии со статусами и планом повторных приёмов открываются в версии 0.7 и новее. Из копий версий 1 и 2 каждый приём получает отдельную карточку; карточки версии 3 сохраняются. Автоматического объединения пациентов нет.</p><h2>Только демонстрация</h2><p>Данные сохраняются без шифрования. Прототип не подготовлен для реальных медицинских записей. Используйте только вымышленные сведения.</p></section></div>';
+    return '<div class="page-heading"><div><h1>Помощь и данные</h1><p>Первый запуск, сохранение и границы прототипа.</p></div></div><div class="help-layout"><section class="card help-card"><h2>Анализы и исследования</h2><p>В первичном или повторном приёме откройте вкладку «Исследования»; в карточке пациента — раздел «Анализы и исследования». Нажмите «Добавить результат» и выберите ОАК, ОАМ, БАК или другое исследование. Откроется готовая форма; укажите дату и результаты. Единицы измерения заполняются только для лабораторных анализов. «Бланки анализов» открывает готовые формы напрямую. Предложенные единицы можно исправить по выданному бланку; нормы вводятся вручную. Пустые результаты не сохраняются и не попадают в запись, значение 0 сохраняется. В том же списке доступны «Другое лабораторное исследование» и «Другое инструментальное исследование» с ручным вводом названия, результата и примечания; поле единиц есть только у лабораторного исследования. Кнопка «Назад» из выбранного бланка возвращает к форме выбора, сохраняя прежний ручной ввод. Формы сохраняются только по нажатию кнопки.</p><p>Результаты, добавленные во время приёма, сохраняются и в карточке пациента. Для включения прежних результатов в приём нажмите «Выбрать из карточки» и отметьте нужные бланки или показатели; автоматического переноса в повторный приём нет. Изменение или удаление связанного результата снимает отметку проверки у связанных записей. Сохранённый текст остаётся для вашей проверки; чтобы включить актуальные результаты, заново сформируйте черновик. «Убрать из приёма» сохраняет результат в карточке.</p><p>В карточке выберите показатель, чтобы увидеть историю и динамику. График и разность доступны для числовых результатов с одинаковым названием и единицами на разные даты. Единицы не пересчитываются; текстовые результаты и результаты одного дня показываются таблицей. Нормы берутся из соответствующей строки, медицинская интерпретация не выполняется. Результаты доступны в поиске пациентов и резервной копии. Для копий с бланками или связями с приёмами нужна версия 0.15.0 или новее; отдельные результаты прежнего формата поддерживаются с 0.14.0.</p><h2>Назначения препаратов</h2><p>В разделе «Запись» нажмите «Добавить препарат». Введите название, дозировку, способ приёма, кратность, длительность и примечание, затем сохраните. Название обязательно; остальные параметры врач заполняет самостоятельно. Каждое назначение можно изменить или удалить. Новые назначения включаются при формировании черновика; сохранённый ручной текст остаётся.</p><p>При создании повторного приёма отметьте отдельные назначения для переноса. По умолчанию они выключены; постоянные препараты анамнеза, аллергии и заболевания подтверждаются отдельно. Назначения входят в резервную копию; копии с ними требуют версии 0.13.0 или новее. Шаблоны рекомендаций сохраняют только свободный текст рекомендаций.</p><h2>Возможности приёма</h2><p>В разделе «Запись» больничный можно выдать, продлить или закрыть с одновременным сохранением в журнале. При продлении и закрытии выберите конкретный листок. Чтобы исправить последнее связанное действие, отмените его в этом приёме и внесите заново.</p><p>«Предыдущий приём» открывает сведения из истории только для просмотра. «Мои шаблоны» возле осмотра и рекомендаций сохраняют ваши формулировки и применяются по нажатию. Шаблоны входят в резервную копию; копии с шаблонами или связанными действиями больничного требуют версии 0.12.0 или новее.</p><h2>Как пройти демонстрационный приём</h2><ol><li>Нажмите «Начать приём» и найдите пациента либо выберите «Новый пациент». Пустая новая форма не сохраняется; карточка появляется после первого ввода сведений. На главной также доступен вымышленный пример.</li><li>Заполните сведения о приёме, анамнез и осмотр. Вводите только вымышленные данные.</li><li>В разделе «Запись» заполните диагноз, при необходимости рекомендации, дату повторного приёма и отметку о больничном. Нажмите «Сформировать черновик».</li><li>Проверьте и отредактируйте текст. Скачайте .txt или скопируйте его.</li></ol><h2>Перелистывание разделов</h2><p>Главное меню, вкладки приёма, рубрики пациентов, периоды повторных приёмов, статусы записей на обзоре и разделы карточки переключаются с боковым перелистыванием. Команда «Проверить обновления» запускает обновлятор. В карточке открывается один раздел: «История приёмов», «Анализы и исследования» или «Журнал больничных». Для перехода нажмите вкладку, используйте стрелки влево и вправо, Home или End на выбранной вкладке либо проведите пальцем вбок по свободной области содержимого. В главном меню стрелки, Home и End перемещают фокус; Enter или пробел открывает выбранный раздел. Жесты перелистывания действуют только внутри списков и вкладок, не переключают главное меню. Ввод в полях и вертикальная прокрутка сохраняются. При включённом уменьшении анимации в системе переход происходит сразу.</p><h2>Карточка и повторный приём</h2><p>Раздел «Пациенты» содержит карточки с историей по датам. В списке видны последний приём и ближайшая предстоящая повторная явка. Пациенты с явкой сегодня или позже идут первыми, от ближайшей даты к дальней; только с прошедшей незакрытой датой — следом, без назначений — в конце. Состоявшиеся приёмы не участвуют в этом порядке. ФИО пациента можно ввести в начале вкладки «Приём» или изменить в карточке. Это одно общее поле; используйте только вымышленные фамилию, имя и отчество. Кнопка «Повторный приём» создаёт отдельную запись того же пациента. Выберите исходный приём и отметьте нужные препараты, аллергии и заболевания; нажмите «Создать приём» для подтверждения. Без отметок перенос не выполняется. При смене источника отметки сбрасываются. Возраст, пол, жалобы, осмотр, показатели и заключение заполните заново.</p><h2>Журнал больничных</h2><p>В карточке пациента откройте вкладку «Журнал больничных». Выдача, продление и закрытие сохраняются явно; автоматически по прошедшей дате больничный не закрывается. Можно изменить номер или отменить последнее действие. Общий счётчик объединяет все внесённые календарные периоды пациента: обе даты включены, пересечения учитываются один раз. Закрытие исключает дни после выбранной даты; для более позднего закрытия сначала внесите продление.</p><p>Прежние отметки видны под журналом и уже входят в общий подсчёт. Перенесите отметку в журнал, чтобы продлевать или закрывать её. Исходный приём и текст сохраняются; дальнейшие изменения ведутся отдельно. Неполные даты исключены из счётчика с предупреждением. Журнал входит в резервную копию; для её открытия нужна версия 0.11.0 или новее.</p><h2>Повторные даты и проверка записи</h2><p>Дата в конце раздела «Запись» появляется в списке «Повторные приёмы». Там доступны сегодняшние, все будущие и прошедшие даты. Прошедшая дата не означает неявку. «Начать повторный приём» создаёт связанную запись после подтверждения переноса; повторное нажатие открывает её. Отдельно отметьте «Состоялся» после фактического приёма. Изменение назначенной даты сбрасывает отметку и связь, но сохраняет запись в истории.</p><p>На вкладке «Запись» нажмите «Отметить: проверено врачом» после проверки непустого текста. Это личная отметка, не электронная подпись. Правки сведений, текста или ФИО снимают её. На главной фильтр «Черновики» показывает незавершённые записи. Статус записи и факт состоявшегося приёма независимы.</p><h2>Режимы работы</h2><p>Сейчас доступен поликлинический режим. Стационарный режим запланирован отдельно; его формы и функции будут определены на следующем этапе.</p><h2>Что делает прототип</h2><p>Собирает введённые сведения в свободный текст. Работает из локальных файлов, без аккаунта, сервера, МИС и внешних запросов приложения.</p><p>Диагноз и рекомендации вводит врач. Программа не назначает лечение и не оформляет больничные документы. Варианты осмотра — вспомогательные формулировки; источники и ограничения перечислены в EXAM-SOURCES.md. Нормативные формы Беларуси не реализованы.</p><h2>Запуск в Windows</h2><p>Распакуйте архив в постоянную папку и откройте <span class="code-path">Start-MedAssist.cmd</span>. Приложение использует установленный Edge или Chrome. Также можно открыть <span class="code-path">app/index.html</span>.</p></section><section class="card help-card"><h2>Сохранение на этом компьютере</h2><p>Изменения автоматически сохраняются в локальном хранилище текущего браузера. Статус сохранения показан в приёме. При ошибке вы увидите сообщение.</p><p>Хранение локальных HTML-файлов зависит от браузера. Перемещение папки, другой профиль или очистка данных браузера могут сделать записи недоступными. Перед этим скачайте резервную копию.</p><p>Резервная копия содержит карточки с анализами и исследованиями, связанные приёмы, отредактированные черновики и личные шаблоны. Восстановление заменит все карточки и приёмы после подтверждения.</p><div class="backup-actions">' + button('backup', 'Резервная копия', 'download', 'primary') + button('import', 'Восстановить', 'upload') + button('reset', 'Очистить демонстрационные записи', null, 'secondary') + '</div><h2>Обновление программы через интернет</h2><p>Нажмите «Проверить обновления» в верхнем меню. Откроется окно проверки; браузер может попросить разрешить его запуск. Если доступна новая версия, сохраните резервную копию, закройте окна МедАссистента и подтвердите установку в окне обновления.</p><p>Для работы кнопки запускайте программу через <span class="code-path">Start-MedAssist.cmd</span> или обычный ярлык <span class="code-path">MedAssist</span>. При открытии файла index.html напрямую потребуется повторный запуск через ярлык. Отдельный <span class="code-path">Update-MedAssist.cmd</span> остаётся запасным способом.</p><p>Обновления загружаются из публичного проекта romaick/medassist на GitHub. Скачивать и распаковывать архивы вручную не понадобится. Без интернета приёмы работают как раньше.</p><h2>Перенос записей из прежней папки</h2><p>Сначала скачайте резервную копию в старой версии. Новая версия принимает её через «Восстановить» и сохраняет старые тексты. Если файлы обновлены в той же папке и браузере, доступные старые записи загрузятся автоматически. Новые копии со статусами и планом повторных приёмов открываются в версии 0.7 и новее. Из копий версий 1 и 2 каждый приём получает отдельную карточку; карточки версии 3 сохраняются. Автоматического объединения пациентов нет.</p><h2>Только демонстрация</h2><p>Данные сохраняются без шифрования. Прототип не подготовлен для реальных медицинских записей. Используйте только вымышленные сведения.</p></section></div>';
   }
 
   function updateValidation() {
@@ -1700,6 +1716,43 @@
     document.getElementById('main').focus({preventScroll: true});
     window.scrollTo({top: 0});
   }
+  function createNewVisit(demonstration = false) {
+    if (!canReplaceActive() || !requireFreshState()) return false;
+    if (state.encounters.length >= 500) { toast('В прототипе можно хранить до 500 приёмов. Скачайте резервную копию перед очисткой.', true); return false; }
+    if (state.patients.length >= core.MAX_PATIENTS) { toast('Достигнут лимит 500 карточек. Скачайте резервную копию перед очисткой.', true); return false; }
+    const patient = core.createPatient();
+    const entry = demonstration ? core.createDemoEncounter({patientId: patient.id}) : core.createEncounter({patientId: patient.id});
+    discardEmptyForm();
+    state.pendingNew = {patient, entry, initialDate: entry.visitDate};
+    state.patientId = patient.id; state.activeId = entry.id;
+    if (demonstration) persist();
+    navigate('visit', 'basic');
+    return true;
+  }
+  function switchMainPage(view) {
+    const navigation = document.getElementById('main-navigation');
+    const choices = Array.from(navigation.querySelectorAll('.pager-tab'), item => item.dataset.action);
+    const to = choices.indexOf(view);
+    if (to < 0) return;
+    const before = state.view;
+    let applied = false;
+    return pager.transition({
+      from: choices.indexOf(before === 'patient' ? 'patients' : before), to,
+      viewport: document.getElementById('main'), tabList: navigation,
+      getViewport: () => document.getElementById('main'), getTabList: () => document.getElementById('main-navigation'),
+      update: () => {
+        if (state.view !== before) return;
+        if (view === 'new') applied = createNewVisit();
+        else {
+          navigate(view);
+          applied = true;
+        }
+      },
+      focus: () => {
+        if (applied) document.querySelector('#main-navigation [aria-current="page"]')?.focus({preventScroll: true});
+      }
+    });
+  }
   function switchVisitTab(key) {
     const to = tabs.findIndex(([id]) => id === key);
     if (state.view !== 'visit' || to < 0) return;
@@ -1747,6 +1800,34 @@
       focus: () => document.getElementById('patient-tab-' + key)?.focus({preventScroll: true})
     });
   }
+  function switchFollowupFilter(key) {
+    const to = followupBuckets.findIndex(([id]) => id === key);
+    if (state.view !== 'followups' || to < 0) return;
+    return pager.transition({
+      from: followupBuckets.findIndex(([id]) => id === state.followupFilter), to,
+      viewport: document.getElementById('followup-list'), tabList: document.getElementById('followup-filters'),
+      getViewport: () => document.getElementById('followup-list'), getTabList: () => document.getElementById('followup-filters'),
+      update: () => {
+        if (state.view !== 'followups') return;
+        state.followupFilter = key; refreshFollowups();
+      },
+      focus: () => document.getElementById('followup-filter-' + key)?.focus({preventScroll: true})
+    });
+  }
+  function switchRecordFilter(key) {
+    const to = recordBuckets.findIndex(([id]) => id === key);
+    if (state.view !== 'home' || to < 0) return;
+    return pager.transition({
+      from: recordBuckets.findIndex(([id]) => id === state.recordFilter), to,
+      viewport: document.getElementById('visit-list'), tabList: document.getElementById('record-filters'),
+      getViewport: () => document.getElementById('visit-list'), getTabList: () => document.getElementById('record-filters'),
+      update: () => {
+        if (state.view !== 'home') return;
+        state.recordFilter = key; refreshRecords();
+      },
+      focus: () => document.getElementById('record-filter-' + key)?.focus({preventScroll: true})
+    });
+  }
   function bindPageNavigation() {
     app.querySelectorAll('.pager-tabs').forEach(list => pager.decorateTabs(list));
     if (state.view === 'visit') {
@@ -1764,9 +1845,20 @@
         const next = patientModules[patientModules.findIndex(module => module.id === state.patientTab) + direction];
         if (next) switchPatientTab(next.id);
       });
+    } else if (state.view === 'followups') {
+      pager.bindSwipe(document.getElementById('followup-list'), direction => {
+        const next = followupBuckets[followupBuckets.findIndex(([id]) => id === state.followupFilter) + direction];
+        if (next) switchFollowupFilter(next[0]);
+      });
+    } else if (state.view === 'home') {
+      pager.bindSwipe(document.getElementById('visit-list'), direction => {
+        const next = recordBuckets[recordBuckets.findIndex(([id]) => id === state.recordFilter) + direction];
+        if (next) switchRecordFilter(next[0]);
+      });
     }
   }
   async function handleAction(action, target) {
+    if (target.closest('#main-navigation') && action !== 'check-updates') return switchMainPage(action);
     if (action === 'patient-history') { switchPatientTab('history'); return; }
     if (action === 'investigations') { switchPatientTab('investigations'); return; }
     if (action === 'investigation-add') { openInvestigationForm(); return; }
@@ -1870,13 +1962,8 @@
       state.patientSearch = ''; state.patientFilters = defaultPatientFilters(state.patientCategory);
       render(); document.getElementById('patient-search').focus({preventScroll: true}); return;
     }
-    if (action === 'record-filter') {
-      state.recordFilter = target.dataset.filter;
-      document.getElementById('record-filters').innerHTML = recordFilters();
-      document.getElementById('home-record-heading').textContent = {draft: 'Записи для проверки', all: 'Все записи', reviewed: 'Проверенные записи'}[state.recordFilter];
-      document.getElementById('visit-list').innerHTML = renderList(); return;
-    }
-    if (action === 'followup-filter') { state.followupFilter = target.dataset.filter; refreshFollowups(); return; }
+    if (action === 'record-filter') return switchRecordFilter(target.dataset.filter);
+    if (action === 'followup-filter') return switchFollowupFilter(target.dataset.filter);
     if (action === 'start-followup') {
       const source = state.encounters.find(entry => entry.id === target.dataset.id);
       if (!source || !requireFreshState()) return;
@@ -1919,16 +2006,7 @@
     }
     if (action === 'tab') { switchVisitTab(target.dataset.tab); return; }
     if (action === 'new' || action === 'example') {
-      if (!requireFreshState()) return;
-      if (state.encounters.length >= 500) { toast('В прототипе можно хранить до 500 приёмов. Скачайте резервную копию перед очисткой.', true); return; }
-      if (state.patients.length >= core.MAX_PATIENTS) { toast('Достигнут лимит 500 карточек. Скачайте резервную копию перед очисткой.', true); return; }
-      const patient = core.createPatient();
-      const entry = action === 'new' ? core.createEncounter({patientId: patient.id}) : core.createDemoEncounter({patientId: patient.id});
-      discardEmptyForm();
-      state.pendingNew = {patient, entry, initialDate: entry.visitDate};
-      state.patientId = patient.id; state.activeId = entry.id;
-      if (action === 'example') persist();
-      navigate('visit', 'basic'); return;
+      createNewVisit(action === 'example'); return;
     }
     if (action === 'open') { discardEmptyForm(); state.activeId = target.dataset.id; navigate('visit', target.dataset.tab === 'draft' ? 'draft' : 'basic'); return; }
     if (action === 'generate') {
@@ -2048,7 +2126,7 @@
       return;
     }
     if (control.id === 'visit-search') {
-      state.search = control.value; document.getElementById('visit-list').innerHTML = renderList(); return;
+      state.search = control.value; refreshRecords(); return;
     }
     if (!control.dataset.field || !active()) return;
     if (get(active(), control.dataset.field) === control.value) return;
@@ -2098,14 +2176,16 @@
   });
   app.addEventListener('keydown', (event) => {
     const tab = event.target.closest('.pager-tabs [role="tab"]');
-    if (tab && !event.altKey && !event.ctrlKey && !event.metaKey && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
-      const buttons = Array.from(tab.closest('.pager-tabs').querySelectorAll('[role="tab"]'));
-      const index = buttons.indexOf(tab);
+    const navigationButton = event.target.closest('#main-navigation button');
+    const control = tab || navigationButton;
+    if (control && !event.altKey && !event.ctrlKey && !event.metaKey && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+      const buttons = Array.from(control.closest('.pager-tabs').querySelectorAll(tab ? '[role="tab"]' : 'button'));
+      const index = buttons.indexOf(control);
       const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : index + (event.key === 'ArrowRight' ? 1 : -1);
       event.preventDefault();
       if (buttons[next]) {
         buttons[next].focus({preventScroll: true});
-        buttons[next].click();
+        if (tab) buttons[next].click();
       }
       return;
     }

@@ -92,6 +92,98 @@ async function revealField(page, id, type) {
   return control;
 }
 
+test("Add result offers every ready-made investigation in the patient card and saves the chosen CBC", {timeout: 24000}, async t => {
+  const {page} = await openApp(t);
+  await seed(page, {report: false}); await openCard(page);
+  const before = await raw(page);
+  await action(page, "investigation-add").click();
+  const options = await page.locator("#investigation-kind option").evaluateAll(items => items.map(item => ({value: item.value, label: item.textContent})));
+  assert.equal(options.filter(item => item.value.startsWith("report:")).length, 13);
+  for (const [id, shortName] of [["cbc", "ОАК"], ["urinalysis", "ОАМ"], ["biochemistry", "БАК"]]) {
+    assert.match(options.find(item => item.value === "report:" + id).label, new RegExp(shortName));
+  }
+  assert.ok(options.some(item => item.value === "lab")); assert.ok(options.some(item => item.value === "study"));
+  assert.equal(await page.locator("#investigation-name").isVisible(), false);
+  await page.locator("#investigation-date").fill("2032-04-17");
+  await page.locator("#investigation-kind").selectOption("report:cbc");
+  assert.equal(await page.locator("#investigation-report-template").inputValue(), "cbc");
+  assert.equal(await page.locator("#investigation-report-date").inputValue(), "2032-04-17");
+  assert.equal(await field(page, "hemoglobin", "unit").inputValue(), "г/л");
+  assert.equal(await raw(page), before, "opening a template does not save an empty result");
+  await field(page, "hemoglobin").fill("123");
+  await saveReport(page);
+  assert.equal(await page.locator("#investigation-dialog").isVisible(), false);
+  const bundle = await saved(page);
+  assert.equal(bundle.patients[0].investigations.length, 1);
+  assert.equal(bundle.patients[0].investigations[0].panelId, "cbc");
+  assert.equal(bundle.encounters[0].investigationIds, undefined, "card entry is not automatically linked to an old visit");
+});
+
+test("Add result selects urine and biochemistry forms in primary and repeat encounters", {timeout: 24000}, async t => {
+  const {page} = await openApp(t);
+  await action(page, "new").click();
+  await page.locator('[data-action="tab"][data-tab="investigations"]').click();
+  const before = await raw(page);
+  await action(page, "investigation-add").click();
+  await page.locator("#investigation-kind").selectOption("report:urinalysis");
+  assert.equal(await page.locator("#investigation-report-template").inputValue(), "urinalysis");
+  await page.locator("#investigation-report-cancel").click();
+  await page.locator("#investigation-cancel").click();
+  assert.equal(await raw(page), before, "cancel creates neither an empty patient nor a visit");
+  await action(page, "investigation-add").click();
+  await page.locator("#investigation-kind").selectOption("report:urinalysis");
+  await field(page, "color").fill("ДЕМО: цвет из бланка");
+  await saveReport(page);
+  let bundle = await saved(page);
+  assert.equal(bundle.patients.length, 1); assert.equal(bundle.encounters.length, 1);
+  assert.equal(bundle.encounters[0].investigationIds[0], bundle.patients[0].investigations[0].id);
+  assert.match(await generate(page), /ДЕМО: цвет из бланка/);
+
+  await seed(page, {report: false}); await openCard(page);
+  await action(page, "repeat").click(); await page.locator("#repeat-create").click();
+  await page.locator('[data-action="tab"][data-tab="investigations"]').click();
+  await action(page, "investigation-add").click();
+  await page.locator("#investigation-kind").selectOption("report:biochemistry");
+  assert.equal(await field(page, "glucose", "unit").inputValue(), "ммоль/л");
+  await field(page, "glucose").fill("5,1"); await saveReport(page);
+  bundle = await saved(page);
+  const next = bundle.encounters.find(item => item.id !== visitId);
+  assert.equal(bundle.encounters.length, 2);
+  assert.equal(next.investigationIds.length, 1);
+  assert.equal(bundle.encounters.find(item => item.id === visitId).investigationIds, undefined);
+  assert.equal(bundle.patients[0].investigations[0].panelId, "biochemistry");
+  assert.match(await generate(page), /5,1 ммоль\/л/);
+});
+
+test("returning from a ready-made form preserves manual input and editing a saved result keeps its type", {timeout: 24000}, async t => {
+  const {page} = await openApp(t);
+  await seed(page, {report: false}); await openCard(page);
+  await action(page, "investigation-add").click();
+  await page.locator("#investigation-kind").selectOption("lab");
+  const values = {date: "2032-04-16", name: "ДЕМО: особый показатель", result: "0", unit: "демо/л", reference: "ДЕМО норма из бланка", note: "ДЕМО примечание"};
+  for (const [key, value] of Object.entries(values)) await page.locator("#investigation-" + key).fill(value);
+  const before = await raw(page);
+  await page.locator("#investigation-kind").selectOption("report:cbc");
+  assert.equal(await page.locator("#investigation-report-cancel").innerText(), "Назад");
+  await page.locator("#investigation-report-cancel").click();
+  assert.equal(await page.locator("#investigation-kind").inputValue(), "lab");
+  for (const [key, value] of Object.entries(values)) assert.equal(await page.locator("#investigation-" + key).inputValue(), value);
+  assert.equal(await raw(page), before);
+  await page.locator("#investigation-kind").selectOption("report:ecg");
+  await page.keyboard.press("Escape");
+  await page.locator("#investigation-save").click();
+  await page.locator("#investigation-dialog").waitFor({state: "hidden"});
+  const card = await patient(page);
+  assert.equal(card.investigations.length, 1);
+  assert.equal(card.investigations[0].reportId, undefined);
+  assert.equal(card.investigations[0].result, "0");
+  await page.locator('[data-action="investigation-edit"]').first().click();
+  assert.equal(await page.locator('#investigation-kind option[value^="report:"]').count(), 0);
+  assert.equal(await page.locator("#investigation-kind").inputValue(), "lab");
+  for (const [key, value] of Object.entries(values)) assert.equal(await page.locator("#investigation-" + key).inputValue(), value);
+  await page.locator("#investigation-cancel").click();
+});
+
 test("new encounter accepts a preset report atomically and omits every blank indicator, retaining zero", {timeout: 24000}, async t => {
   const {page} = await openApp(t);
   await action(page, "new").click();

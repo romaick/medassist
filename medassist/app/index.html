@@ -25,17 +25,19 @@
   <dialog id="investigation-dialog" aria-labelledby="investigation-title" aria-describedby="investigation-description investigation-patient">
     <h2 id="investigation-title">Добавить результат</h2>
     <p id="investigation-patient"></p>
-    <p id="investigation-description">Перепишите сведения из бланка. Дата, название и результат обязательны. Нормы и единицы указывайте для этого результата.</p>
+    <p id="investigation-description">Выберите ОАК, ОАМ, БАК или другое исследование. В готовом бланке уже указаны показатели и единицы; для своего показателя выберите «Другое».</p>
     <form id="investigation-form" novalidate>
       <div class="field-grid">
-        <div class="field"><label for="investigation-kind">Тип</label><select id="investigation-kind"><option value="lab">Другое лабораторное исследование</option><option value="study">Другое инструментальное исследование</option></select></div>
+        <div class="field"><label for="investigation-kind">Исследование</label><select id="investigation-kind"></select></div>
         <div class="field"><label for="investigation-date">Дата из бланка</label><input id="investigation-date" type="date" required aria-describedby="investigation-error"></div>
       </div>
+      <div id="investigation-manual-fields" hidden>
       <div class="field"><label for="investigation-name">Название показателя или исследования</label><input id="investigation-name" type="text" maxlength="200" autocomplete="off" required aria-describedby="investigation-name-hint investigation-error"><p id="investigation-name-hint" class="hint">Для динамики используйте одинаковое название и единицы.</p></div>
       <div class="field"><label for="investigation-result">Результат / заключение</label><textarea id="investigation-result" rows="3" maxlength="2000" required aria-describedby="investigation-error"></textarea></div>
       <div class="field"><label for="investigation-unit">Единицы измерения</label><input id="investigation-unit" type="text" maxlength="80" autocomplete="off"><p class="hint">Необязательно для текстового заключения. Введите единицы так, как они указаны в бланке.</p></div>
       <div class="field"><label for="investigation-reference">Нормы из бланка</label><textarea id="investigation-reference" rows="2" maxlength="500"></textarea><p class="hint">Только из конкретного бланка, включая условия и пояснения. Если норм нет, оставьте поле пустым.</p></div>
       <div class="field"><label for="investigation-note">Примечание</label><textarea id="investigation-note" rows="2" maxlength="1000"></textarea></div>
+      </div>
       <p id="investigation-error" class="field-error" role="alert" hidden></p>
       <div class="dialog-actions"><button id="investigation-cancel" class="button secondary" type="button">Отмена</button><button id="investigation-save" class="button primary" type="submit">Сохранить результат</button></div>
     </form>

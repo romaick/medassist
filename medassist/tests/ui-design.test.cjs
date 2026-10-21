@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const {pathToFileURL} = require("node:url");
 const {chromium} = require(process.env.MEDASSIST_PLAYWRIGHT || "playwright");
-const {clickAction: click} = require("./ui-actions.cjs");
+const {clickAction: click, enterPolyclinic} = require("./ui-actions.cjs");
 const appRoot = path.resolve(process.env.MEDASSIST_APP_ROOT || path.join(__dirname, "../app"));
 const core = require(path.join(appRoot, "core.js"));
 const url = pathToFileURL(path.join(appRoot, "index.html")).href;
@@ -30,7 +30,7 @@ async function openApp(t) {
   page.on("request", request => {if (/^https?:/.test(request.url())) requests.push(request.url());});
   t.after(() => {assert.deepEqual(errors, [], "no uncaught application errors"); assert.deepEqual(requests, [], "new controls work fully offline");});
   await page.clock.setFixedTime(new Date(now));
-  await page.goto(url);
+  await page.goto(url); await enterPolyclinic(page);
   await page.locator('[data-action="search-patients"]').waitFor();
   return page;
 }
@@ -64,6 +64,7 @@ async function shortcutTab(page, number, name) {
 
 test("global patient search is reachable by keyboard and preserves the selected query without writes", {timeout: 22000}, async t => {
   const page = await openApp(t);
+  await page.reload(); await page.locator("#main-navigation").waitFor();
   await page.keyboard.press("Tab");
   assert.equal(await page.locator(".skip-link").evaluate(node => node === document.activeElement), true);
   await page.keyboard.press("Enter");

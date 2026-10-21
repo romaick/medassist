@@ -16,7 +16,7 @@ const diagnosis = page => page.locator("#field-assessment-summary");
 const panel = page => page.locator("#diagnosis-suggestions");
 const options = page => page.locator("#diagnosis-options [role=option]");
 const codeOption = (page, code) => page.locator('#diagnosis-options [role=option][data-code="' + code + '"]');
-const {clickAction: click} = require("./ui-actions.cjs");
+const {clickAction: click, enterPolyclinic} = require("./ui-actions.cjs");
 const tab = (page, name) => page.locator('[data-action="tab"][data-tab="' + name + '"]').first().click();
 const raw = page => page.evaluate(key => localStorage.getItem(key), key);
 const savedVisit = async page => JSON.parse(await raw(page)).encounters.find(entry => entry.id === visitId);
@@ -40,7 +40,7 @@ async function openApp(t) {
   const newPage = async () => {
     const page = await context.newPage();
     await page.clock.setFixedTime(new Date(now));
-    await page.goto(url);
+    await page.goto(url); await enterPolyclinic(page);
     return page;
   };
   return {page: await newPage(), newPage};

@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const {pathToFileURL} = require("node:url");
 const {chromium} = require(process.env.MEDASSIST_PLAYWRIGHT || "playwright");
-const {clickAction: click} = require("./ui-actions.cjs");
+const {clickAction: click, enterPolyclinic} = require("./ui-actions.cjs");
 const appRoot = path.resolve(process.env.MEDASSIST_APP_ROOT || path.join(__dirname, "../app"));
 const core = require(path.join(appRoot, "core.js"));
 const url = pathToFileURL(path.join(appRoot, "index.html")).href;
@@ -39,7 +39,7 @@ async function openApp(t) {
   const newPage = async () => {
     const page = await context.newPage();
     await page.clock.setFixedTime(new Date(now));
-    await page.goto(url);
+    await page.goto(url); await enterPolyclinic(page);
     await page.locator('[data-action="patients"]').first().waitFor();
     return page;
   };

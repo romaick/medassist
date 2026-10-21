@@ -18,4 +18,9 @@ async function selectFilter(page, kind, value) {
   await page.locator(selector + '[aria-selected="true"]').waitFor({state: "visible"});
 }
 
-module.exports = {clickAction, selectFilter};
+async function enterPolyclinic(page) {
+  await page.locator('[data-action="enter-polyclinic"]').click();
+  await page.locator("#main-navigation").waitFor();
+}
+
+module.exports = {clickAction, selectFilter, enterPolyclinic};

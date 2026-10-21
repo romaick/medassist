@@ -1,5 +1,5 @@
 "use strict";
-const {clickAction: click} = require("./ui-actions.cjs");
+const {clickAction: click, enterPolyclinic} = require("./ui-actions.cjs");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -35,7 +35,7 @@ async function openApp(t, {reducedMotion = "no-preference", fallback = false} = 
   page.on("request", request => { if (/^https?:/.test(request.url())) requests.push(request.url()); });
   t.after(() => { assert.deepEqual(errors, [], "navigation has no uncaught errors"); assert.deepEqual(requests, [], "navigation works offline"); });
   await page.clock.setFixedTime(new Date(now));
-  await page.goto(url);
+  await page.goto(url); await enterPolyclinic(page);
   await action(page, "patients").waitFor();
   return page;
 }
@@ -292,7 +292,7 @@ test("main navigation animates complete pages, preserves current input and cance
   await choose(visitTab(page, "history"));
   await page.locator('[data-field="history.complaints"]').fill("ДЕМО: введено перед сменой главного раздела");
   const before = await raw(page);
-  for (const name of ["patients", "followups", "modules", "help", "home"]) await click(page, name);
+  for (const name of ["patients", "followups", "help", "home"]) await click(page, name);
   await click(page, "visit");
   await selected(visitTab(page, "history"));
   assert.equal(await page.locator('[data-field="history.complaints"]').inputValue(), "ДЕМО: введено перед сменой главного раздела");
@@ -374,7 +374,7 @@ test("global menu forms a left rail with top context, usable narrow navigation a
   assert.equal(new Set(desktop.menuColumns).size, 1, "navigation entries align in one column");
   assert.equal(await page.locator("#current-date").textContent(), "19 апреля(04) 2032");
   assert.equal(await page.locator("#current-time").textContent(), "11:00");
-  for (const name of ["patients", "followups", "modules", "help", "home"]) {
+  for (const name of ["patients", "followups", "help", "home"]) {
     await menu.locator('[data-action="' + name + '"]').click();
     assert.equal(await menu.locator('[data-action="' + name + '"]').getAttribute("aria-current"), "page");
     assert.equal(await page.locator("#current-time").textContent(), "11:00");
@@ -539,7 +539,7 @@ test("finishing in a stale window keeps the current form and never overwrites a 
   const page = await openApp(t);
   await seed(page); await openVisit(page); await choose(visitTab(page, "draft"));
   const other = await page.context().newPage();
-  await other.goto(url); await openVisit(other); await choose(visitTab(other, "history"));
+  await other.goto(url); await enterPolyclinic(other); await openVisit(other); await choose(visitTab(other, "history"));
   await other.locator('[data-field="history.complaints"]').fill("ДЕМО: изменение во втором окне");
   await page.waitForFunction(() => document.getElementById("storage-banner").textContent.includes("другом окне"));
   const latest = await raw(page);

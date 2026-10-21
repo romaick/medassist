@@ -1,5 +1,5 @@
 "use strict";
-const {clickAction: click} = require("./ui-actions.cjs");
+const {clickAction: click, enterPolyclinic} = require("./ui-actions.cjs");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -43,7 +43,7 @@ async function openApp(t) {
   const newPage = async () => {
     const page = await context.newPage();
     await page.clock.setFixedTime(new Date(now));
-    await page.goto(url);
+    await page.goto(url); await enterPolyclinic(page);
     await action(page, "patients").waitFor();
     return page;
   };

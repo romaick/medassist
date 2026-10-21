@@ -1,5 +1,5 @@
 "use strict";
-const {clickAction: click} = require("./ui-actions.cjs");
+const {clickAction: click, enterPolyclinic} = require("./ui-actions.cjs");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -30,7 +30,7 @@ async function openApp(t) {
   page.on("request", request => { if (/^https?:/.test(request.url())) requests.push(request.url()); });
   t.after(() => { assert.deepEqual(errors, []); assert.deepEqual(requests, []); });
   await page.clock.setFixedTime(new Date(now));
-  await page.goto(url);
+  await page.goto(url); await enterPolyclinic(page);
   await page.locator('#main-navigation [data-action="new"]').waitFor();
   return page;
 }
@@ -218,7 +218,7 @@ test("another window changing data while finish review is open visibly blocks st
   await seed(page, {text: ""});
   await finish(page);
   const other = await page.context().newPage();
-  await other.goto(url);
+  await other.goto(url); await enterPolyclinic(other);
   await openVisit(other);
   await other.locator("#draft-text").fill("ДЕМО: сохранено из второго окна");
   await page.locator("#finish-review-error").waitFor({state: "visible"});

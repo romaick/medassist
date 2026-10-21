@@ -12,7 +12,7 @@ const url = pathToFileURL(path.join(appRoot, "index.html")).href;
 const key = "medassist.demo.v4";
 const now = "2032-04-15T07:00:00.000Z";
 const today = "2032-04-15";
-const {clickAction: click} = require("./ui-actions.cjs");
+const {clickAction: click, enterPolyclinic} = require("./ui-actions.cjs");
 const tab = async (page, name) => {
   const selector = '[data-action="tab"][data-tab="' + name + '"]';
   await page.locator(selector).first().click();
@@ -46,7 +46,7 @@ async function openApp(t) {
   const newPage = async () => {
     const page = await context.newPage();
     await page.clock.setFixedTime(new Date(now));
-    await page.goto(url);
+    await page.goto(url); await enterPolyclinic(page);
     return page;
   };
   return { page: await newPage(), newPage };

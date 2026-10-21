@@ -8,7 +8,7 @@ const { chromium } = require(process.env.MEDASSIST_PLAYWRIGHT || "playwright");
 const appRoot = path.resolve(process.env.MEDASSIST_APP_ROOT || path.join(__dirname, "../app"));
 const url = pathToFileURL(path.join(appRoot, "index.html")).href;
 const key = "medassist.demo.v4";
-const {clickAction: click} = require("./ui-actions.cjs");
+const {clickAction: click, enterPolyclinic} = require("./ui-actions.cjs");
 const tab = (page, name) => page.locator('[data-action="tab"][data-tab="' + name + '"]').first().click();
 const saved = page => page.evaluate(key => JSON.parse(localStorage.getItem(key)), key);
 const openVisit = (page, id) => page.locator('[data-action="open"][data-id="' + id + '"]').click();
@@ -30,7 +30,7 @@ async function openApp(t) {
   });
   t.after(() => { assert.deepEqual(errors, [], "no page errors"); assert.deepEqual(requests, [], "offline application makes no HTTP requests"); });
   const page = await context.newPage();
-  await page.goto(url);
+  await page.goto(url); await enterPolyclinic(page);
   return { context, page };
 }
 
@@ -419,7 +419,7 @@ test("two windows: a conflict cancels repeat creation and exposes the warning, t
   await click(page, "patient"); await click(page, "repeat");
   await page.locator('#repeat-fields input[value="medications"]').check();
 
-  const second = await context.newPage(); await second.goto(url); await openVisit(second, source.id);
+  const second = await context.newPage(); await second.goto(url); await enterPolyclinic(second); await openVisit(second, source.id);
   await tab(second, "history");
   const updated = "ДЕМО: уточнение препарата во втором окне";
   await second.locator('[data-field="history.medications"]').fill(updated);
@@ -743,7 +743,7 @@ test('compact patient card retains unsaved identity and visible warnings after s
   assert.equal(await page.locator('#patient-edit-panel').isVisible(), false);
   assert.equal((await saved(page)).patients.find(patient => patient.id === 'card-main').label, 'Тестова Анна Сохранённая');
   await click(page, 'edit-patient');
-  const second = await context.newPage(); await second.goto(url); await openPatientCard(second);
+  const second = await context.newPage(); await second.goto(url); await enterPolyclinic(second); await openPatientCard(second);
   await click(second, 'edit-patient');
   await second.locator('#patient-label').fill('Тестова Анна Из Второго Окна');
   await page.waitForFunction(() => document.getElementById('storage-banner').textContent.includes('другом окне'));
@@ -850,7 +850,7 @@ test('patient information blocks editing stale source details after another wind
   const { page, context } = await openApp(t);
   await patientCardFixture(page); await openPatientCard(page);
   const originalText = await patientInformationValue(page, 'medications').innerText();
-  const second = await context.newPage(); await second.goto(url); await openPatientCard(second);
+  const second = await context.newPage(); await second.goto(url); await enterPolyclinic(second); await openPatientCard(second);
   await click(second, 'edit-patient-information');
   const changed = 'ДЕМО: сведения о препарате из второго окна';
   await second.locator('[data-field="history.medications"]').fill(changed);

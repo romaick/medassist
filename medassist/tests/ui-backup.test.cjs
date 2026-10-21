@@ -5,7 +5,7 @@ const path = require("node:path");
 const fs = require("node:fs/promises");
 const {pathToFileURL} = require("node:url");
 const {chromium} = require(process.env.MEDASSIST_PLAYWRIGHT || "playwright");
-const {clickAction: click} = require("./ui-actions.cjs");
+const {clickAction: click, enterPolyclinic} = require("./ui-actions.cjs");
 const appRoot = path.resolve(process.env.MEDASSIST_APP_ROOT || path.join(__dirname, "../app"));
 const core = require(path.join(appRoot, "core.js"));
 const url = pathToFileURL(path.join(appRoot, "index.html")).href;
@@ -51,7 +51,7 @@ async function openApp(t) {
   t.after(() => {assert.deepEqual(errors, []); assert.deepEqual(requests, []);});
   const page = await context.newPage();
   await page.clock.setFixedTime(new Date(now));
-  await page.goto(url);
+  await page.goto(url); await enterPolyclinic(page);
   await page.locator("#main-navigation").waitFor();
   return page;
 }
@@ -107,7 +107,7 @@ test("export metadata from another window refreshes without suspending medical d
   const page = await openApp(t); await seed(page);
   const other = await page.context().newPage();
   await other.clock.setFixedTime(new Date(now));
-  await other.goto(url); await other.locator("#main-navigation").waitFor();
+  await other.goto(url); await enterPolyclinic(other); await other.locator("#main-navigation").waitFor();
   const before = await raw(page);
   await download(other);
   await page.locator("#backup-reminder").waitFor({state: "hidden"});
@@ -201,7 +201,7 @@ test("failed restore keeps the preview and existing data, then retries safely", 
 
 test("another window blocks replacement visibly and a same-window disk change is also detected", {timeout: 20000}, async t => {
   const page = await openApp(t); await seed(page); await selectFile(page);
-  const other = await page.context().newPage(); await other.goto(url);
+  const other = await page.context().newPage(); await other.goto(url); await enterPolyclinic(other);
   const latest = fixture("other");
   await other.evaluate(({key, value}) => localStorage.setItem(key, value), {key, value: latest});
   await page.locator("#restore-preview-error").waitFor({state: "visible"});

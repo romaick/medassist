@@ -686,3 +686,39 @@ dialog.restore-preview{width:min(760px,calc(100vw - 32px));max-width:760px;max-h
 @media screen and (prefers-reduced-motion: reduce) {
   .design-refresh *, .design-refresh *::before, .design-refresh *::after { scroll-behavior: auto; transition-duration: 0s; }
 }
+
+/* Area choice at launch: Поликлиника, Стационар, Модули. */
+@media screen {
+  .start-screen { max-width: 1080px; min-height: 100dvh; margin: 0 auto; padding: 32px 32px 28px; display: flex; flex-direction: column; }
+  .start-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+  .start-header .brand { display: flex; align-items: center; gap: 10px; margin: 0; padding: 0; }
+  .start-header .brand img { width: 34px; height: 34px; }
+  .start-header .brand strong { display: block; font-size: 18px; font-weight: 650; letter-spacing: -.5px; color: var(--ink); }
+  .start-header .brand small { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .start-header .current-datetime { display: flex; align-items: baseline; gap: 14px; font-size: 14px; color: var(--muted); white-space: nowrap; }
+  .start-header #current-time { font-size: 16px; font-weight: 600; color: var(--ink); }
+  .start-choice { margin: auto 0; padding: 36px 0; }
+  .start-choice h1 { font-size: 28px; line-height: 1.25; margin: 0 0 22px; color: var(--ink); }
+  .area-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+  .area-card { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; min-height: 196px; padding: 24px; text-align: left; color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 3px 10px #173a3403; font: inherit; transition: border-color .15s ease, background-color .15s ease; }
+  .area-card:hover:not(:disabled) { border-color: var(--green); background: #fbfdfc; }
+  .area-card:focus-visible { outline: 3px solid #176b6040; outline-offset: 2px; border-color: var(--green); }
+  .area-card .area-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 10px; background: #edf5f1; color: var(--green); }
+  .area-card .area-icon .icon { width: 22px; height: 22px; }
+  .area-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; }
+  .area-title strong { font-size: 20px; font-weight: 650; line-height: 1.3; }
+  .area-text { display: block; color: var(--muted); font-size: 14px; line-height: 1.55; }
+  .area-card.unavailable { background: #f7f9f9; color: #586c6f; box-shadow: none; opacity: 1; }
+  .area-card.unavailable .area-text { color: #607477; }
+  .area-card.unavailable .area-icon { background: #eef1f1; color: #6f8184; }
+  .start-screen .footer-note { margin-top: 0; }
+  .design-refresh .navigation-header .nav-command + .nav-command { margin-top: 0; }
+}
+@media screen and (max-width: 760px) {
+  .start-screen { padding: 18px 16px 20px; }
+  .start-header { flex-wrap: wrap; padding-bottom: 14px; }
+  .start-choice { margin: 0; padding: 22px 0; }
+  .start-choice h1 { font-size: 24px; margin-bottom: 14px; }
+  .area-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .area-card { min-height: 0; padding: 16px 18px; gap: 8px; }
+}

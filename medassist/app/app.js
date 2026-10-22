@@ -24,10 +24,11 @@
   function readSessionArea() {
     try { return window.sessionStorage.getItem(areaKey); } catch (error) { return null; }
   }
+  const moduleViews = ['modules', 'calculators'];
   function rememberArea(view) {
     try {
       if (view === 'start') window.sessionStorage.removeItem(areaKey);
-      else window.sessionStorage.setItem(areaKey, view === 'modules' ? 'modules' : 'polyclinic');
+      else window.sessionStorage.setItem(areaKey, moduleViews.includes(view) ? 'modules' : 'polyclinic');
     } catch (error) { /* Without sessionStorage a reload shows the area choice again. */ }
   }
   const sessionArea = readSessionArea();
@@ -37,7 +38,8 @@
     recordFilter: 'draft', followupFilter: 'today', followupDay: '', repeatPlanId: null, patientListDay: '', homeDay: '',
     patientCategory: 'all', patientFilters: defaultPatientFilters(), patientFiltersOpen: false, pendingNew: null,
     patientEditOpen: false, patientCardDay: '', patientTab: 'history', previousOpen: false, previousId: '', previousForId: '',
-    investigationPatientId: '', investigationSeriesKey: '', birthDateInputs: {}, visitDateInputs: {}
+    investigationPatientId: '', investigationSeriesKey: '', birthDateInputs: {}, visitDateInputs: {},
+    calculatorRubric: 'all', calculatorId: null, calculatorInputs: {}, calculatorTouched: {}
   };
   const icons = {
     home: '<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>',
@@ -208,18 +210,18 @@
     document.body.classList.toggle('start-view', state.view === 'start');
     app.dataset.view = state.view;
     rememberArea(state.view);
-    document.title = baseTitle + (state.view === 'start' ? '' : state.view === 'modules' ? ' — модули' : ' — поликлиника');
+    document.title = baseTitle + (state.view === 'start' ? '' : moduleViews.includes(state.view) ? ' — модули' : ' — поликлиника');
     if (state.view === 'start') app.innerHTML = renderStart();
     else {
-      const modulesArea = state.view === 'modules';
-      const sectionName = {home: 'Рабочий стол', patients: 'Пациенты', followups: 'Повторные приёмы', patient: 'Карточка пациента', visit: 'Демонстрационный приём', modules: 'Возможности и развитие', help: 'Помощь и данные'}[state.view];
+      const modulesArea = moduleViews.includes(state.view);
+      const sectionName = {home: 'Рабочий стол', patients: 'Пациенты', followups: 'Повторные приёмы', patient: 'Карточка пациента', visit: 'Демонстрационный приём', modules: 'Возможности и развитие', calculators: 'Калькуляторы', help: 'Помощь и данные'}[state.view];
       app.innerHTML = '<div class="shell"><header class="navigation-header"><div class="brand"><img src="icon.svg" alt=""><div><strong>Медасист</strong><small>Рабочее место врача</small></div></div><nav id="main-navigation" class="nav pager-tabs" aria-label="Главная навигация">' +
-        (modulesArea ? navButton('modules', 'Модули', 'grid') : navButton('home', 'Рабочий стол', 'home') + navButton('patients', 'Пациенты', 'user') +
+        (modulesArea ? navButton('modules', 'Модули', 'grid') + navButton('calculators', 'Калькуляторы', 'calculator') : navButton('home', 'Рабочий стол', 'home') + navButton('patients', 'Пациенты', 'user') +
         (current ? navButton('visit', 'Текущий приём', 'document') : navButton('new', 'Новый пациент', 'plus')) + navButton('followups', 'Повторные приёмы', 'calendar') + navButton('help', 'Помощь и данные', 'help') + navButton('check-updates', 'Проверить обновления', 'download')) +
         navButton('choose-area', 'Выбор раздела', 'back') +
-        '</nav><div class="rail-note">' + (modulesArea ? 'Модули МедАссистента' : 'Поликлинический приём') + '<br><span>Беларусь · деморежим</span><span>Версия 0.25.0</span></div></header><aside class="topbar context-sidebar" aria-label="Дата, время и текущий раздел"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><div class="topbar-left"><span class="context-mode">' + (modulesArea ? 'Модули' : 'Поликлиника') + '</span><strong>' + sectionName + '</strong></div>' + (modulesArea ? '' : '<button type="button" class="search-launch" data-action="search-patients" aria-label="Найти пациента" aria-keyshortcuts="Control+K" title="Найти пациента: Ctrl + K">' + icon('search') + '<span>Найти пациента</span><kbd>Ctrl + K</kbd></button>') + '<div class="side-bottom"><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><div class="version">Прототип 0.25.0</div></div></aside><div class="workspace"><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
+        '</nav><div class="rail-note">' + (modulesArea ? 'Модули МедАссистента' : 'Поликлинический приём') + '<br><span>Беларусь · деморежим</span><span>Версия 0.26.0</span></div></header><aside class="topbar context-sidebar" aria-label="Дата, время и текущий раздел"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><div class="topbar-left"><span class="context-mode">' + (modulesArea ? 'Модули' : 'Поликлиника') + '</span><strong>' + sectionName + '</strong></div>' + (modulesArea ? '' : '<button type="button" class="search-launch" data-action="search-patients" aria-label="Найти пациента" aria-keyshortcuts="Control+K" title="Найти пациента: Ctrl + K">' + icon('search') + '<span>Найти пациента</span><kbd>Ctrl + K</kbd></button>') + '<div class="side-bottom"><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><div class="version">Прототип 0.26.0</div></div></aside><div class="workspace"><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
         (state.migrated && !modulesArea ? '<div class="migration-notice">Прежние записи доступны со статусом «Черновик». Карточки, данные и ручные тексты сохранены. Исходное сохранение предыдущей версии не изменяется.</div>' : '') +
-        ({home: renderHome, patients: renderPatients, followups: renderFollowups, patient: renderPatient, visit: renderVisit, modules: renderModules, help: renderHelp}[state.view])() +
+        ({home: renderHome, patients: renderPatients, followups: renderFollowups, patient: renderPatient, visit: renderVisit, modules: renderModules, calculators: renderCalculators, help: renderHelp}[state.view])() +
         '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span>' + (modulesArea ? '' : '<span class="keyboard-hint"><kbd>Ctrl + K</kbd> поиск · <kbd>Ctrl + S</kbd> сохранить · <kbd>Alt + 1–5</kbd> разделы приёма</span>') + '</footer></main></div></div>';
     }
     const reminder = document.createElement('section');
@@ -2082,7 +2084,295 @@
   }
   function renderModules() {
     return '<div class="page-heading"><div><h1>Модули</h1><p>Возможности и развитие МедАссистента.</p></div></div>' + demoNotice() +
-      '<p class="section-intro">Во вкладке «Исследования» приёма и в карточке пациента доступны бланки и ручной ввод результатов. В карточке также доступны история и динамика. ИМТ рассчитывается в разделе «Осмотр». Отдельные калькуляторы, диспансерное наблюдение и официальные формы остаются в плане развития.</p><div class="module-grid">' + window.MedAssistModules.map((module) => '<section class="card module-card"><div class="module-head"><div class="icon-tile">' + icon(module.icon) + '</div><span class="pill neutral">' + (module.status === 'available' ? 'Доступно' : module.status === 'verification' ? 'После проверки источников' : 'Запланировано') + '</span></div><h2>' + escape(module.title) + '</h2><p>' + escape(module.description) + '</p><details><summary>' + (module.status === 'available' ? 'Как пользоваться' : 'Что потребуется для добавления') + '</summary><p>' + escape(module.requirements) + '</p></details></section>').join('') + '</div>';
+      '<p class="section-intro">Во вкладке «Исследования» приёма и в карточке пациента доступны бланки и ручной ввод результатов. В карточке также доступны история и динамика. ИМТ рассчитывается в разделе «Осмотр». В разделе «Калькуляторы» — расчёты по опубликованным формулам, сгруппированные по системам органов. Диспансерное наблюдение и официальные формы остаются в плане развития.</p><div class="module-grid">' + window.MedAssistModules.map((module) => '<section class="card module-card"><div class="module-head"><div class="icon-tile">' + icon(module.icon) + '</div><span class="pill neutral">' + (module.status === 'available' ? 'Доступно' : module.status === 'verification' ? 'После проверки источников' : 'Запланировано') + '</span></div><h2>' + escape(module.title) + '</h2><p>' + escape(module.description) + '</p>' + (module.id === 'calculators' ? button('calculators', 'Открыть калькуляторы', 'calculator', 'primary compact module-open') : '') + '<details><summary>' + (module.status === 'available' ? 'Как пользоваться' : 'Что потребуется для добавления') + '</summary><p>' + escape(module.requirements) + '</p></details></section>').join('') + '</div>';
+  }
+  // Calculators live in the Modules area. Their inputs stay in this window only and are never saved.
+  const calculatorRubrics = [['all', 'Все'], ['kidney', 'Почки'], ['heart', 'Сердце и сосуды'], ['infection', 'Инфекции и лёгкие'], ['metabolic', 'Обмен веществ'], ['liver', 'Печень'], ['mind', 'Психика']];
+  const calculatorCatalog = [
+    {id: 'egfr', rubric: 'kidney', title: 'СКФ по CKD-EPI (2021)', summary: 'Расчётная скорость клубочковой фильтрации по креатинину у взрослых, категория G1–G5.'},
+    {id: 'cockcroft', rubric: 'kidney', title: 'Клиренс креатинина по Кокрофту–Голту', summary: 'Коррекция доз препаратов по функции почек.'},
+    {id: 'chads', rubric: 'heart', title: 'CHA₂DS₂-VASc и CHA₂DS₂-VA', summary: 'Риск инсульта при фибрилляции предсердий.'},
+    {id: 'hasbled', rubric: 'heart', title: 'HAS-BLED', summary: 'Риск кровотечения при приёме антикоагулянтов.'},
+    {rubric: 'heart', title: 'SCORE2', summary: 'Десятилетний риск сердечно-сосудистых событий.'},
+    {rubric: 'heart', title: 'Корригированный интервал QT', summary: 'Формулы Базетта и Фридериции.'},
+    {id: 'crb65', rubric: 'infection', title: 'CRB-65', summary: 'Тяжесть внебольничной пневмонии без лабораторных данных.'},
+    {id: 'centor', rubric: 'infection', title: 'Centor / McIsaac', summary: 'Вероятность стрептококкового тонзиллофарингита, поправка на возраст.'},
+    {rubric: 'metabolic', place: 'visit', title: 'Индекс массы тела', summary: 'Рассчитывается в разделе «Осмотр» приёма по росту и массе тела.'},
+    {rubric: 'metabolic', title: 'FINDRISC', summary: 'Риск сахарного диабета 2 типа.'},
+    {rubric: 'liver', title: 'FIB-4', summary: 'Риск выраженного фиброза печени по обычным анализам.'},
+    {rubric: 'mind', title: 'PHQ-9', summary: 'Скрининг депрессии.'},
+    {rubric: 'mind', title: 'GAD-7', summary: 'Скрининг тревожного расстройства.'}
+  ];
+  function calculatorDisclaimer() {
+    return '<div class="demo-notice calculator-disclaimer" role="note">' + icon('info') + '<span><strong>Не заменяет клиническое решение.</strong> Результат — оценка по опубликованной формуле. Решение принимает врач с учётом всей клинической картины.</span></div>';
+  }
+  function calculatorItem(item) {
+    const status = item.id ? 'Открыть' : item.place === 'visit' ? 'В разделе «Осмотр»' : 'Готовится';
+    const body = '<span class="calculator-name">' + escape(item.title) + '</span><span class="calculator-summary">' + escape(item.summary) + '</span><span class="pill' + (item.id ? '' : ' neutral') + '">' + status + '</span>';
+    return '<li>' + (item.id ? '<button type="button" class="calculator-item" data-action="calc-open" data-calculator="' + item.id + '">' + body + '</button>' : '<div class="calculator-item unavailable">' + body + '</div>') + '</li>';
+  }
+  // Each ready calculator is described by its fields, the core.js calculation, the result and the reference with sources.
+  // Element ids are <calculator>-<field>, so the eGFR page keeps egfr-age, egfr-sex, egfr-creatinine, egfr-unit, egfr-result and egfr-copy.
+  const calculatorSource = (text, href, label) => '<li>' + text + ' <a href="' + href + '" target="_blank" rel="noopener noreferrer">' + label + '</a></li>';
+  const calculatorDoi = (text, doi) => calculatorSource(text, 'https://doi.org/' + doi, 'doi:' + doi);
+  const calculatorTable = (head, rows) => '<table class="calculator-table"><thead><tr>' + head.map(cell => '<th scope="col">' + cell + '</th>').join('') + '</tr></thead><tbody>' +
+    rows.map(row => '<tr><th scope="row">' + row[0] + '</th>' + row.slice(1).map(cell => '<td>' + cell + '</td>').join('') + '</tr>').join('') + '</tbody></table>';
+  const calculatorProtocolNote = 'Толкование приведено по зарубежному руководству; сверяйте его с действующим клиническим протоколом Минздрава Республики Беларусь.';
+  const calcAgeField = {key: 'age', type: 'integer', label: 'Возраст, полных лет', maxlength: 3};
+  const calcSexField = {key: 'sex', type: 'radio', legend: 'Пол', options: [['female', 'Женский'], ['male', 'Мужской']]};
+  const calcCreatinineField = {key: 'creatinine', type: 'decimal', label: 'Креатинин сыворотки', maxlength: 10, unit: {key: 'unit', label: 'Единицы креатинина', options: [['umol', 'мкмоль/л'], ['mg', 'мг/дл']]}};
+  function pointsWord(value) {
+    const n = Math.abs(value) % 100, last = n % 10;
+    return n > 10 && n < 20 ? 'баллов' : last === 1 ? 'балл' : last >= 2 && last <= 4 ? 'балла' : 'баллов';
+  }
+  const signed = value => value < 0 ? '−' + Math.abs(value) : String(value);
+  const calculatorFactors = (factors, labels) => factors.length ? 'учтены: ' + factors.map(key => labels[key]).join(', ') : 'факторы не отмечены';
+  const calculatorScore = (value, name) => '<p class="calculator-value"><strong>' + signed(value) + '</strong> ' + pointsWord(value) + ' ' + name + '</p>';
+  const chadsLabels = {chf: 'сердечная недостаточность или дисфункция ЛЖ', hypertension: 'артериальная гипертензия', age75: 'возраст 75 лет и старше', diabetes: 'сахарный диабет', stroke: 'инсульт, ТИА или тромбоэмболия в анамнезе', vascular: 'сосудистое заболевание', age65: 'возраст 65–74 года'};
+  const chadsAdvice = {recommended: 'Пероральная антикоагулянтная терапия рекомендуется для профилактики инсульта и тромбоэмболий.', consider: 'Пероральную антикоагулянтную терапию следует рассмотреть.', none: 'По шкале показаний к антикоагулянтной терапии нет. Риск пересматривают при появлении новых факторов.'};
+  const hasBledLabels = {hypertension: 'неконтролируемая артериальная гипертензия', renal: 'нарушение функции почек', liver: 'нарушение функции печени', stroke: 'инсульт в анамнезе', bleeding: 'кровотечение в анамнезе или предрасположенность', labileInr: 'лабильное МНО', elderly: 'возраст старше 65 лет', drugs: 'антиагреганты или НПВС', alcohol: 'злоупотребление алкоголем'};
+  const crbLabels = {confusion: 'нарушение сознания', respiratory: 'ЧДД 30 в минуту и более', pressure: 'низкое АД', age65: 'возраст 65 лет и старше'};
+  const crbRisk = {low: ['низкий риск', 'менее 1%'], intermediate: ['промежуточный риск', '1–10%'], high: ['высокий риск', 'более 10%']};
+  const centorLabels = {exudate: 'налёт на миндалинах', nodes: 'болезненные передние шейные лимфоузлы', fever: 'лихорадка выше 38 °C', noCough: 'нет кашля'};
+  const centorAgeLabels = {child: '3–14 лет', young: '15–44 года', older: '45 лет и старше'};
+  const calculatorForms = {
+    egfr: {
+      lead: 'расчётная скорость клубочковой фильтрации по креатинину у взрослых 18 лет и старше.',
+      fields: [calcAgeField, calcSexField, {...calcCreatinineField, hint: 'Значение из бланка лаборатории. Формула рассчитана на стандартизованный (IDMS) креатинин.'}],
+      empty: 'Введите возраст, пол и креатинин.',
+      compute: values => core.calculateEgfrCkdEpi2021(values),
+      result: result => '<p class="calculator-value"><strong>' + result.value + '</strong> мл/мин/1,73 м²</p>' +
+        '<p class="calculator-category"><span class="pill">' + result.category + '</span> ' + escape(result.categoryLabel) + ' (категория KDIGO)</p>' +
+        '<p class="hint">Категория по одному измерению. Хроническая болезнь почек устанавливается, если изменения сохраняются более 3 месяцев.</p>',
+      copy: (result, values) => 'СКФ (CKD-EPI 2021) ' + result.value + ' мл/мин/1,73 м², категория ' + result.category + ' по KDIGO; креатинин ' + values.creatinine.trim() + ' ' + (values.unit === 'mg' ? 'мг/дл' : 'мкмоль/л') + '.',
+      reference: '<p class="calculator-formula">СКФ = 142 × min(Scr/κ; 1)<sup>α</sup> × max(Scr/κ; 1)<sup>−1,200</sup> × 0,9938<sup>возраст</sup> × 1,012 [для женщин]</p>' +
+        '<p>Scr — креатинин сыворотки в мг/дл (мкмоль/л ÷ 88,4); κ = 0,7 для женщин и 0,9 для мужчин; α = −0,241 для женщин и −0,302 для мужчин; возраст в годах. Результат в мл/мин/1,73 м² округляется до целого. Расовый коэффициент в версии 2021 года не используется.</p>' +
+        '<h3>Категории СКФ (KDIGO)</h3>' + calculatorTable(['Категория', 'СКФ, мл/мин/1,73 м²', 'Описание'], [['G1', '90 и выше', 'нормальная или высокая'], ['G2', '60–89', 'незначительно снижена'], ['G3a', '45–59', 'умеренно снижена'], ['G3b', '30–44', 'существенно снижена'], ['G4', '15–29', 'резко снижена'], ['G5', 'менее 15', 'почечная недостаточность']]) +
+        '<h3>Ограничения</h3><p>Только для взрослых 18 лет и старше. Оценка менее точна при быстро меняющемся креатинине (острое повреждение почек), очень низкой или высокой мышечной массе, ампутациях конечностей, при беременности. Если лаборатория считает СКФ по формуле CKD-EPI 2009 года, результаты могут немного различаться.</p>',
+      sources: [
+        calculatorDoi('Inker LA, Eneanya ND, Coresh J, et al. New Creatinine- and Cystatin C–Based Equations to Estimate GFR without Race. N Engl J Med. 2021;385(19):1737–1749.', '10.1056/NEJMoa2102953'),
+        calculatorDoi('KDIGO 2024 Clinical Practice Guideline for the Evaluation and Management of Chronic Kidney Disease. Kidney Int. 2024;105(4S):S117–S314.', '10.1016/j.kint.2023.10.018')
+      ]
+    },
+    cockcroft: {
+      lead: 'клиренс креатинина у взрослых 18 лет и старше, мл/мин, без пересчёта на площадь поверхности тела.',
+      fields: [calcAgeField, calcSexField, {key: 'weight', type: 'decimal', label: 'Масса тела, кг', maxlength: 6, hint: 'Фактическая масса тела, как в исходной статье.'}, {...calcCreatinineField, hint: 'Значение из бланка лаборатории.'}],
+      empty: 'Введите возраст, пол, массу тела и креатинин.',
+      compute: values => core.calculateCockcroftGault(values),
+      result: result => '<p class="calculator-value"><strong>' + result.value + '</strong> мл/мин</p>' +
+        '<p class="hint">Клиренс креатинина не пересчитан на 1,73 м². Для коррекции дозы сверяйте значение с инструкцией к препарату.</p>',
+      copy: (result, values) => 'Клиренс креатинина (Кокрофт–Голт) ' + result.value + ' мл/мин; масса тела ' + values.weight.trim() + ' кг, креатинин ' + values.creatinine.trim() + ' ' + (values.unit === 'mg' ? 'мг/дл' : 'мкмоль/л') + '.',
+      reference: '<p class="calculator-formula">КлКр = (140 − возраст) × масса тела / (72 × Scr) × 0,85 [для женщин]</p>' +
+        '<p>КлКр — клиренс креатинина в мл/мин; возраст в годах; масса тела в кг; Scr — креатинин сыворотки в мг/дл (мкмоль/л ÷ 88,4). Результат округляется до целого. Распространённый вариант формулы для мкмоль/л с коэффициентами 1,23 и 1,04 даёт близкие, но не совпадающие значения.</p>' +
+        '<h3>Ограничения</h3><p>Формула выведена в 1976 году по данным мужчин; поправка 0,85 для женщин предложена авторами. Оценка неточна при ожирении, отёках, низкой мышечной массе и быстро меняющемся креатинине. Для стадирования хронической болезни почек используйте СКФ по CKD-EPI; клиренс по Кокрофту–Голту применяют главным образом для дозирования препаратов, если этого требует инструкция.</p>',
+      sources: [calculatorDoi('Cockcroft DW, Gault MH. Prediction of creatinine clearance from serum creatinine. Nephron. 1976;16(1):31–41.', '10.1159/000180580')]
+    },
+    chads: {
+      lead: 'риск инсульта и тромбоэмболий при фибрилляции предсердий.',
+      referenceTitle: 'Шкала',
+      fields: [calcAgeField, calcSexField, {type: 'checks', legend: 'Факторы риска', items: [
+        {key: 'chf', points: 1, label: 'Сердечная недостаточность или систолическая дисфункция левого желудочка'},
+        {key: 'hypertension', points: 1, label: 'Артериальная гипертензия'},
+        {key: 'diabetes', points: 1, label: 'Сахарный диабет'},
+        {key: 'stroke', points: 2, label: 'Инсульт, ТИА или тромбоэмболия в анамнезе'},
+        {key: 'vascular', points: 1, label: 'Сосудистое заболевание', hint: 'Перенесённый инфаркт миокарда, атеросклероз периферических артерий, атеросклеротическая бляшка аорты.'}
+      ]}],
+      note: 'Баллы за возраст и пол начисляются по полям выше.',
+      empty: 'Укажите возраст и пол.',
+      compute: values => core.scoreChadsVasc(values),
+      result: result => calculatorScore(result.va, 'по CHA₂DS₂-VA') +
+        '<p class="calculator-category"><span class="pill neutral">CHA₂DS₂-VASc: ' + result.vasc + ' ' + pointsWord(result.vasc) + '</span></p>' +
+        '<p class="calculator-verdict">' + chadsAdvice[result.recommendation] + ' (ESC 2024, по CHA₂DS₂-VA)</p>' +
+        '<p class="hint">Риск кровотечения (HAS-BLED) оценивают, чтобы устранить изменяемые факторы, а не чтобы отказаться от антикоагулянта.</p>',
+      copy: result => 'CHA₂DS₂-VA — ' + result.va + ' ' + pointsWord(result.va) + ', CHA₂DS₂-VASc — ' + result.vasc + ' ' + pointsWord(result.vasc) + '; ' +
+        calculatorFactors(result.factors.concat(result.female ? ['female'] : []), {...chadsLabels, female: 'женский пол (только в CHA₂DS₂-VASc)'}) + '.',
+      reference: calculatorTable(['Буква', 'Фактор', 'Баллы'], [['C', 'Сердечная недостаточность или систолическая дисфункция ЛЖ', '1'], ['H', 'Артериальная гипертензия', '1'], ['A₂', 'Возраст 75 лет и старше', '2'], ['D', 'Сахарный диабет', '1'], ['S₂', 'Инсульт, ТИА или тромбоэмболия в анамнезе', '2'], ['V', 'Сосудистое заболевание (инфаркт миокарда, атеросклероз периферических артерий, бляшка аорты)', '1'], ['A', 'Возраст 65–74 года', '1'], ['Sc', 'Женский пол — только в CHA₂DS₂-VASc', '1']]) +
+        '<p>CHA₂DS₂-VASc — от 0 до 9 баллов. CHA₂DS₂-VA — та же шкала без пункта «женский пол», от 0 до 8 баллов; её использует руководство ESC 2024 по фибрилляции предсердий.</p>' +
+        '<h3>Толкование (ESC 2024, CHA₂DS₂-VA)</h3>' + calculatorTable(['Баллы', 'Пероральная антикоагулянтная терапия'], [['2 и более', 'рекомендуется'], ['1', 'следует рассмотреть'], ['0', 'по шкале не показана']]) +
+        '<h3>Ограничения</h3><p>Для пациентов с фибрилляцией предсердий. При амилоидозе сердца, гипертрофической кардиомиопатии и митральном стенозе решение об антикоагулянте принимают независимо от балла. При механическом протезе клапана или умеренном и тяжёлом митральном стенозе прямые пероральные антикоагулянты не применяются. Решение принимают с учётом противопоказаний и мнения пациента. ' + calculatorProtocolNote + '</p>',
+      sources: [
+        calculatorDoi('Lip GYH, Nieuwlaat R, Pisters R, Lane DA, Crijns HJGM. Refining clinical risk stratification for predicting stroke and thromboembolism in atrial fibrillation using a novel risk factor-based approach. Chest. 2010;137(2):263–272.', '10.1378/chest.09-1584'),
+        calculatorDoi('Van Gelder IC, Rienstra M, Bunting KV, et al. 2024 ESC Guidelines for the management of atrial fibrillation. Eur Heart J. 2024;45(36):3314–3414.', '10.1093/eurheartj/ehae176'),
+        calculatorDoi('Rienstra M, Tzeis S, Bunting KV, et al. Spotlight on the 2024 ESC/EACTS management of atrial fibrillation guidelines. Europace. 2024;26(12):euae298.', '10.1093/europace/euae298')
+      ],
+      sourceNote: 'Полный текст руководства ESC 2024 закрыт ограничением доступа; пороги сверены по обзору авторов руководства в Europace.'
+    },
+    hasbled: {
+      lead: 'риск большого кровотечения при антикоагулянтной терапии у пациентов с фибрилляцией предсердий.',
+      referenceTitle: 'Шкала',
+      fields: [{type: 'checks', legend: 'Факторы риска', items: [
+        {key: 'hypertension', points: 1, label: 'Неконтролируемая артериальная гипертензия', hint: 'Систолическое АД выше 160 мм рт. ст.'},
+        {key: 'renal', points: 1, label: 'Нарушение функции почек', hint: 'Диализ, трансплантация почки или креатинин 200 мкмоль/л и выше.*'},
+        {key: 'liver', points: 1, label: 'Нарушение функции печени', hint: 'Цирроз либо билирубин выше 2 норм вместе с АСТ, АЛТ или ЩФ выше 3 норм.*'},
+        {key: 'stroke', points: 1, label: 'Инсульт в анамнезе'},
+        {key: 'bleeding', points: 1, label: 'Кровотечение в анамнезе или предрасположенность к нему', hint: 'Например, анемия.*'},
+        {key: 'labileInr', points: 1, label: 'Лабильное МНО', hint: 'Только при приёме антагониста витамина K: время в целевом диапазоне менее 60%.*'},
+        {key: 'elderly', points: 1, label: 'Возраст старше 65 лет'},
+        {key: 'drugs', points: 1, label: 'Приём антиагрегантов или НПВС'},
+        {key: 'alcohol', points: 1, label: 'Злоупотребление алкоголем', hint: '8 и более порций алкоголя в неделю.*'}
+      ]}],
+      note: '* Уточнения взяты из вторичных источников (справочные статьи со ссылкой на работу 2010 года); с полным текстом статьи не сверены.',
+      compute: values => core.scoreHasBled(values),
+      result: result => calculatorScore(result.score, 'по HAS-BLED') +
+        '<p class="calculator-category"><span class="pill' + (result.high ? '' : ' neutral') + '">' + (result.high ? 'высокий риск кровотечения' : 'не относится к высокому риску') + '</span></p>' +
+        '<p class="calculator-verdict">' + (result.high ? 'Нужны осторожность и регулярный контроль. Устраните изменяемые факторы: АД, сопутствующие препараты, алкоголь, лабильное МНО. Высокий балл сам по себе не причина отказываться от антикоагулянта.' : 'Изменяемые факторы риска кровотечения всё равно стоит устранять.') + '</p>',
+      copy: result => 'HAS-BLED — ' + result.score + ' ' + pointsWord(result.score) + (result.high ? ' (высокий риск кровотечения)' : '') + '; ' + calculatorFactors(result.factors, hasBledLabels) + '.',
+      reference: calculatorTable(['Буква', 'Фактор', 'Баллы'], [['H', 'Неконтролируемая артериальная гипертензия (САД выше 160 мм рт. ст.)', '1'], ['A', 'Нарушение функции почек и (или) печени', '1 или 2'], ['S', 'Инсульт', '1'], ['B', 'Кровотечение в анамнезе или предрасположенность', '1'], ['L', 'Лабильное МНО', '1'], ['E', 'Возраст старше 65 лет', '1'], ['D', 'Антиагреганты или НПВС и (или) алкоголь', '1 или 2']]) +
+        '<p>Сумма от 0 до 9 баллов. 3 балла и более — высокий риск кровотечения: нужны осторожность, регулярный контроль и устранение изменяемых факторов.</p>' +
+        '<h3>Ограничения</h3><p>Шкала не служит основанием для отказа от антикоагулянта. Пункт «лабильное МНО» относится только к антагонистам витамина K. ' + calculatorProtocolNote + '</p>',
+      sources: [
+        calculatorDoi('Pisters R, Lane DA, Nieuwlaat R, de Vos CB, Crijns HJGM, Lip GYH. A novel user-friendly score (HAS-BLED) to assess 1-year risk of major bleeding in patients with atrial fibrillation: the Euro Heart Survey. Chest. 2010;138(5):1093–1100.', '10.1378/chest.10-0134'),
+        calculatorDoi('Senoo K, Lane DA, Lip GYH. Stroke and bleeding risk in atrial fibrillation. Korean Circ J. 2014;44(5):281–290.', '10.4070/kcj.2014.44.5.281')
+      ]
+    },
+    crb65: {
+      lead: 'тяжесть внебольничной пневмонии в первичном звене без лабораторных данных.',
+      referenceTitle: 'Шкала',
+      fields: [{type: 'checks', legend: 'Признаки', items: [
+        {key: 'confusion', points: 1, label: 'Нарушение сознания (спутанность)', hint: 'AMTS 8 баллов и менее или новая дезориентация во времени, месте или собственной личности.'},
+        {key: 'respiratory', points: 1, label: 'Частота дыхания 30 в минуту и более'},
+        {key: 'pressure', points: 1, label: 'Систолическое АД ниже 90 или диастолическое 60 мм рт. ст. и ниже'},
+        {key: 'age65', points: 1, label: 'Возраст 65 лет и старше'}
+      ]}],
+      compute: values => core.scoreCrb65(values),
+      result: result => calculatorScore(result.score, 'по CRB-65') +
+        '<p class="calculator-category"><span class="pill' + (result.risk === 'low' ? ' neutral' : '') + '">' + crbRisk[result.risk][0] + '</span> 30-дневная летальность ' + crbRisk[result.risk][1] + '</p>' +
+        '<p class="calculator-verdict">' + (result.score === 0 ? 'Обычно ведение в первичном звене с объяснением, когда обратиться повторно.' : result.score === 1 ? 'Ведение в первичном звене с контролем либо направление в стационар — по клинической оценке.' : 'Рассмотрите направление в стационар.') + ' (NICE NG250)</p>',
+      copy: result => 'CRB-65 — ' + result.score + ' ' + pointsWord(result.score) + ' (' + crbRisk[result.risk][0] + ', 30-дневная летальность ' + crbRisk[result.risk][1] + '); ' + calculatorFactors(result.factors, crbLabels) + '.',
+      reference: calculatorTable(['Буква', 'Признак', 'Баллы'], [['C', 'Нарушение сознания', '1'], ['R', 'Частота дыхания 30 в минуту и более', '1'], ['B', 'Систолическое АД ниже 90 или диастолическое 60 мм рт. ст. и ниже', '1'], ['65', 'Возраст 65 лет и старше', '1']]) +
+        '<h3>Толкование (NICE NG250, 2025)</h3>' + calculatorTable(['Баллы', 'Риск', '30-дневная летальность', 'Действие'], [['0', 'низкий', 'менее 1%', 'ведение в первичном звене с объяснением, когда обратиться повторно'], ['1–2', 'промежуточный', '1–10%', 'при 1 балле — первичное звено с контролем или направление; при 2 — рассмотреть направление в стационар'], ['3–4', 'высокий', 'более 10%', 'рассмотреть направление в стационар']]) +
+        '<h3>Ограничения</h3><p>Для внебольничной пневмонии, диагностированной в первичном звене. Шкала дополняет, а не заменяет клиническую оценку: учитывайте сопутствующие заболевания, общее состояние и возможность ухода дома. ' + calculatorProtocolNote + '</p>',
+      sources: [
+        calculatorDoi('Lim WS, van der Eerden MM, Laing R, et al. Defining community acquired pneumonia severity on presentation to hospital: an international derivation and validation study. Thorax. 2003;58(5):377–382.', '10.1136/thorax.58.5.377'),
+        calculatorSource('NICE guideline NG250. Pneumonia: diagnosis and management. 2025.', 'https://www.nice.org.uk/guidance/ng250', 'nice.org.uk/guidance/ng250')
+      ]
+    },
+    centor: {
+      lead: 'вероятность стрептококкового (БГСА) тонзиллофарингита при боли в горле.',
+      referenceTitle: 'Шкала',
+      fields: [{type: 'checks', legend: 'Признаки', items: [
+        {key: 'exudate', points: 1, label: 'Налёт (экссудат) на миндалинах'},
+        {key: 'nodes', points: 1, label: 'Болезненные увеличенные передние шейные лимфоузлы'},
+        {key: 'fever', points: 1, label: 'Лихорадка выше 38 °C в анамнезе'},
+        {key: 'noCough', points: 1, label: 'Отсутствие кашля'}
+      ]}, {key: 'ageGroup', type: 'radio', legend: 'Возраст — для поправки McIsaac', options: [['child', '3–14 лет'], ['young', '15–44 года'], ['older', '45 лет и старше']]}],
+      compute: values => core.scoreCentor(values),
+      result: result => calculatorScore(result.centor, 'по Centor') +
+        '<p class="calculator-category"><span class="pill neutral">' + (result.mcIsaac === null ? 'McIsaac: укажите возраст' : 'McIsaac: ' + signed(result.mcIsaac) + ' ' + pointsWord(result.mcIsaac)) + '</span></p>' +
+        '<p class="calculator-verdict">' + (result.likely ? 'Вероятность стрептококковой инфекции 32–56%. Рассмотрите немедленное или отсроченное назначение антибиотика.' : 'Вероятность стрептококковой инфекции 3–17%. Антибиотик не назначается; объясните симптоматическое лечение и когда обратиться повторно.') + ' (NICE NG84, по баллу Centor)</p>',
+      copy: result => 'Centor — ' + result.centor + ' ' + pointsWord(result.centor) + (result.mcIsaac === null ? '' : ', McIsaac — ' + signed(result.mcIsaac) + ' ' + pointsWord(result.mcIsaac)) + '; ' +
+        calculatorFactors(result.factors, centorLabels) + (result.ageGroup ? '; возраст ' + centorAgeLabels[result.ageGroup] : '') + '.',
+      reference: calculatorTable(['Признак', 'Баллы'], [['Налёт (экссудат) на миндалинах', '1'], ['Болезненные увеличенные передние шейные лимфоузлы', '1'], ['Лихорадка выше 38 °C в анамнезе', '1'], ['Отсутствие кашля', '1']]) +
+        '<h3>Поправка McIsaac на возраст</h3>' + calculatorTable(['Возраст', 'Баллы'], [['3–14 лет', '+1'], ['15–44 года', '0'], ['45 лет и старше', '−1']]) +
+        '<h3>Толкование балла Centor (NICE NG84)</h3>' + calculatorTable(['Баллы', 'Вероятность БГСА', 'Антибиотик'], [['0–2', '3–17%', 'не назначается'], ['3–4', '32–56%', 'рассмотреть немедленное или отсроченное назначение']]) +
+        '<h3>Ограничения</h3><p>Шкала оценивает вероятность стрептококковой инфекции, а не тяжесть состояния. Балл McIsaac показан без толкования: пороги не сверены по полному тексту статьи. Поправка на возраст подтверждена по вторичным источникам. ' + calculatorProtocolNote + '</p>',
+      sources: [
+        calculatorDoi('Centor RM, Witherspoon JM, Dalton HP, Brody CE, Link K. The diagnosis of strep throat in adults in the emergency room. Med Decis Making. 1981;1(3):239–246.', '10.1177/0272989X8100100304'),
+        calculatorSource('McIsaac WJ, White D, Tannenbaum D, Low DE. A clinical score to reduce unnecessary antibiotic use in patients with sore throat. CMAJ. 1998;158(1):75–83.', 'https://pubmed.ncbi.nlm.nih.gov/9475915/', 'PMID 9475915'),
+        calculatorSource('NICE guideline NG84. Sore throat (acute): antimicrobial prescribing. 2018.', 'https://www.nice.org.uk/guidance/ng84', 'nice.org.uk/guidance/ng84')
+      ]
+    }
+  };
+  function renderCalculators() {
+    const form = calculatorForms[state.calculatorId];
+    if (form) return renderCalculatorPage(state.calculatorId, form);
+    const rubric = state.calculatorRubric;
+    const tabs = calculatorRubrics.map(([key, label]) => button('calc-rubric', label, null, (key === rubric ? 'primary active' : 'secondary') + ' compact pager-tab', 'id="calc-rubric-' + key + '" role="tab" data-filter="' + key + '" aria-controls="calculator-list" aria-selected="' + (key === rubric) + '" aria-pressed="' + (key === rubric) + '" tabindex="' + (key === rubric ? '0' : '-1') + '"')).join('');
+    const groups = calculatorRubrics.filter(([key]) => key !== 'all' && (rubric === 'all' || rubric === key)).map(([key, label]) =>
+      '<section class="calculator-group" aria-labelledby="calc-group-' + key + '"><h2 id="calc-group-' + key + '">' + label + '</h2><ul class="calculator-items">' + calculatorCatalog.filter(item => item.rubric === key).map(calculatorItem).join('') + '</ul></section>').join('');
+    return '<div class="page-heading"><div><h1>Калькуляторы</h1><p>Расчёты по опубликованным формулам с указанием источника. Введённые значения не сохраняются.</p></div></div>' + calculatorDisclaimer() +
+      '<section class="card calculators-card"><div id="calculator-rubrics" class="workflow-filters pager-tabs" role="tablist" aria-label="Рубрики калькуляторов">' + tabs + '</div>' +
+      '<div id="calculator-list" class="calculator-list" role="tabpanel" aria-labelledby="calc-rubric-' + rubric + '" tabindex="0">' + groups + '</div></section>';
+  }
+  function calculatorValues(id) {
+    if (!state.calculatorInputs[id]) {
+      const values = {};
+      calculatorForms[id].fields.forEach(field => {
+        if (field.type === 'checks') field.items.forEach(item => { values[item.key] = false; });
+        else values[field.key] = '';
+        if (field.unit) values[field.unit.key] = field.unit.options[0][0];
+      });
+      state.calculatorInputs[id] = values;
+      state.calculatorTouched[id] = {};
+    }
+    return state.calculatorInputs[id];
+  }
+  function calculatorState(id) {
+    const values = calculatorValues(id);
+    const check = calculatorForms[id].compute(values);
+    const shown = {};
+    Object.keys(check.errors).forEach(key => { if (state.calculatorTouched[id][key]) shown[key] = check.errors[key]; });
+    return {values, result: check.result, errors: shown};
+  }
+  function calculatorResultHtml(id, current = calculatorState(id)) {
+    if (!current.result) return '<p class="calculator-empty">' + (Object.keys(current.errors).length ? 'Исправьте отмеченные поля.' : calculatorForms[id].empty) + '</p>';
+    return calculatorForms[id].result(current.result, current.values);
+  }
+  function calculatorCopyText() {
+    const form = calculatorForms[state.calculatorId];
+    if (!form) return '';
+    const {values, result} = calculatorState(state.calculatorId);
+    return result ? form.copy(result, values) : '';
+  }
+  function calculatorError(id, message) {
+    return '<p class="field-error" id="' + id + '-error"' + (message ? '' : ' hidden') + '>' + escape(message || '') + '</p>';
+  }
+  const calculatorTextFields = form => form.fields.filter(field => field.type === 'integer' || field.type === 'decimal');
+  function calculatorField(id, field, current) {
+    const values = current.values;
+    if (field.type === 'radio') {
+      return '<fieldset class="field calculator-choice"><legend>' + field.legend + '</legend><div class="calculator-radios">' + field.options.map(([value, label]) =>
+        '<label class="calculator-radio"><input type="radio" name="' + id + '-' + field.key + '" value="' + value + '" data-calc-field="' + field.key + '"' + (values[field.key] === value ? ' checked' : '') + '> ' + label + '</label>').join('') + '</div></fieldset>';
+    }
+    if (field.type === 'checks') {
+      return '<fieldset class="field calculator-choice"><legend>' + field.legend + '</legend><ul class="calculator-checks">' + field.items.map(item => {
+        const itemId = id + '-' + item.key;
+        return '<li><label class="calculator-check"><input type="checkbox" id="' + itemId + '" data-calc-field="' + item.key + '"' + (values[item.key] ? ' checked' : '') + (item.hint ? ' aria-describedby="' + itemId + '-hint"' : '') + '>' +
+          '<span class="calculator-check-text"><span>' + item.label + '</span>' + (item.hint ? '<span class="hint" id="' + itemId + '-hint">' + item.hint + '</span>' : '') + '</span><span class="calculator-points" aria-label="' + item.points + ' ' + pointsWord(item.points) + '">+' + item.points + '</span></label></li>';
+      }).join('') + '</ul></fieldset>';
+    }
+    const fieldId = id + '-' + field.key, error = current.errors[field.key];
+    const input = '<input id="' + fieldId + '" data-calc-field="' + field.key + '" type="text" inputmode="' + (field.type === 'integer' ? 'numeric' : 'decimal') + '" maxlength="' + field.maxlength + '" autocomplete="off" value="' + escape(values[field.key]) + '" aria-describedby="' + (field.hint ? fieldId + '-hint ' : '') + fieldId + '-error" aria-invalid="' + Boolean(error) + '">';
+    const control = field.unit ? '<div class="calculator-unit">' + input + '<select id="' + id + '-' + field.unit.key + '" data-calc-field="' + field.unit.key + '" aria-label="' + field.unit.label + '">' +
+      field.unit.options.map(([value, label]) => '<option value="' + value + '"' + (values[field.unit.key] === value ? ' selected' : '') + '>' + label + '</option>').join('') + '</select></div>' : input;
+    return '<div class="field"><label for="' + fieldId + '">' + field.label + '</label>' + control + (field.hint ? '<p class="hint" id="' + fieldId + '-hint">' + field.hint + '</p>' : '') + calculatorError(fieldId, error) + '</div>';
+  }
+  function renderCalculatorPage(id, form) {
+    const item = calculatorCatalog.find(entry => entry.id === id);
+    const rubric = calculatorRubrics.find(([key]) => key === item.rubric)[1];
+    const current = calculatorState(id);
+    return '<div class="page-heading calculator-heading"><div>' + button('calc-back', 'Все калькуляторы', 'back', 'ghost compact') + '<h1>' + escape(item.title) + '</h1><p>' + rubric + ' · ' + form.lead + '</p></div></div>' + calculatorDisclaimer() +
+      '<div class="calculator-layout"><section class="card calculator-form" aria-labelledby="' + id + '-input-title"><h2 id="' + id + '-input-title">Данные</h2>' +
+      form.fields.map(field => calculatorField(id, field, current)).join('') + (form.note ? '<p class="hint calculator-note">' + form.note + '</p>' : '') + '</section>' +
+      '<section class="card calculator-result" aria-labelledby="' + id + '-result-title"><h2 id="' + id + '-result-title">Результат</h2><div id="' + id + '-result" aria-live="polite">' + calculatorResultHtml(id, current) + '</div>' +
+      '<div class="actions">' + button('calc-copy', 'Скопировать результат', 'copy', 'secondary compact', 'id="' + id + '-copy"' + (current.result ? '' : ' disabled')) + '</div></section></div>' +
+      '<section class="card calculator-reference" aria-labelledby="' + id + '-formula-title"><h2 id="' + id + '-formula-title">' + (form.referenceTitle || 'Формула') + '</h2>' + form.reference +
+      '<h3>Источники</h3><ul class="calculator-sources">' + form.sources.join('') + '</ul>' + (form.sourceNote ? '<p class="hint">' + form.sourceNote + '</p>' : '') +
+      '<p class="hint">Ссылки открываются в браузере и требуют интернета. Сам расчёт работает офлайн.</p></section>';
+  }
+  function updateCalculatorField(control, committed) {
+    const id = state.calculatorId, form = calculatorForms[id];
+    if (!form) return;
+    const key = control.dataset.calcField, values = calculatorValues(id);
+    if (!Object.prototype.hasOwnProperty.call(values, key) || (control.type === 'radio' && !control.checked)) return;
+    values[key] = control.type === 'checkbox' ? control.checked : control.value;
+    if (committed || control.tagName === 'SELECT') state.calculatorTouched[id][key] = true;
+    const owner = form.fields.find(field => field.unit && field.unit.key === key);
+    if (owner && values[owner.key].trim()) state.calculatorTouched[id][owner.key] = true;
+    refreshCalculator(id);
+  }
+  function refreshCalculator(id) {
+    const current = calculatorState(id);
+    const output = document.getElementById(id + '-result');
+    if (!output) return;
+    output.innerHTML = calculatorResultHtml(id, current);
+    document.getElementById(id + '-copy').disabled = !current.result;
+    for (const field of calculatorTextFields(calculatorForms[id])) {
+      const error = document.getElementById(id + '-' + field.key + '-error');
+      error.textContent = current.errors[field.key] || '';
+      error.hidden = !current.errors[field.key];
+      document.getElementById(id + '-' + field.key).setAttribute('aria-invalid', String(Boolean(current.errors[field.key])));
+    }
   }
   function renderHelp() {
     return '<div class="page-heading"><div><h1>Помощь и данные</h1><p>Первый запуск, сохранение и границы прототипа.</p></div></div><div class="help-layout"><section class="card help-card"><h2>Работа с клавиатурой</h2><dl class="keyboard-shortcuts"><div><dt><kbd>Ctrl + K</kbd></dt><dd>Открыть поиск пациентов</dd></div><div><dt><kbd>Ctrl + S</kbd></dt><dd>Сохранить текущий приём или карточку, сохранив место ввода</dd></div><div><dt><kbd>Alt + 1–5</kbd></dt><dd>Перейти к разделу открытого приёма</dd></div></dl><p class="hint">В меню используйте стрелки вверх и вниз, во вкладках — влево и вправо. Tab переводит фокус к следующему элементу. Сочетания поиска, сохранения и перехода по разделам приостановлены, пока открыто диалоговое окно.</p><h2>Анализы и исследования</h2><p>«Из текста» — в работе: сверка анализов по тексту требует доработки, кнопка временно недоступна. Ручной ввод и бланки анализов доступны.</p><p>В первичном или повторном приёме откройте вкладку «Исследования»; в карточке пациента — раздел «Анализы и исследования». Нажмите «Добавить результат» и выберите ОАК, ОАМ, БАК или другое исследование. Откроется готовая форма; укажите дату и результаты. Единицы измерения заполняются только для лабораторных анализов. «Бланки анализов» открывает готовые формы напрямую. Предложенные единицы можно исправить по выданному бланку; нормы вводятся вручную. Пустые результаты не сохраняются и не попадают в запись, значение 0 сохраняется. В том же списке доступны «Другое лабораторное исследование» и «Другое инструментальное исследование» с ручным вводом названия, результата и примечания; поле единиц есть только у лабораторного исследования. Кнопка «Назад» из выбранного бланка возвращает к форме выбора, сохраняя прежний ручной ввод. Формы сохраняются только по нажатию кнопки.</p><p>Результаты, добавленные во время приёма, сохраняются и в карточке пациента. Для включения прежних результатов в приём нажмите «Выбрать из карточки» и отметьте нужные бланки или показатели; автоматического переноса в повторный приём нет. Изменение или удаление связанного результата снимает отметку проверки у связанных записей. Сохранённый текст остаётся для вашей проверки; чтобы включить актуальные результаты, заново сформируйте черновик. «Убрать из приёма» сохраняет результат в карточке.</p><p>В карточке выберите показатель, чтобы увидеть историю и динамику. График и разность доступны для числовых результатов с одинаковым названием и единицами на разные даты. Единицы не пересчитываются; текстовые результаты и результаты одного дня показываются таблицей. Нормы берутся из соответствующей строки, медицинская интерпретация не выполняется. Результаты доступны в поиске пациентов и резервной копии. Для копий с бланками или связями с приёмами нужна версия 0.15.0 или новее; отдельные результаты прежнего формата поддерживаются с 0.14.0.</p><h2>Назначения препаратов</h2><p>В разделе «Запись» нажмите «Добавить препарат». Введите название, дозировку, способ приёма, кратность, длительность и примечание, затем сохраните. Название обязательно; остальные параметры врач заполняет самостоятельно. Каждое назначение можно изменить или удалить. Новые назначения включаются при формировании черновика; сохранённый ручной текст остаётся.</p><p>При создании повторного приёма отметьте отдельные назначения для переноса. По умолчанию они выключены; постоянные препараты анамнеза, аллергии и заболевания подтверждаются отдельно. Назначения входят в резервную копию; копии с ними требуют версии 0.13.0 или новее. Шаблоны рекомендаций сохраняют только свободный текст рекомендаций.</p><h2>Возможности приёма</h2><p>В разделе «Запись» больничный можно выдать, продлить или закрыть с одновременным сохранением в журнале. При продлении и закрытии выберите конкретный листок. Чтобы исправить последнее связанное действие, отмените его в этом приёме и внесите заново.</p><p>«Предыдущий приём» открывает сведения из истории только для просмотра. «Мои шаблоны» возле осмотра и рекомендаций сохраняют ваши формулировки и применяются по нажатию. Шаблоны входят в резервную копию; копии с шаблонами или связанными действиями больничного требуют версии 0.12.0 или новее.</p><h2>Как пройти демонстрационный приём</h2><ol><li>Нажмите «Начать приём» и найдите пациента либо выберите «Новый пациент». Пустая новая форма не сохраняется; карточка появляется после первого ввода сведений. На главной также доступен вымышленный пример.</li><li>Заполните сведения о приёме, анамнез и осмотр. Вводите только вымышленные данные.</li><li>В разделе «Запись» заполните диагноз, при необходимости рекомендации, дату повторного приёма и отметку о больничном. Нажмите «Сформировать черновик».</li><li>Проверьте и отредактируйте текст. Скачайте .txt или скопируйте его.</li></ol><h2>Перелистывание разделов</h2><p>Главное меню, вкладки приёма, рубрики пациентов, периоды повторных приёмов, статусы записей на обзоре и разделы карточки переключаются с боковым перелистыванием. Команда «Проверить обновления» запускает обновлятор. В карточке открывается один раздел: «История приёмов», «Анализы и исследования» или «Журнал больничных». Для перехода нажмите вкладку, используйте стрелки влево и вправо, Home или End на выбранной вкладке либо проведите пальцем вбок по свободной области содержимого. В главном меню стрелки, Home и End перемещают фокус; Enter или пробел открывает выбранный раздел. Жесты перелистывания действуют только внутри списков и вкладок, не переключают главное меню. Ввод в полях и вертикальная прокрутка сохраняются. При включённом уменьшении анимации в системе переход происходит сразу.</p><h2>Карточка и повторный приём</h2><p>Раздел «Пациенты» содержит карточки с историей по датам. В списке видны последний приём и ближайшая предстоящая повторная явка. Пациенты с явкой сегодня или позже идут первыми, от ближайшей даты к дальней; только с прошедшей незакрытой датой — следом, без назначений — в конце. Состоявшиеся приёмы не участвуют в этом порядке. ФИО пациента можно ввести в начале вкладки «Приём» или изменить в карточке. Это одно общее поле; используйте только вымышленные фамилию, имя и отчество. Кнопка «Повторный приём» создаёт отдельную запись того же пациента. Выберите исходный приём и отметьте нужные препараты, аллергии и заболевания; нажмите «Создать приём» для подтверждения. Без отметок перенос не выполняется. При смене источника отметки сбрасываются. Возраст, пол, жалобы, осмотр, показатели и заключение заполните заново.</p><h2>Журнал больничных</h2><p>В карточке пациента откройте вкладку «Журнал больничных». Выдача, продление и закрытие сохраняются явно; автоматически по прошедшей дате больничный не закрывается. Можно изменить номер или отменить последнее действие. Общий счётчик объединяет все внесённые календарные периоды пациента: обе даты включены, пересечения учитываются один раз. Закрытие исключает дни после выбранной даты; для более позднего закрытия сначала внесите продление.</p><p>Прежние отметки видны под журналом и уже входят в общий подсчёт. Перенесите отметку в журнал, чтобы продлевать или закрывать её. Исходный приём и текст сохраняются; дальнейшие изменения ведутся отдельно. Неполные даты исключены из счётчика с предупреждением. Журнал входит в резервную копию; для её открытия нужна версия 0.11.0 или новее.</p><h2>Повторные даты и проверка записи</h2><p>Дата в конце раздела «Запись» появляется в списке «Повторные приёмы». Там доступны сегодняшние, все будущие и прошедшие даты. Прошедшая дата не означает неявку. «Начать повторный приём» создаёт связанную запись после подтверждения переноса; повторное нажатие открывает её. Отдельно отметьте «Состоялся» после фактического приёма. Изменение назначенной даты сбрасывает отметку и связь, но сохраняет запись в истории.</p><p>На вкладке «Запись» нажмите «Отметить: проверено врачом» после проверки непустого текста. Это личная отметка, не электронная подпись. Правки сведений, текста или ФИО снимают её. На главной фильтр «Черновики» показывает незавершённые записи. Статус записи и факт состоявшегося приёма независимы.</p><h2>Режимы работы</h2><p>При запуске программа предлагает раздел: «Поликлиника», «Стационар» или «Модули». Сразу после запуска выбрана «Поликлиника», её можно открыть клавишей Enter. Вернуться к выбору можно пунктом «Выбор раздела» в меню. Перезагрузка окна сохраняет выбранный раздел, новое окно начинается с выбора. Сам выбор раздела записи не меняет.</p><p>Сейчас доступен поликлинический режим. Стационарный режим помечен «В работе»: его формы и функции будут определены на следующем этапе. «Модули» открываются отдельным разделом с экрана выбора.</p><h2>Что делает прототип</h2><p>Собирает введённые сведения в свободный текст. Работает из локальных файлов, без аккаунта, сервера, МИС и внешних запросов приложения.</p><p>Диагноз и рекомендации вводит врач. Программа не назначает лечение и не оформляет больничные документы. Варианты осмотра — вспомогательные формулировки; источники и ограничения перечислены в EXAM-SOURCES.md. Нормативные формы Беларуси не реализованы.</p><h2>Запуск в Windows</h2><p>Распакуйте архив в постоянную папку и откройте <span class="code-path">Start-MedAssist.cmd</span>. Приложение использует установленный Edge или Chrome. Также можно открыть <span class="code-path">app/index.html</span>.</p></section><section class="card help-card"><h2>Сохранение на этом компьютере</h2><p>Изменения автоматически сохраняются в локальном хранилище текущего браузера. Статус сохранения показан в приёме. При ошибке вы увидите сообщение.</p><p>Хранение локальных HTML-файлов зависит от браузера. Перемещение папки, другой профиль или очистка данных браузера могут сделать записи недоступными. Перед этим скачайте резервную копию.</p><p>Резервная копия содержит карточки с анализами и исследованиями, связанные приёмы, отредактированные черновики, личные шаблоны и сокращения. Копии с сокращениями открываются в версии 0.22.0 или новее. Восстановление заменит все карточки и приёмы после подтверждения.</p><div class="backup-actions">' + button('backup', 'Резервная копия', 'download', 'primary') + button('import', 'Восстановить', 'upload') + button('reset', 'Очистить демонстрационные записи', null, 'secondary') + '</div><h2>Обновление программы через интернет</h2><p>Нажмите «Проверить обновления» в меню приложения. Откроется окно проверки; браузер может попросить разрешить его запуск. Если доступна новая версия, сохраните резервную копию, закройте окна МедАссистента и подтвердите установку в окне обновления.</p><p>Для работы кнопки запускайте программу через <span class="code-path">Start-MedAssist.cmd</span> или обычный ярлык <span class="code-path">MedAssist</span>. При открытии файла index.html напрямую потребуется повторный запуск через ярлык. Отдельный <span class="code-path">Update-MedAssist.cmd</span> остаётся запасным способом.</p><p>Обновления загружаются из публичного проекта romaick/medassist на GitHub. Скачивать и распаковывать архивы вручную не понадобится. Без интернета приёмы работают как раньше.</p><h2>Перенос записей из прежней папки</h2><p>Сначала скачайте резервную копию в старой версии. Новая версия принимает её через «Восстановить» и сохраняет старые тексты. Если файлы обновлены в той же папке и браузере, доступные старые записи загрузятся автоматически. Новые копии со статусами и планом повторных приёмов открываются в версии 0.7 и новее. Из копий версий 1 и 2 каждый приём получает отдельную карточку; карточки версии 3 сохраняются. Автоматического объединения пациентов нет.</p><h2>Только демонстрация</h2><p>Данные сохраняются без шифрования. Прототип не подготовлен для реальных медицинских записей. Используйте только вымышленные сведения.</p></section></div>';
@@ -2478,6 +2768,7 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   function navigate(view, tab) {
+    if (view === 'calculators') state.calculatorId = null;
     if (view !== 'visit') discardEmptyForm();
     if (view !== 'patient') state.patientEditOpen = false;
     state.view = view;
@@ -2750,7 +3041,19 @@
       toast('Если браузер запросит разрешение, нажмите «Открыть». Результат проверки появится в отдельном окне.');
       return;
     }
-    if (['home', 'patients', 'followups', 'help', 'modules', 'visit'].includes(action)) { navigate(action); return; }
+    if (['home', 'patients', 'followups', 'help', 'modules', 'calculators', 'visit'].includes(action)) { navigate(action); return; }
+    if (action === 'calc-rubric') { state.calculatorRubric = target.dataset.filter; render(); document.getElementById('calc-rubric-' + state.calculatorRubric)?.focus({preventScroll: true}); return; }
+    if (action === 'calc-open') { state.calculatorId = target.dataset.calculator; render(); document.getElementById('main').focus({preventScroll: true}); window.scrollTo({top: 0}); return; }
+    if (action === 'calc-back') { const from = state.calculatorId; state.calculatorId = null; render(); document.querySelector('[data-action="calc-open"][data-calculator="' + from + '"]')?.focus({preventScroll: true}); return; }
+    if (action === 'calc-copy') {
+      const text = calculatorCopyText();
+      if (!text) return;
+      try {
+        if (!navigator.clipboard) throw new Error('Clipboard API unavailable');
+        await navigator.clipboard.writeText(text); toast('Результат скопирован.');
+      } catch (error) { toast('Не удалось скопировать. Выделите результат и нажмите Ctrl+C.', true); }
+      return;
+    }
     if (action === 'patient-toggle-filters') {
       state.patientFiltersOpen = !state.patientFiltersOpen;
       document.getElementById('patient-filter-panel').hidden = !state.patientFiltersOpen;
@@ -2905,6 +3208,7 @@
   });
   function handleInput(event) {
     const control = event.target;
+    if (control.dataset.calcField) { updateCalculatorField(control, false); return; }
     if (control.id === 'patient-birth-date') {
       const patient = state.view === 'visit' ? patientFor(active()) : selectedPatient();
       if (!requireFreshState()) return;
@@ -3043,7 +3347,10 @@
       event.preventDefault(); selectDiagnosis(diagnosisSuggestions.items[diagnosisSuggestions.selected].code);
     }
   });
-  app.addEventListener('change', (event) => { if (event.target.tagName === 'SELECT') handleInput(event); });
+  app.addEventListener('change', (event) => {
+    if (event.target.dataset.calcField) { updateCalculatorField(event.target, true); return; }
+    if (event.target.tagName === 'SELECT') handleInput(event);
+  });
   document.getElementById('import-file').addEventListener('change', async (event) => {
     const file = event.target.files[0];
     event.target.value = '';
@@ -3194,7 +3501,7 @@
   });
   document.addEventListener('keydown', event => {
     if (event.defaultPrevented || event.isComposing || document.querySelector('dialog[open]')) return;
-    if (event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey && event.code === 'KeyK' && !['start', 'modules'].includes(state.view)) {
+    if (event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey && event.code === 'KeyK' && !['start', ...moduleViews].includes(state.view)) {
       event.preventDefault(); focusPatientSearch(); return;
     }
     if (event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey && event.code === 'KeyS' && ['visit', 'patient'].includes(state.view)) {

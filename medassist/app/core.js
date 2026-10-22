@@ -125,6 +125,116 @@
     return Number(rounded) > 0 && !rounded.includes("e") ? rounded.replace(".", ",") : "";
   }
 
+  // CKD-EPI 2021 by creatinine, without race: Inker LA et al. N Engl J Med 2021;385:1737-1749.
+  // Categories G1-G5 follow KDIGO 2024. Inputs are the strings typed by the doctor; nothing is stored.
+  const CREATININE_UMOL_PER_MG = 88.4;
+  const EGFR_LIMITS = Object.freeze({ age: [18, 120], umol: [20, 3000], mg: [0.2, 34] });
+  const EGFR_CATEGORIES = Object.freeze([
+    [90, "G1", "нормальная или высокая"], [60, "G2", "незначительно снижена"], [45, "G3a", "умеренно снижена"],
+    [30, "G3b", "существенно снижена"], [15, "G4", "резко снижена"], [0, "G5", "почечная недостаточность"]
+  ]);
+
+  function calculateEgfrCkdEpi2021(input) {
+    const values = isObject(input) ? input : {};
+    const text = key => typeof values[key] === "string" ? values[key].trim() : "";
+    const errors = {}, missing = [];
+    const unit = values.unit === "mg" ? "mg" : "umol";
+    const ageText = text("age"), creatinineText = text("creatinine");
+    if (!ageText) missing.push("age");
+    else if (!/^\d{1,3}$/.test(ageText) || Number(ageText) < EGFR_LIMITS.age[0] || Number(ageText) > EGFR_LIMITS.age[1]) {
+      errors.age = "Возраст — целое число лет от 18 до 120: формула предназначена для взрослых.";
+    }
+    if (!["female", "male"].includes(values.sex)) missing.push("sex");
+    const [low, high] = EGFR_LIMITS[unit];
+    if (!creatinineText) missing.push("creatinine");
+    else if (!DECIMAL_PATTERN.test(creatinineText) || !(Number(creatinineText.replace(",", ".")) >= low && Number(creatinineText.replace(",", ".")) <= high)) {
+      errors.creatinine = unit === "mg" ? "Креатинин — число от 0,2 до 34 мг/дл." : "Креатинин — число от 20 до 3000 мкмоль/л.";
+    }
+    if (missing.length || Object.keys(errors).length) return { result: null, errors, missing };
+    const female = values.sex === "female";
+    const kappa = female ? 0.7 : 0.9;
+    const alpha = female ? -0.241 : -0.302;
+    const creatinine = Number(creatinineText.replace(",", "."));
+    const ratio = (unit === "mg" ? creatinine : creatinine / CREATININE_UMOL_PER_MG) / kappa;
+    const exact = 142 * Math.min(ratio, 1) ** alpha * Math.max(ratio, 1) ** -1.2 * 0.9938 ** Number(ageText) * (female ? 1.012 : 1);
+    const value = Math.round(exact);
+    const [, code, label] = EGFR_CATEGORIES.find(([from]) => value >= from);
+    return { result: { value, exact, category: code, categoryLabel: label }, errors, missing };
+  }
+
+  // Cockcroft DW, Gault MH. Nephron 1976;16(1):31-41: CrCl, mL/min = (140 - age) x weight, kg / (72 x Scr, mg/100 mL), 15% less in women.
+  // Actual body weight as in the original; the result is not normalised to body surface area. Age, sex and creatinine are checked as for eGFR.
+  const WEIGHT_LIMITS_KG = Object.freeze([20, 300]);
+
+  function calculateCockcroftGault(input) {
+    const values = isObject(input) ? input : {};
+    const base = calculateEgfrCkdEpi2021(values);
+    const errors = { ...base.errors }, missing = [...base.missing];
+    const weightText = typeof values.weight === "string" ? values.weight.trim() : "";
+    const weight = Number(weightText.replace(",", "."));
+    if (!weightText) missing.push("weight");
+    else if (!DECIMAL_PATTERN.test(weightText) || !(weight >= WEIGHT_LIMITS_KG[0] && weight <= WEIGHT_LIMITS_KG[1])) errors.weight = "Масса тела — число от 20 до 300 кг.";
+    if (missing.length || Object.keys(errors).length) return { result: null, errors, missing };
+    const creatinine = Number(values.creatinine.trim().replace(",", "."));
+    const milligrams = values.unit === "mg" ? creatinine : creatinine / CREATININE_UMOL_PER_MG;
+    const exact = (140 - Number(values.age.trim())) * weight / (72 * milligrams) * (values.sex === "female" ? 0.85 : 1);
+    return { result: { value: Math.round(exact), exact }, errors, missing };
+  }
+
+  // CHA2DS2-VASc: Lip GY et al. Chest 2010;137(2):263-272. CHA2DS2-VA is the same score without sex (ESC 2024 AF guideline,
+  // Van Gelder IC et al. Eur Heart J 2024;45(36):3314-3414): 2 or more - anticoagulation recommended, 1 - should be considered.
+  function scoreChadsVasc(input) {
+    const values = isObject(input) ? input : {};
+    const ageText = typeof values.age === "string" ? values.age.trim() : "";
+    const errors = {}, missing = [];
+    if (!ageText) missing.push("age");
+    else if (!/^\d{1,3}$/.test(ageText) || Number(ageText) < 18 || Number(ageText) > 120) errors.age = "Возраст — целое число лет от 18 до 120.";
+    if (!["female", "male"].includes(values.sex)) missing.push("sex");
+    if (missing.length || Object.keys(errors).length) return { result: null, errors, missing };
+    const age = Number(ageText);
+    const points = {
+      chf: values.chf === true ? 1 : 0, hypertension: values.hypertension === true ? 1 : 0, age75: age >= 75 ? 2 : 0,
+      diabetes: values.diabetes === true ? 1 : 0, stroke: values.stroke === true ? 2 : 0, vascular: values.vascular === true ? 1 : 0,
+      age65: age >= 65 && age < 75 ? 1 : 0
+    };
+    const factors = Object.keys(points).filter(key => points[key] > 0);
+    const va = factors.reduce((sum, key) => sum + points[key], 0);
+    const female = values.sex === "female";
+    return { result: { va, vasc: va + (female ? 1 : 0), factors, female, recommendation: va >= 2 ? "recommended" : va === 1 ? "consider" : "none" }, errors, missing };
+  }
+
+  // HAS-BLED: Pisters R et al. Chest 2010;138(5):1093-1100. One point per item, 0-9; 3 or more marks a high bleeding risk.
+  const HAS_BLED_ITEMS = Object.freeze(["hypertension", "renal", "liver", "stroke", "bleeding", "labileInr", "elderly", "drugs", "alcohol"]);
+
+  function scoreHasBled(input) {
+    const values = isObject(input) ? input : {};
+    const factors = HAS_BLED_ITEMS.filter(key => values[key] === true);
+    return { result: { score: factors.length, factors, high: factors.length >= 3 }, errors: {}, missing: [] };
+  }
+
+  // CRB-65: Lim WS et al. Thorax 2003;58(5):377-382. Risk bands of 30-day mortality as in NICE NG250 (2025).
+  const CRB65_ITEMS = Object.freeze(["confusion", "respiratory", "pressure", "age65"]);
+
+  function scoreCrb65(input) {
+    const values = isObject(input) ? input : {};
+    const factors = CRB65_ITEMS.filter(key => values[key] === true);
+    const score = factors.length;
+    return { result: { score, factors, risk: score === 0 ? "low" : score <= 2 ? "intermediate" : "high" }, errors: {}, missing: [] };
+  }
+
+  // Centor RM et al. Med Decis Making 1981;1(3):239-246, interpreted as in NICE NG84 (2018).
+  // McIsaac WJ et al. CMAJ 1998;158(1):75-83 adds an age modifier: 3-14 years +1, 15-44 years 0, 45 and older -1.
+  const CENTOR_ITEMS = Object.freeze(["exudate", "nodes", "fever", "noCough"]);
+  const MCISAAC_AGE_POINTS = Object.freeze({ child: 1, young: 0, older: -1 });
+
+  function scoreCentor(input) {
+    const values = isObject(input) ? input : {};
+    const factors = CENTOR_ITEMS.filter(key => values[key] === true);
+    const centor = factors.length;
+    const ageGroup = Object.prototype.hasOwnProperty.call(MCISAAC_AGE_POINTS, values.ageGroup) ? values.ageGroup : "";
+    return { result: { centor, mcIsaac: ageGroup ? centor + MCISAAC_AGE_POINTS[ageGroup] : null, ageGroup, factors, likely: centor >= 3 }, errors: {}, missing: ageGroup ? [] : ["ageGroup"] };
+  }
+
   function calculateAge(birthDate, visitDate) {
     if (typeof birthDate !== "string" || typeof visitDate !== "string" || !validDate(birthDate) || !validDate(visitDate) || birthDate > visitDate) return null;
     // В невисокосный год полный год для родившихся 29 февраля наступает 1 марта.
@@ -1672,5 +1782,5 @@
     return validateBundle(parsed);
   }
 
-  return Object.freeze({ validateShortcuts, upsertShortcut, removeShortcut, findShortcutAtCaret, shortcutReplacement, MAX_SHORTCUTS, MAX_SHORTCUT_CODE_LENGTH, MAX_SHORTCUT_TEXT_LENGTH, DEFAULT_RECORD_FORMAT, RECORD_SECTIONS, validateRecordFormat, setPatientNote, MAX_PERSONAL_NOTE_LENGTH, calculateAge, encounterAge, getDiagnoses, formatDiagnoses, upsertDiagnosis, removeDiagnosis, moveDiagnosis, validateDiagnoses, MAX_DIAGNOSES, MAX_DIAGNOSIS_TEXT_LENGTH, MAX_DIAGNOSIS_SUMMARY_LENGTH, DIAGNOSIS_LABELS, createPatient, createEncounter, createRepeatEncounter, createDemoEncounter, upsertInvestigation, removeInvestigation, validateInvestigations, getInvestigationSeries, getInvestigationReports, upsertInvestigationReport, removeInvestigationReport, setEncounterInvestigations, reconcileInvestigationReferences, upsertPrescription, removePrescription, formatPrescription, validatePrescriptions, setReviewStatus, setReturnVisitStatus, linkReturnVisit, getReturnVisits, getPatientBriefing, calculateBmi, calculateSickLeaveDays, calculateSickLeaveTotalDays, getSickLeaveJournal, getEncounterSickLeaveSummary, getEncounterSickLeaveAction, applyEncounterSickLeave, undoEncounterSickLeave, issueSickLeave, extendSickLeave, closeSickLeave, undoSickLeaveAction, createVisitTemplate, applyVisitTemplate, validateTemplates, generateDraft, fingerprint, validatePatient, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_PATIENTS, MAX_PATIENT_LABEL_LENGTH, MAX_SICK_LEAVES, MAX_SICK_LEAVE_EVENTS, MAX_SICK_LEAVE_NUMBER_LENGTH, MAX_TEMPLATES, MAX_TEMPLATE_NAME_LENGTH, MAX_PRESCRIPTIONS, MAX_PRESCRIPTION_FIELD_LENGTH, MAX_PRESCRIPTION_NOTE_LENGTH, MAX_INVESTIGATIONS, MAX_INVESTIGATION_REPORT_FIELDS, INVESTIGATION_FIELD_LIMITS, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
+  return Object.freeze({ validateShortcuts, upsertShortcut, removeShortcut, findShortcutAtCaret, shortcutReplacement, MAX_SHORTCUTS, MAX_SHORTCUT_CODE_LENGTH, MAX_SHORTCUT_TEXT_LENGTH, DEFAULT_RECORD_FORMAT, RECORD_SECTIONS, validateRecordFormat, setPatientNote, MAX_PERSONAL_NOTE_LENGTH, calculateAge, encounterAge, getDiagnoses, formatDiagnoses, upsertDiagnosis, removeDiagnosis, moveDiagnosis, validateDiagnoses, MAX_DIAGNOSES, MAX_DIAGNOSIS_TEXT_LENGTH, MAX_DIAGNOSIS_SUMMARY_LENGTH, DIAGNOSIS_LABELS, createPatient, createEncounter, createRepeatEncounter, createDemoEncounter, upsertInvestigation, removeInvestigation, validateInvestigations, getInvestigationSeries, getInvestigationReports, upsertInvestigationReport, removeInvestigationReport, setEncounterInvestigations, reconcileInvestigationReferences, upsertPrescription, removePrescription, formatPrescription, validatePrescriptions, setReviewStatus, setReturnVisitStatus, linkReturnVisit, getReturnVisits, getPatientBriefing, calculateBmi, calculateEgfrCkdEpi2021, calculateCockcroftGault, scoreChadsVasc, scoreHasBled, scoreCrb65, scoreCentor, calculateSickLeaveDays, calculateSickLeaveTotalDays, getSickLeaveJournal, getEncounterSickLeaveSummary, getEncounterSickLeaveAction, applyEncounterSickLeave, undoEncounterSickLeave, issueSickLeave, extendSickLeave, closeSickLeave, undoSickLeaveAction, createVisitTemplate, applyVisitTemplate, validateTemplates, generateDraft, fingerprint, validatePatient, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_PATIENTS, MAX_PATIENT_LABEL_LENGTH, MAX_SICK_LEAVES, MAX_SICK_LEAVE_EVENTS, MAX_SICK_LEAVE_NUMBER_LENGTH, MAX_TEMPLATES, MAX_TEMPLATE_NAME_LENGTH, MAX_PRESCRIPTIONS, MAX_PRESCRIPTION_FIELD_LENGTH, MAX_PRESCRIPTION_NOTE_LENGTH, MAX_INVESTIGATIONS, MAX_INVESTIGATION_REPORT_FIELDS, INVESTIGATION_FIELD_LIMITS, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
 });

@@ -1,4 +1,12 @@
-# МедАссистент 0.25.0: архитектура
+# МедАссистент 0.26.0: архитектура
+
+## Калькуляторы — 0.26.0
+
+В области «Модули» появилась вторая страница state.view = calculators (меню: «Модули», «Калькуляторы», «Выбор раздела»; moduleViews = modules, calculators). sessionStorage medassist.session.area для обеих страниц хранит modules; перезагрузка открывает «Модули». Каталог calculatorCatalog и рубрики calculatorRubrics в app.js: у готового расчёта есть id, остальные показываются «Готовится» без действия. state.calculatorRubric, state.calculatorId, state.calculatorInputs и state.calculatorTouched живут только в памяти окна: localStorage, резервные копии, схема 4 и обновлятор не меняются.
+
+core.calculateEgfrCkdEpi2021({age, sex, creatinine, unit}) — чистая функция CKD-EPI 2021 по креатинину без расового коэффициента (Inker et al., NEJM 2021;385:1737–1749): 142 × min(Scr/κ,1)^α × max(Scr/κ,1)^−1,200 × 0,9938^возраст × 1,012 для женщин; κ 0,7/0,9, α −0,241/−0,302; мкмоль/л ÷ 88,4. Возраст 18–120 целым числом, креатинин 20–3000 мкмоль/л или 0,2–34 мг/дл, десятичная запятая допустима. Возвращает {result, errors, missing}; result.value округлён до целого, категория KDIGO 2024 G1–G5 по округлённому значению. Ошибки поля показываются после change (выход из поля) или смены единиц; при вводе результат пересчитывается без перерисовки страницы. Тесты: calculators.test.cjs (ручные эталоны, единицы, границы категорий, проверка ввода) и ui-calculators.test.cjs.
+
+Вторая партия (тоже 0.26.0): страница калькулятора общая и строится по описанию calculatorForms[id] в app.js — поля integer/decimal (с выбором единиц), radio и группа флажков checks; compute вызывает функцию core.js, result и copy дают текст результата и строку для записи, reference и sources — шкалу или формулу, толкование, ограничения и источники. Идентификаторы элементов — <id>-<поле>, поэтому у СКФ сохранились egfr-*. Значения создаются при первом открытии калькулятора (calculatorValues) и живут только в памяти окна. Новые чистые функции core.js: calculateCockcroftGault({age, sex, weight, creatinine, unit}) — (140 − возраст) × масса / (72 × Scr, мг/дл), × 0,85 для женщин, масса 20–300 кг, возраст и креатинин проверяются как у СКФ; scoreChadsVasc({age, sex, chf, hypertension, diabetes, stroke, vascular}) → va, vasc, factors, recommendation по CHA₂DS₂-VA (ESC 2024: 2 и более — recommended, 1 — consider); scoreHasBled (9 флажков, high при 3 и более); scoreCrb65 (4 флажка, risk low/intermediate/high по NICE NG250); scoreCentor (4 флажка; ageGroup child/young/older даёт McIsaac +1/0/−1, балл McIsaac без толкования). Флажок учитывается только при значении true.
 
 ## Удаление «Моих сокращений» из интерфейса — 0.25.0
 

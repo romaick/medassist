@@ -271,7 +271,7 @@
         (modulesArea ? navButton('modules', 'Модули', 'grid') + navButton('calculators', 'Калькуляторы', 'calculator') : navButton('home', 'Рабочий стол', 'home') + navButton('patients', 'Пациенты', 'user') +
         (current ? navButton('visit', 'Текущий приём', 'document') : navButton('new', 'Новый пациент', 'plus')) + navButton('followups', 'Повторные приёмы', 'calendar') + navButton('help', 'Помощь и данные', 'help') + navButton('check-updates', 'Проверить обновления', 'download')) +
         navButton('choose-area', 'Выбор раздела', 'back') +
-        '</nav></header><aside class="context-sidebar" aria-label="' + (modulesArea ? 'Сведения о модулях' : 'Пациенты и сведения о разделе') + '">' + (modulesArea ? contextModules() : contextPatients(current)) + '<div class="side-bottom"><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><div class="rail-note">' + (modulesArea ? 'Модули МедАссистента' : 'Поликлинический приём') + '<br><span>Беларусь · деморежим</span><span>Версия 0.31.0</span></div><div class="version">Прототип 0.31.0</div></div></aside><div class="workspace"><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
+        '</nav></header><aside class="context-sidebar" aria-label="' + (modulesArea ? 'Сведения о модулях' : 'Пациенты и сведения о разделе') + '">' + (modulesArea ? contextModules() : contextPatients(current)) + '<div class="side-bottom"><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><div class="rail-note">' + (modulesArea ? 'Модули МедАссистента' : 'Поликлинический приём') + '<br><span>Беларусь · деморежим</span><span>Версия 0.31.1</span></div><div class="version">Прототип 0.31.1</div></div></aside><div class="workspace"><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
         (state.migrated && !modulesArea ? '<div class="migration-notice">Прежние записи доступны со статусом «Черновик». Карточки, данные и ручные тексты сохранены. Исходное сохранение предыдущей версии не изменяется.</div>' : '') +
         ({home: renderHome, patients: renderPatients, followups: renderFollowups, patient: renderPatient, visit: renderVisit, modules: renderModules, calculators: renderCalculators, help: renderHelp}[state.view])() +
         '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span>' + (modulesArea ? '' : '<span class="keyboard-hint"><kbd>Ctrl + K</kbd> поиск · <kbd>Ctrl + S</kbd> сохранить · <kbd>Alt + 1–5</kbd> разделы приёма · <kbd>Alt + ←</kbd> назад</span>') + '</footer></main></div></div>';
@@ -2510,12 +2510,38 @@
     const form = calculatorForms[state.calculatorId];
     if (form) return renderCalculatorPage(state.calculatorId, form);
     const rubric = state.calculatorRubric;
-    const tabs = calculatorRubrics.map(([key, label]) => button('calc-rubric', label, null, (key === rubric ? 'primary active' : 'secondary') + ' compact pager-tab', 'id="calc-rubric-' + key + '" role="tab" data-filter="' + key + '" aria-controls="calculator-list" aria-selected="' + (key === rubric) + '" aria-pressed="' + (key === rubric) + '" tabindex="' + (key === rubric ? '0' : '-1') + '"')).join('');
-    const groups = calculatorRubrics.filter(([key]) => key !== 'all' && (rubric === 'all' || rubric === key)).map(([key, label]) =>
-      '<section class="calculator-group" aria-labelledby="calc-group-' + key + '"><h2 id="calc-group-' + key + '">' + label + '</h2><ul class="calculator-items">' + calculatorCatalog.filter(item => item.rubric === key).map(calculatorItem).join('') + '</ul></section>').join('');
     return '<div class="page-heading"><div><h1>Калькуляторы</h1><p>Расчёты по опубликованным формулам с указанием источника. Введённые значения не сохраняются.</p></div></div>' + calculatorDisclaimer() +
-      '<section class="card calculators-card"><div id="calculator-rubrics" class="workflow-filters pager-tabs" role="tablist" aria-label="Рубрики калькуляторов">' + tabs + '</div>' +
-      '<div id="calculator-list" class="calculator-list" role="tabpanel" aria-labelledby="calc-rubric-' + rubric + '" tabindex="0">' + groups + '</div></section>';
+      '<section class="card calculators-card"><div id="calculator-rubrics" class="workflow-filters pager-tabs" role="tablist" aria-label="Рубрики калькуляторов">' + calculatorRubricTabs() + '</div>' +
+      '<div id="calculator-list" class="calculator-list pager-viewport" role="tabpanel" aria-labelledby="calc-rubric-' + rubric + '" tabindex="0">' + calculatorGroups() + '</div></section>';
+  }
+  function calculatorRubricTabs(rubric = state.calculatorRubric) {
+    return calculatorRubrics.map(([key, label]) => button('calc-rubric', label, null, (key === rubric ? 'primary active' : 'secondary') + ' compact pager-tab', 'id="calc-rubric-' + key + '" role="tab" data-filter="' + key + '" aria-controls="calculator-list" aria-selected="' + (key === rubric) + '" aria-pressed="' + (key === rubric) + '" tabindex="' + (key === rubric ? '0' : '-1') + '"')).join('');
+  }
+  function calculatorGroups(rubric = state.calculatorRubric) {
+    return calculatorRubrics.filter(([key]) => key !== 'all' && (rubric === 'all' || rubric === key)).map(([key, label]) =>
+      '<section class="calculator-group" aria-labelledby="calc-group-' + key + '"><h2 id="calc-group-' + key + '">' + label + '</h2><ul class="calculator-items">' + calculatorCatalog.filter(item => item.rubric === key).map(calculatorItem).join('') + '</ul></section>').join('');
+  }
+  function refreshCalculatorRubrics() {
+    pager.invalidate();
+    document.getElementById('calculator-rubrics').innerHTML = calculatorRubricTabs();
+    const list = document.getElementById('calculator-list');
+    list.innerHTML = calculatorGroups();
+    list.setAttribute('aria-labelledby', 'calc-rubric-' + state.calculatorRubric);
+    bindPageNavigation();
+  }
+  function switchCalculatorRubric(key) {
+    const to = calculatorRubrics.findIndex(([id]) => id === key);
+    if (state.view !== 'calculators' || state.calculatorId || to < 0) return;
+    return pager.transition({
+      from: calculatorRubrics.findIndex(([id]) => id === state.calculatorRubric), to,
+      viewport: document.getElementById('calculator-list'), tabList: document.getElementById('calculator-rubrics'),
+      getViewport: () => document.getElementById('calculator-list'), getTabList: () => document.getElementById('calculator-rubrics'),
+      update: () => {
+        if (state.view !== 'calculators' || state.calculatorId) return;
+        state.calculatorRubric = key; refreshCalculatorRubrics();
+      },
+      focus: () => document.getElementById('calc-rubric-' + key)?.focus({preventScroll: true})
+    });
   }
   function calculatorValues(id) {
     if (!state.calculatorInputs[id]) {
@@ -3278,6 +3304,11 @@
         const next = followupBuckets[followupBuckets.findIndex(([id]) => id === state.followupFilter) + direction];
         if (next) switchFollowupFilter(next[0]);
       });
+    } else if (state.view === 'calculators' && !state.calculatorId) {
+      pager.bindSwipe(document.getElementById('calculator-list'), direction => {
+        const next = calculatorRubrics[calculatorRubrics.findIndex(([id]) => id === state.calculatorRubric) + direction];
+        if (next) switchCalculatorRubric(next[0]);
+      });
     } else if (state.view === 'home') {
       pager.bindSwipe(document.getElementById('visit-list'), direction => {
         const next = recordBuckets[recordBuckets.findIndex(([id]) => id === state.recordFilter) + direction];
@@ -3393,7 +3424,7 @@
       return;
     }
     if (['home', 'patients', 'followups', 'help', 'modules', 'calculators', 'visit'].includes(action)) { navigate(action); return; }
-    if (action === 'calc-rubric') { state.calculatorRubric = target.dataset.filter; render(); document.getElementById('calc-rubric-' + state.calculatorRubric)?.focus({preventScroll: true}); return; }
+    if (action === 'calc-rubric') return switchCalculatorRubric(target.dataset.filter);
     if (action === 'calc-open') { state.calculatorId = target.dataset.calculator; render(); document.getElementById('main').focus({preventScroll: true}); window.scrollTo({top: 0}); return; }
     if (action === 'calc-back') { const from = state.calculatorId; state.calculatorId = null; render(); document.querySelector('[data-action="calc-open"][data-calculator="' + from + '"]')?.focus({preventScroll: true}); return; }
     if (action === 'calc-prefill') {

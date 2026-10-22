@@ -877,3 +877,28 @@ test("narrow screen keeps Back as an icon button inside the top bar", {timeout: 
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await goBackTo(page, "home", "Рабочий стол");
 });
+
+for (const fallback of [false, true]) {
+  test("calculator rubrics animate the catalog in both directions and follow swipes" + (fallback ? " without View Transitions" : ""), {timeout: 18000}, async t => {
+    const page = await openApp(t, {fallback});
+    await click(page, "choose-area");
+    await page.locator('[data-action="enter-modules"]').click();
+    await page.locator('#main-navigation [data-action="calculators"]').click();
+    const rubric = name => page.locator("#calc-rubric-" + name);
+    const chosen = name => page.waitForFunction(name => document.getElementById("calc-rubric-" + name)?.getAttribute("aria-selected") === "true", name);
+    await rubric("all").waitFor();
+    for (const [value, direction] of [["mind", "next"], ["kidney", "previous"]]) {
+      await settle(page);
+      await rubric(value).evaluate(node => node.click());
+      await contentAnimation(page, {fallback, direction, viewport: "#calculator-list"});
+      await chosen(value);
+    }
+    await settle(page);
+    assert.equal(await page.evaluate(() => document.activeElement.id), "calc-rubric-kidney", "focus stays on the chosen rubric");
+    await touchSwipe(page, "#calculator-list", -260);
+    await chosen("heart");
+    await settle(page);
+    assert.equal(await page.locator("#calculator-list .calculator-group h2").first().innerText(), "Сердце и сосуды");
+    assert.equal(await page.locator("#calculator-list").getAttribute("aria-labelledby"), "calc-rubric-heart");
+  });
+}

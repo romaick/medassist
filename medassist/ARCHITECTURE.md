@@ -1,4 +1,8 @@
-# МедАссистент 0.31.0: архитектура
+# МедАссистент 0.31.1: архитектура
+
+## Рубрики калькуляторов: плавное перелистывание — 0.31.1
+
+Рубрики каталога калькуляторов переключаются через общий MedAssistPager, как фильтры записей, явок и рубрик пациентов: switchCalculatorRubric → pager.transition (направление по порядку calculatorRubrics, отмена устаревшего перехода, reduced motion) → refreshCalculatorRubrics обновляет только полосу рубрик и #calculator-list (класс pager-viewport) без полного render. bindPageNavigation добавляет сенсорное перелистывание списка. Разметка вынесена в calculatorRubricTabs/calculatorGroups; состав и порядок каталога прежние.
 
 ## Оформление «Светлая карта» — 0.31.0
 

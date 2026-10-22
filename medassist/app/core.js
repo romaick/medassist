@@ -357,6 +357,33 @@
     return { result: { model: older ? "SCORE2-OP" : "SCORE2", percent, exact, uncalibrated: 100 * uncalibrated, limits, category }, errors, missing };
   }
 
+  // Calculator prefill takes a lab value only from a report field (panel and field ids), never from free-text results.
+  // The latest dated result wins; differing results on that date, a non-numeric result or an unknown unit are reported, not guessed.
+  const LAB_UNIT_ALIASES = Object.freeze({
+    umol: ["мкмоль/л", "umol/l", "µmol/l", "μmol/l"], mg: ["мг/дл", "mg/dl"], mmol: ["ммоль/л", "mmol/l"],
+    unitsPerLitre: ["ед/л", "е/л", "ме/л", "u/l", "iu/l"], perNanolitre: ["109/л", "109/l", "тыс/мкл", "103/мкл", "103/µl", "103/μl"]
+  });
+  const SUPERSCRIPT_DIGITS = { "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9" };
+
+  function labUnitKind(unit) {
+    const text = String(unit || "").toLowerCase().replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]/g, char => SUPERSCRIPT_DIGITS[char]).replace(/[\s×x*^.]/g, "");
+    return Object.keys(LAB_UNIT_ALIASES).find(kind => LAB_UNIT_ALIASES[kind].includes(text)) || "";
+  }
+
+  function findLatestLabResult(investigations, panelId, fieldId, kinds) {
+    const rows = (Array.isArray(investigations) ? investigations : []).filter(item => isObject(item) && item.kind === "lab" && item.panelId === panelId && item.fieldId === fieldId && typeof item.result === "string" && item.result.trim());
+    if (!rows.length) return null;
+    const date = rows.reduce((latest, item) => item.date > latest ? item.date : latest, "");
+    const latest = rows.filter(item => item.date === date);
+    const item = latest[0], text = item.result.trim();
+    const base = { date, reportTitle: item.reportTitle || "" };
+    if (latest.some(row => row.result.trim() !== text || labUnitKind(row.unit) !== labUnitKind(item.unit))) return { ...base, problem: "conflict" };
+    if (!DECIMAL_PATTERN.test(text)) return { ...base, problem: "notNumber", result: text };
+    const unit = labUnitKind(item.unit);
+    if (!kinds.includes(unit)) return { ...base, problem: "unit", unitText: String(item.unit || "").trim() };
+    return { ...base, value: text, unit };
+  }
+
   function calculateAge(birthDate, visitDate) {
     if (typeof birthDate !== "string" || typeof visitDate !== "string" || !validDate(birthDate) || !validDate(visitDate) || birthDate > visitDate) return null;
     // В невисокосный год полный год для родившихся 29 февраля наступает 1 марта.
@@ -1904,5 +1931,5 @@
     return validateBundle(parsed);
   }
 
-  return Object.freeze({ validateShortcuts, upsertShortcut, removeShortcut, findShortcutAtCaret, shortcutReplacement, MAX_SHORTCUTS, MAX_SHORTCUT_CODE_LENGTH, MAX_SHORTCUT_TEXT_LENGTH, DEFAULT_RECORD_FORMAT, RECORD_SECTIONS, validateRecordFormat, setPatientNote, MAX_PERSONAL_NOTE_LENGTH, calculateAge, encounterAge, getDiagnoses, formatDiagnoses, upsertDiagnosis, removeDiagnosis, moveDiagnosis, validateDiagnoses, MAX_DIAGNOSES, MAX_DIAGNOSIS_TEXT_LENGTH, MAX_DIAGNOSIS_SUMMARY_LENGTH, DIAGNOSIS_LABELS, createPatient, createEncounter, createRepeatEncounter, createDemoEncounter, upsertInvestigation, removeInvestigation, validateInvestigations, getInvestigationSeries, getInvestigationReports, upsertInvestigationReport, removeInvestigationReport, setEncounterInvestigations, reconcileInvestigationReferences, upsertPrescription, removePrescription, formatPrescription, validatePrescriptions, setReviewStatus, setReturnVisitStatus, linkReturnVisit, getReturnVisits, getPatientBriefing, calculateBmi, calculateEgfrCkdEpi2021, calculateCockcroftGault, scoreChadsVasc, scoreHasBled, scoreCrb65, scoreCentor, calculateFib4, calculateQtc, scoreFindrisc, scorePhq9, scoreGad7, calculateScore2, calculateSickLeaveDays, calculateSickLeaveTotalDays, getSickLeaveJournal, getEncounterSickLeaveSummary, getEncounterSickLeaveAction, applyEncounterSickLeave, undoEncounterSickLeave, issueSickLeave, extendSickLeave, closeSickLeave, undoSickLeaveAction, createVisitTemplate, applyVisitTemplate, validateTemplates, generateDraft, fingerprint, validatePatient, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_PATIENTS, MAX_PATIENT_LABEL_LENGTH, MAX_SICK_LEAVES, MAX_SICK_LEAVE_EVENTS, MAX_SICK_LEAVE_NUMBER_LENGTH, MAX_TEMPLATES, MAX_TEMPLATE_NAME_LENGTH, MAX_PRESCRIPTIONS, MAX_PRESCRIPTION_FIELD_LENGTH, MAX_PRESCRIPTION_NOTE_LENGTH, MAX_INVESTIGATIONS, MAX_INVESTIGATION_REPORT_FIELDS, INVESTIGATION_FIELD_LIMITS, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
+  return Object.freeze({ validateShortcuts, upsertShortcut, removeShortcut, findShortcutAtCaret, shortcutReplacement, MAX_SHORTCUTS, MAX_SHORTCUT_CODE_LENGTH, MAX_SHORTCUT_TEXT_LENGTH, DEFAULT_RECORD_FORMAT, RECORD_SECTIONS, validateRecordFormat, setPatientNote, MAX_PERSONAL_NOTE_LENGTH, calculateAge, encounterAge, getDiagnoses, formatDiagnoses, upsertDiagnosis, removeDiagnosis, moveDiagnosis, validateDiagnoses, MAX_DIAGNOSES, MAX_DIAGNOSIS_TEXT_LENGTH, MAX_DIAGNOSIS_SUMMARY_LENGTH, DIAGNOSIS_LABELS, createPatient, createEncounter, createRepeatEncounter, createDemoEncounter, upsertInvestigation, removeInvestigation, validateInvestigations, getInvestigationSeries, getInvestigationReports, upsertInvestigationReport, removeInvestigationReport, setEncounterInvestigations, reconcileInvestigationReferences, upsertPrescription, removePrescription, formatPrescription, validatePrescriptions, setReviewStatus, setReturnVisitStatus, linkReturnVisit, getReturnVisits, getPatientBriefing, calculateBmi, calculateEgfrCkdEpi2021, calculateCockcroftGault, scoreChadsVasc, scoreHasBled, scoreCrb65, scoreCentor, calculateFib4, calculateQtc, scoreFindrisc, scorePhq9, scoreGad7, calculateScore2, findLatestLabResult, calculateSickLeaveDays, calculateSickLeaveTotalDays, getSickLeaveJournal, getEncounterSickLeaveSummary, getEncounterSickLeaveAction, applyEncounterSickLeave, undoEncounterSickLeave, issueSickLeave, extendSickLeave, closeSickLeave, undoSickLeaveAction, createVisitTemplate, applyVisitTemplate, validateTemplates, generateDraft, fingerprint, validatePatient, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_PATIENTS, MAX_PATIENT_LABEL_LENGTH, MAX_SICK_LEAVES, MAX_SICK_LEAVE_EVENTS, MAX_SICK_LEAVE_NUMBER_LENGTH, MAX_TEMPLATES, MAX_TEMPLATE_NAME_LENGTH, MAX_PRESCRIPTIONS, MAX_PRESCRIPTION_FIELD_LENGTH, MAX_PRESCRIPTION_NOTE_LENGTH, MAX_INVESTIGATIONS, MAX_INVESTIGATION_REPORT_FIELDS, INVESTIGATION_FIELD_LIMITS, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
 });

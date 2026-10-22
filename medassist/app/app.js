@@ -39,7 +39,7 @@
     patientCategory: 'all', patientFilters: defaultPatientFilters(), patientFiltersOpen: false, pendingNew: null,
     patientEditOpen: false, patientCardDay: '', patientTab: 'history', previousOpen: false, previousId: '', previousForId: '',
     investigationPatientId: '', investigationSeriesKey: '', birthDateInputs: {}, visitDateInputs: {},
-    calculatorRubric: 'all', calculatorId: null, calculatorInputs: {}, calculatorTouched: {}
+    calculatorRubric: 'all', calculatorId: null, calculatorInputs: {}, calculatorTouched: {}, calculatorPatientId: '', calculatorFill: {}
   };
   const icons = {
     home: '<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>',
@@ -219,7 +219,7 @@
         (modulesArea ? navButton('modules', 'Модули', 'grid') + navButton('calculators', 'Калькуляторы', 'calculator') : navButton('home', 'Рабочий стол', 'home') + navButton('patients', 'Пациенты', 'user') +
         (current ? navButton('visit', 'Текущий приём', 'document') : navButton('new', 'Новый пациент', 'plus')) + navButton('followups', 'Повторные приёмы', 'calendar') + navButton('help', 'Помощь и данные', 'help') + navButton('check-updates', 'Проверить обновления', 'download')) +
         navButton('choose-area', 'Выбор раздела', 'back') +
-        '</nav><div class="rail-note">' + (modulesArea ? 'Модули МедАссистента' : 'Поликлинический приём') + '<br><span>Беларусь · деморежим</span><span>Версия 0.28.0</span></div></header><aside class="topbar context-sidebar" aria-label="Дата, время и текущий раздел"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><div class="topbar-left"><span class="context-mode">' + (modulesArea ? 'Модули' : 'Поликлиника') + '</span><strong>' + sectionName + '</strong></div>' + (modulesArea ? '' : '<button type="button" class="search-launch" data-action="search-patients" aria-label="Найти пациента" aria-keyshortcuts="Control+K" title="Найти пациента: Ctrl + K">' + icon('search') + '<span>Найти пациента</span><kbd>Ctrl + K</kbd></button>') + '<div class="side-bottom"><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><div class="version">Прототип 0.28.0</div></div></aside><div class="workspace"><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
+        '</nav><div class="rail-note">' + (modulesArea ? 'Модули МедАссистента' : 'Поликлинический приём') + '<br><span>Беларусь · деморежим</span><span>Версия 0.29.0</span></div></header><aside class="topbar context-sidebar" aria-label="Дата, время и текущий раздел"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><div class="topbar-left"><span class="context-mode">' + (modulesArea ? 'Модули' : 'Поликлиника') + '</span><strong>' + sectionName + '</strong></div>' + (modulesArea ? '' : '<button type="button" class="search-launch" data-action="search-patients" aria-label="Найти пациента" aria-keyshortcuts="Control+K" title="Найти пациента: Ctrl + K">' + icon('search') + '<span>Найти пациента</span><kbd>Ctrl + K</kbd></button>') + '<div class="side-bottom"><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><div class="version">Прототип 0.29.0</div></div></aside><div class="workspace"><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
         (state.migrated && !modulesArea ? '<div class="migration-notice">Прежние записи доступны со статусом «Черновик». Карточки, данные и ручные тексты сохранены. Исходное сохранение предыдущей версии не изменяется.</div>' : '') +
         ({home: renderHome, patients: renderPatients, followups: renderFollowups, patient: renderPatient, visit: renderVisit, modules: renderModules, calculators: renderCalculators, help: renderHelp}[state.view])() +
         '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span>' + (modulesArea ? '' : '<span class="keyboard-hint"><kbd>Ctrl + K</kbd> поиск · <kbd>Ctrl + S</kbd> сохранить · <kbd>Alt + 1–5</kbd> разделы приёма</span>') + '</footer></main></div></div>';
@@ -2484,32 +2484,146 @@
     return '<p class="field-error" id="' + id + '-error"' + (message ? '' : ' hidden') + '>' + escape(message || '') + '</p>';
   }
   const calculatorTextFields = form => form.fields.filter(field => field.type === 'integer' || field.type === 'decimal');
+  // Prefill takes values from the patient card, one appointment (the open one, otherwise the latest) and the latest lab report fields.
+  // Each entry names a field and the data item it comes from; map derives a scale answer from the number and returns null when it cannot.
+  const prefillAge = {key: 'age', label: 'возраст'}, prefillSex = {key: 'sex', label: 'пол'};
+  const prefillCreatinine = {key: 'creatinine', label: 'креатинин'};
+  const calculatorPrefill = {
+    egfr: [prefillAge, prefillSex, prefillCreatinine],
+    cockcroft: [prefillAge, prefillSex, {key: 'weight', label: 'масса тела'}, prefillCreatinine],
+    chads: [prefillAge, prefillSex],
+    hasbled: [{key: 'elderly', label: 'возраст', from: 'age', map: age => age > 65}],
+    score2: [prefillAge, prefillSex, {key: 'sbp', label: 'систолическое АД'}, {key: 'tchol', label: 'общий холестерин'}, {key: 'hdl', label: 'холестерин ЛПВП'}],
+    qtc: [prefillSex],
+    crb65: [{key: 'respiratory', label: 'частота дыхания', from: 'respiratoryRate', map: rate => rate >= 30}, {key: 'pressure', label: 'АД', from: 'lowPressure'}, {key: 'age65', label: 'возраст', from: 'age', map: age => age >= 65}],
+    centor: [{key: 'ageGroup', label: 'возраст', from: 'age', map: age => age >= 3 && age <= 14 ? 'child' : age >= 15 && age <= 44 ? 'young' : age >= 45 ? 'older' : null}],
+    findrisc: [{key: 'age', label: 'возраст', from: 'age', map: age => age < 45 ? 'lt45' : age <= 54 ? '45-54' : age <= 64 ? '55-64' : 'gt64'}, {key: 'bmi', label: 'индекс массы тела', from: 'bmi', map: bmi => bmi < 25 ? 'lt25' : bmi <= 30 ? '25-30' : 'gt30'}],
+    fib4: [prefillAge, {key: 'ast', label: 'АСТ'}, {key: 'alt', label: 'АЛТ'}, {key: 'platelets', label: 'тромбоциты'}]
+  };
+  const capitalize = text => text.charAt(0).toUpperCase() + text.slice(1);
+  function calculatorPatientChoices() {
+    const current = active(), currentPatient = current ? patientFor(current) : undefined;
+    const others = state.patients.filter(patient => patient.id !== currentPatient?.id).sort((a, b) => patientName(a).localeCompare(patientName(b), 'ru'));
+    const choices = (currentPatient ? [{patient: currentPatient, current: true}] : []).concat(others.map(patient => ({patient, current: false})));
+    const ids = choices.map(choice => choice.patient.id);
+    const selected = [state.calculatorPatientId, currentPatient?.id, state.patientId].find(id => id && ids.includes(id)) || '';
+    return {choices, selected};
+  }
+  function calculatorPatientData(patientId) {
+    const current = active();
+    const patient = state.patients.find(item => item.id === patientId) || (current?.patientId === patientId ? patientFor(current) : undefined);
+    if (!patient) return null;
+    const visits = patientHistory(patientId);
+    const visit = current?.patientId === patientId ? current : visits[0];
+    const where = entry => 'из ' + (entry === current ? 'текущего приёма' : 'приёма') + (entry.visitDate ? ' от ' + dateText(entry.visitDate) : ' без даты');
+    const item = (value, label, source) => ({value, number: Number(value.replace(',', '.')), label, source});
+    const data = {patient};
+    const age = core.calculateAge(patient.birthDate || '', localDate());
+    if (age !== null) data.age = item(String(age), 'возраст ' + age + ' ' + yearsWord(age), 'по дате рождения из карточки (' + dateText(patient.birthDate) + ')');
+    else if (visit?.age.trim()) data.age = item(visit.age.trim(), 'возраст ' + visit.age.trim() + (/^\d{1,3}$/.test(visit.age.trim()) ? ' ' + yearsWord(Number(visit.age.trim())) : ''), where(visit));
+    const sexVisit = [visit, ...visits].find(entry => entry && ['female', 'male'].includes(entry.sex));
+    if (sexVisit) data.sex = {value: sexVisit.sex, source: where(sexVisit)};
+    if (visit) {
+      const vitals = visit.vitals, systolic = vitals.systolic.trim(), diastolic = vitals.diastolic.trim();
+      if (systolic) data.sbp = item(systolic, 'САД ' + systolic, where(visit));
+      if (vitals.weight.trim()) data.weight = item(vitals.weight.trim(), 'масса ' + vitals.weight.trim() + ' кг', where(visit));
+      if (vitals.respiratoryRate.trim()) data.respiratoryRate = item(vitals.respiratoryRate.trim(), 'ЧДД ' + vitals.respiratoryRate.trim() + ' в минуту', where(visit));
+      const bmi = core.calculateBmi(vitals.weight, vitals.height);
+      if (bmi) data.bmi = item(bmi, 'ИМТ ' + bmi + ' кг/м² по массе и росту', where(visit));
+      // CRB-65 counts low pressure when systolic is below 90 or diastolic is 60 or less; normal pressure needs both values.
+      const low = [systolic && Number(systolic.replace(',', '.')) < 90, diastolic && Number(diastolic.replace(',', '.')) <= 60];
+      const pressure = 'АД ' + (systolic || '—') + '/' + (diastolic || '—');
+      if (low.some(Boolean) || (systolic && diastolic)) data.lowPressure = {value: low.some(Boolean), source: pressure + ' мм рт. ст. ' + where(visit)};
+    }
+    const lab = (name, panelId, fieldId, kinds) => {
+      const found = core.findLatestLabResult(patient.investigations, panelId, fieldId, kinds);
+      if (!found) return;
+      const source = 'из бланка «' + (found.reportTitle || 'Анализ') + '»' + (found.date ? ' от ' + dateText(found.date) : ' без даты');
+      if (found.problem === 'conflict') data[name] = {problem: 'за ' + (found.date ? dateText(found.date) : 'одну дату') + ' внесены разные результаты'};
+      else if (found.problem === 'notNumber') data[name] = {problem: 'результат «' + found.result + '» не число'};
+      else if (found.problem === 'unit') data[name] = {problem: found.unitText ? 'единицы «' + found.unitText + '» не подходят' : 'не указаны единицы'};
+      else data[name] = {...item(found.value, '', source), unit: found.unit};
+    };
+    lab('creatinine', 'biochemistry', 'creatinine', ['umol', 'mg']);
+    lab('tchol', 'biochemistry', 'cholesterol-total', ['mmol']);
+    lab('hdl', 'biochemistry', 'hdl', ['mmol']);
+    lab('ast', 'biochemistry', 'ast', ['unitsPerLitre']);
+    lab('alt', 'biochemistry', 'alt', ['unitsPerLitre']);
+    lab('platelets', 'cbc', 'platelets', ['perNanolitre']);
+    return data;
+  }
+  function applyCalculatorPrefill(id) {
+    const data = calculatorPatientData(calculatorPatientChoices().selected);
+    if (!data || !calculatorPrefill[id]) return false;
+    delete state.calculatorInputs[id];
+    const values = calculatorValues(id), filled = {}, missing = [];
+    calculatorPrefill[id].forEach(entry => {
+      const found = data[entry.from || entry.key];
+      const value = !found || found.problem ? null : !entry.map ? found.value : Number.isFinite(found.number) ? entry.map(found.number) : null;
+      if (value === null) { missing.push(entry.label + (found?.problem ? ' (' + found.problem + ')' : '')); return; }
+      values[entry.key] = value;
+      if (found.unit && entry.key === 'creatinine') values.unit = found.unit === 'mg' ? 'mg' : 'umol';
+      state.calculatorTouched[id][entry.key] = true;
+      filled[entry.key] = {value, unit: entry.key === 'creatinine' ? values.unit : undefined, label: entry.label, source: capitalize(entry.map ? found.label + ' ' + found.source : found.source)};
+    });
+    state.calculatorFill[id] = {name: patientName(data.patient), filled, missing};
+    return true;
+  }
+  function calculatorOriginText(id, key) {
+    const fill = state.calculatorFill[id]?.filled[key];
+    if (!fill) return '';
+    const values = calculatorValues(id);
+    return values[key] === fill.value && (fill.unit === undefined || values.unit === fill.unit) ? fill.source : 'Изменено вручную';
+  }
+  function calculatorOrigin(id, key, tag = 'p') {
+    const text = calculatorOriginText(id, key);
+    return text ? '<' + tag + ' class="calculator-origin' + (text === 'Изменено вручную' ? ' manual' : '') + '" id="' + id + '-' + key + '-origin">' + escape(text) + '</' + tag + '>' : '';
+  }
+  function refreshCalculatorOrigin(id, key) {
+    const element = document.getElementById(id + '-' + key + '-origin');
+    if (!element) return;
+    element.textContent = calculatorOriginText(id, key);
+    element.classList.toggle('manual', element.textContent === 'Изменено вручную');
+  }
+  function calculatorPrefillHtml(id) {
+    if (!calculatorPrefill[id]) return '';
+    const {choices, selected} = calculatorPatientChoices(), fill = state.calculatorFill[id];
+    const options = choices.length ? (selected ? '' : '<option value="" selected>Выберите пациента</option>') + choices.map(({patient, current}) =>
+      '<option value="' + escape(patient.id) + '"' + (patient.id === selected ? ' selected' : '') + '>' + escape(patientName(patient) + (current ? ' — текущий приём' : '')) + '</option>').join('') : '<option value="">Карточек пациентов нет</option>';
+    const filledLabels = fill ? Object.values(fill.filled).map(item => item.label).filter((label, index, list) => list.indexOf(label) === index) : [];
+    const status = fill ? 'Подставлено для: ' + fill.name + '. ' + (filledLabels.length ? 'Из данных пациента: ' + filledLabels.join(', ') + '.' : 'Подходящих данных не найдено.') +
+      (fill.missing.length ? ' Не найдено: ' + fill.missing.join('; ') + ' — введите вручную.' : '') + ' Проверьте значения.' : '';
+    return '<div class="field calculator-prefill"><label for="' + id + '-patient">Данные пациента</label><div class="calculator-prefill-row"><select id="' + id + '-patient" data-calc-patient' + (choices.length ? '' : ' disabled') + '>' + options + '</select>' +
+      button('calc-prefill', 'Подставить', 'user', 'secondary compact', 'id="' + id + '-prefill"' + (selected ? '' : ' disabled')) + '</div>' +
+      '<p class="hint" id="' + id + '-patient-hint">Возраст — по дате рождения из карточки, иначе из приёма; давление, масса и рост — из текущего приёма, иначе из последнего; анализы — из последних бланков анализов карточки. Подстановка очищает форму; остальные пункты отметьте сами.</p>' +
+      '<p class="calculator-prefill-status" id="' + id + '-prefill-status" role="status">' + escape(status) + '</p></div>';
+  }
   function calculatorField(id, field, current) {
     const values = current.values;
     if (field.type === 'text') return '<p class="calculator-intro">' + field.text + '</p>';
     if (field.type === 'radio') {
       return '<fieldset class="field calculator-choice"><legend>' + field.legend + '</legend><div class="calculator-radios">' + field.options.map(([value, label]) =>
-        '<label class="calculator-radio"><input type="radio" name="' + id + '-' + field.key + '" value="' + value + '" data-calc-field="' + field.key + '"' + (values[field.key] === value ? ' checked' : '') + '> ' + label + '</label>').join('') + '</div></fieldset>';
+        '<label class="calculator-radio"><input type="radio" name="' + id + '-' + field.key + '" value="' + value + '" data-calc-field="' + field.key + '"' + (values[field.key] === value ? ' checked' : '') + '> ' + label + '</label>').join('') + '</div>' + calculatorOrigin(id, field.key) + '</fieldset>';
     }
     if (field.type === 'checks') {
       return '<fieldset class="field calculator-choice"><legend>' + field.legend + '</legend><ul class="calculator-checks">' + field.items.map(item => {
         const itemId = id + '-' + item.key;
         return '<li><label class="calculator-check"><input type="checkbox" id="' + itemId + '" data-calc-field="' + item.key + '"' + (values[item.key] ? ' checked' : '') + (item.hint ? ' aria-describedby="' + itemId + '-hint"' : '') + '>' +
-          '<span class="calculator-check-text"><span>' + item.label + '</span>' + (item.hint ? '<span class="hint" id="' + itemId + '-hint">' + item.hint + '</span>' : '') + '</span><span class="calculator-points" aria-label="' + item.points + ' ' + pointsWord(item.points) + '">+' + item.points + '</span></label></li>';
+          '<span class="calculator-check-text"><span>' + item.label + '</span>' + (item.hint ? '<span class="hint" id="' + itemId + '-hint">' + item.hint + '</span>' : '') + calculatorOrigin(id, item.key, 'span') + '</span><span class="calculator-points" aria-label="' + item.points + ' ' + pointsWord(item.points) + '">+' + item.points + '</span></label></li>';
       }).join('') + '</ul></fieldset>';
     }
     const fieldId = id + '-' + field.key, error = current.errors[field.key];
-    const input = '<input id="' + fieldId + '" data-calc-field="' + field.key + '" type="text" inputmode="' + (field.type === 'integer' ? 'numeric' : 'decimal') + '" maxlength="' + field.maxlength + '" autocomplete="off" value="' + escape(values[field.key]) + '" aria-describedby="' + (field.hint ? fieldId + '-hint ' : '') + fieldId + '-error" aria-invalid="' + Boolean(error) + '">';
+    const input = '<input id="' + fieldId + '" data-calc-field="' + field.key + '" type="text" inputmode="' + (field.type === 'integer' ? 'numeric' : 'decimal') + '" maxlength="' + field.maxlength + '" autocomplete="off" value="' + escape(values[field.key]) + '" aria-describedby="' + (calculatorOriginText(id, field.key) ? fieldId + '-origin ' : '') + (field.hint ? fieldId + '-hint ' : '') + fieldId + '-error" aria-invalid="' + Boolean(error) + '">';
     const control = field.unit ? '<div class="calculator-unit">' + input + '<select id="' + id + '-' + field.unit.key + '" data-calc-field="' + field.unit.key + '" aria-label="' + field.unit.label + '">' +
       field.unit.options.map(([value, label]) => '<option value="' + value + '"' + (values[field.unit.key] === value ? ' selected' : '') + '>' + label + '</option>').join('') + '</select></div>' : input;
-    return '<div class="field"><label for="' + fieldId + '">' + field.label + '</label>' + control + (field.hint ? '<p class="hint" id="' + fieldId + '-hint">' + field.hint + '</p>' : '') + calculatorError(fieldId, error) + '</div>';
+    return '<div class="field"><label for="' + fieldId + '">' + field.label + '</label>' + control + calculatorOrigin(id, field.key) + (field.hint ? '<p class="hint" id="' + fieldId + '-hint">' + field.hint + '</p>' : '') + calculatorError(fieldId, error) + '</div>';
   }
   function renderCalculatorPage(id, form) {
     const item = calculatorCatalog.find(entry => entry.id === id);
     const rubric = calculatorRubrics.find(([key]) => key === item.rubric)[1];
     const current = calculatorState(id);
     return '<div class="page-heading calculator-heading"><div>' + button('calc-back', 'Все калькуляторы', 'back', 'ghost compact') + '<h1>' + escape(item.title) + '</h1><p>' + rubric + ' · ' + form.lead + '</p></div></div>' + calculatorDisclaimer() +
-      '<div class="calculator-layout"><section class="card calculator-form" aria-labelledby="' + id + '-input-title"><h2 id="' + id + '-input-title">Данные</h2>' +
+      '<div class="calculator-layout"><section class="card calculator-form" aria-labelledby="' + id + '-input-title"><h2 id="' + id + '-input-title">Данные</h2>' + calculatorPrefillHtml(id) +
       form.fields.map(field => calculatorField(id, field, current)).join('') + (form.note ? '<p class="hint calculator-note">' + form.note + '</p>' : '') + '</section>' +
       '<section class="card calculator-result" aria-labelledby="' + id + '-result-title"><h2 id="' + id + '-result-title">Результат</h2><div id="' + id + '-result" aria-live="polite">' + calculatorResultHtml(id, current) + '</div>' +
       '<div class="actions">' + button('calc-copy', 'Скопировать результат', 'copy', 'secondary compact', 'id="' + id + '-copy"' + (current.result ? '' : ' disabled')) + '</div></section></div>' +
@@ -2526,6 +2640,7 @@
     if (committed || control.tagName === 'SELECT') state.calculatorTouched[id][key] = true;
     const owner = form.fields.find(field => field.unit && field.unit.key === key);
     if (owner && values[owner.key].trim()) state.calculatorTouched[id][owner.key] = true;
+    refreshCalculatorOrigin(id, owner ? owner.key : key);
     refreshCalculator(id);
   }
   function refreshCalculator(id) {
@@ -3212,6 +3327,12 @@
     if (action === 'calc-rubric') { state.calculatorRubric = target.dataset.filter; render(); document.getElementById('calc-rubric-' + state.calculatorRubric)?.focus({preventScroll: true}); return; }
     if (action === 'calc-open') { state.calculatorId = target.dataset.calculator; render(); document.getElementById('main').focus({preventScroll: true}); window.scrollTo({top: 0}); return; }
     if (action === 'calc-back') { const from = state.calculatorId; state.calculatorId = null; render(); document.querySelector('[data-action="calc-open"][data-calculator="' + from + '"]')?.focus({preventScroll: true}); return; }
+    if (action === 'calc-prefill') {
+      const id = state.calculatorId;
+      if (!applyCalculatorPrefill(id)) { toast('Выберите пациента.', true); return; }
+      render(); document.getElementById(id + '-prefill')?.focus({preventScroll: true});
+      toast('Данные пациента подставлены. Проверьте значения.'); return;
+    }
     if (action === 'calc-copy') {
       const text = calculatorCopyText();
       if (!text) return;
@@ -3516,6 +3637,11 @@
   });
   app.addEventListener('change', (event) => {
     if (event.target.dataset.calcField) { updateCalculatorField(event.target, true); return; }
+    if (event.target.hasAttribute('data-calc-patient')) {
+      state.calculatorPatientId = event.target.value;
+      document.getElementById(state.calculatorId + '-prefill').disabled = !event.target.value;
+      return;
+    }
     if (event.target.tagName === 'SELECT') handleInput(event);
   });
   document.getElementById('import-file').addEventListener('change', async (event) => {

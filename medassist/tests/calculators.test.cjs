@@ -272,3 +272,19 @@ test("SCORE2-OP reproduces the supplement's worked example and uses the very hig
   const low = score2({age: "72", sex: "female", smoking: "no", sbp: "125", tchol: "5", hdl: "1.8"}).result;
   assert.deepEqual([low.percent, low.category], [25.7, "veryHigh"]);
 });
+
+test("calculator prefill takes the latest report value and reports conflicts, non-numbers and unknown units", () => {
+  const row = (fieldId, result, unit, date, panelId = "biochemistry") => ({id: fieldId + date + result, kind: "lab", panelId, fieldId, result, unit, date, reportTitle: "Биохимический анализ крови"});
+  const rows = [row("creatinine", "98", "мкмоль/л", "2032-03-01"), row("creatinine", "1,1", "мг/дл", "2032-04-18"), row("platelets", "250", "10⁹/л", "2032-04-18", "cbc"),
+    row("hdl", "1,2", "ммоль/л", "2032-04-18"), row("hdl", "1,4", "ммоль/л", "2032-04-18"), row("alt", "<5", "Ед/л", "2032-04-18"), row("ast", "30", "мккат/л", "2032-04-18"),
+    {kind: "lab", name: "Креатинин", result: "70", unit: "мкмоль/л", date: "2032-05-01"}];
+  assert.deepEqual(core.findLatestLabResult(rows, "biochemistry", "creatinine", ["umol", "mg"]), {date: "2032-04-18", reportTitle: "Биохимический анализ крови", value: "1,1", unit: "mg"}, "the latest report wins; free-text results are ignored");
+  assert.equal(core.findLatestLabResult(rows, "cbc", "platelets", ["perNanolitre"]).unit, "perNanolitre");
+  for (const unit of ["× 10^9/л", "10*9/л", "тыс/мкл", "10³/мкл"]) assert.equal(core.findLatestLabResult([row("platelets", "250", unit, "2032-04-18", "cbc")], "cbc", "platelets", ["perNanolitre"]).unit, "perNanolitre", unit);
+  assert.equal(core.findLatestLabResult(rows, "biochemistry", "hdl", ["mmol"]).problem, "conflict");
+  assert.deepEqual(core.findLatestLabResult(rows, "biochemistry", "alt", ["unitsPerLitre"]), {date: "2032-04-18", reportTitle: "Биохимический анализ крови", problem: "notNumber", result: "<5"});
+  assert.deepEqual(core.findLatestLabResult(rows, "biochemistry", "ast", ["unitsPerLitre"]), {date: "2032-04-18", reportTitle: "Биохимический анализ крови", problem: "unit", unitText: "мккат/л"});
+  assert.equal(core.findLatestLabResult(rows, "biochemistry", "creatinine", ["umol"]).problem, "unit", "milligrams are refused where only micromoles fit");
+  assert.equal(core.findLatestLabResult(rows, "biochemistry", "cholesterol-total", ["mmol"]), null);
+  assert.equal(core.findLatestLabResult(undefined, "biochemistry", "hdl", ["mmol"]), null);
+});

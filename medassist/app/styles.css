@@ -762,6 +762,13 @@ button.calculator-item:focus-visible { outline: 2px solid var(--green); outline-
 .calculator-check-text .hint { margin: 0; font-size: 13px; }
 .calculator-points { font-weight: 600; color: var(--green-dark); font-variant-numeric: tabular-nums; }
 .calculator-note { margin: 14px 0 0; }
+.calculator-prefill { margin: 0; padding: 12px 14px; border-radius: 8px; background: var(--pale); }
+.calculator-prefill-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.calculator-prefill .hint { margin: 6px 0 0; }
+.calculator-prefill-status { margin: 6px 0 0; font-size: 13px; line-height: 1.5; }
+.calculator-prefill-status:empty { display: none; }
+.calculator-origin { display: block; margin: 4px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--green-dark); }
+.calculator-origin.manual { color: var(--muted); }
 .calculator-verdict { margin: 0 0 10px; line-height: 1.6; }
 .calculator-intro { margin: 0; font-weight: 600; line-height: 1.5; }
 .calculator-alert { margin: 0 0 10px; padding: 10px 12px; border: 1px solid #efc6c2; border-radius: 8px; background: #fbeceb; color: #7a2e27; line-height: 1.55; }

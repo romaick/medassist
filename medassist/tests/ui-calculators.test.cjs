@@ -470,3 +470,125 @@ test("SCORE2 and SCORE2-OP reproduce the published examples, explain their limit
   await page.setViewportSize({width: 390, height: 844});
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), 0);
 });
+
+// Prefill: two fictional patients, one with a birth date, an open appointment and lab reports, one with only an older appointment.
+const prefillNow = {now};
+function prefillBundle() {
+  let anna = core.createPatient({id: "prefill-anna", label: "Тестова Анна Вымышленная", now});
+  anna = {...anna, birthDate: "1970-03-15"};
+  anna = core.upsertInvestigationReport(anna, {panelId: "biochemistry", title: "Биохимический анализ крови", kind: "lab", date: "2032-04-18", rows: [
+    {fieldId: "creatinine", name: "Креатинин крови", result: "80", unit: "мкмоль/л", reference: "", note: ""},
+    {fieldId: "cholesterol-total", name: "Холестерин общий крови", result: "6,1", unit: "ммоль/л", reference: "", note: ""},
+    {fieldId: "hdl", name: "Холестерин ЛПВП крови", result: "1,3", unit: "ммоль/л", reference: "", note: ""},
+    {fieldId: "alt", name: "Аланинаминотрансфераза крови (АЛТ)", result: "40", unit: "Ед/л", reference: "", note: ""},
+    {fieldId: "ast", name: "Аспартатаминотрансфераза крови (АСТ)", result: "35", unit: "Ед/л", reference: "", note: ""}]}, prefillNow);
+  anna = core.upsertInvestigationReport(anna, {panelId: "cbc", title: "Общий анализ крови", kind: "lab", date: "2032-04-18", rows: [
+    {fieldId: "platelets", name: "Тромбоциты крови (PLT)", result: "180", unit: "10⁹/л", reference: "", note: ""}]}, prefillNow);
+  const annaVisit = core.createEncounter({id: "prefill-anna-visit", patientId: anna.id, now});
+  annaVisit.sex = "female";
+  Object.assign(annaVisit.vitals, {systolic: "150", diastolic: "95", respiratoryRate: "18", weight: "70", height: "165"});
+  const boris = core.createPatient({id: "prefill-boris", label: "Примеров Борис Вымышленный", now});
+  const borisVisit = core.createEncounter({id: "prefill-boris-visit", patientId: boris.id, now});
+  Object.assign(borisVisit, {visitDate: "2032-04-10", age: "72", sex: "male"});
+  Object.assign(borisVisit.vitals, {systolic: "85", diastolic: "55", respiratoryRate: "32", weight: "90", height: "180"});
+  return core.serializeBundle([annaVisit, borisVisit], [anna, boris]);
+}
+const origin = (page, id, key) => page.locator("#" + id + "-" + key + "-origin").innerText();
+async function prefill(page, id, patientId) {
+  if (patientId) await page.locator("#" + id + "-patient").selectOption(patientId);
+  await page.locator("#" + id + "-prefill").click();
+  await page.locator("#" + id + "-prefill-status").filter({hasText: "Подставлено"}).waitFor();
+}
+
+test("calculators take age, sex, pressure and lab results from the patient's data and show where each value came from", {timeout: 40000}, async t => {
+  const page = await openApp(t);
+  await page.evaluate(({key, value}) => localStorage.setItem(key, value), {key, value: prefillBundle()});
+  await page.reload();
+  await page.locator('#main-navigation [data-action="choose-area"]').click();
+  await page.locator('[data-action="enter-polyclinic"]').click();
+  await page.locator('#main-navigation [data-action="patients"]').click();
+  await page.locator('.patient-row[data-patient-id="prefill-anna"] [data-action="patient"]').click();
+  await page.locator('#patient-history [data-action="open"][data-id="prefill-anna-visit"]').click();
+  await page.locator('#main-navigation [data-action="visit"]').waitFor();
+  await page.locator('#main-navigation [data-action="choose-area"]').click();
+  await page.locator('[data-action="enter-modules"]').click();
+  await openCalculator(page, "score2");
+  const before = await storageSnapshot(page);
+
+  assert.deepEqual(await page.locator("#score2-patient option").allInnerTexts(), ["Тестова Анна Вымышленная — текущий приём", "Примеров Борис Вымышленный"], "the open appointment comes first");
+  assert.equal(await page.locator("#score2-patient").inputValue(), "prefill-anna");
+  assert.equal(await page.locator("#score2-age").inputValue(), "", "nothing is filled until the doctor asks");
+  await prefill(page, "score2");
+  assert.deepEqual(await Promise.all(["age", "sbp", "tchol", "hdl"].map(key => page.locator("#score2-" + key).inputValue())), ["62", "150", "6,1", "1,3"]);
+  assert.equal(await page.locator('input[name="score2-sex"]:checked').getAttribute("value"), "female");
+  assert.equal(await page.locator('input[name="score2-smoking"]:checked').count(), 0, "smoking is not recorded in the card and stays for the doctor");
+  assert.equal(await origin(page, "score2", "age"), "По дате рождения из карточки (15.03.1970)");
+  assert.equal(await origin(page, "score2", "sex"), "Из текущего приёма от 19.04.2032");
+  assert.equal(await origin(page, "score2", "sbp"), "Из текущего приёма от 19.04.2032");
+  assert.equal(await origin(page, "score2", "tchol"), "Из бланка «Биохимический анализ крови» от 18.04.2032");
+  assert.match(await page.locator("#score2-age").getAttribute("aria-describedby"), /score2-age-origin/);
+  assert.equal(await page.locator("#score2-prefill-status").innerText(), "Подставлено для: Тестова Анна Вымышленная. Из данных пациента: возраст, пол, систолическое АД, общий холестерин, холестерин ЛПВП. Проверьте значения.");
+  await page.locator('input[name="score2-smoking"][value="no"]').check();
+  const expected = core.calculateScore2({age: "62", sex: "female", smoking: "no", sbp: "150", tchol: "6,1", hdl: "1,3"}).result;
+  assert.match(await resultOf(page, "score2"), new RegExp(expected.percent.toFixed(1).replace(".", ",") + " % за 10 лет по SCORE2"));
+
+  await page.locator("#score2-sbp").fill("140");
+  assert.equal(await origin(page, "score2", "sbp"), "Изменено вручную");
+  assert.equal(await page.locator("#score2-sbp-origin").getAttribute("class"), "calculator-origin manual");
+  await page.locator("#score2-sbp").fill("150");
+  assert.equal(await origin(page, "score2", "sbp"), "Из текущего приёма от 19.04.2032", "the source returns when the filled value is restored");
+
+  await prefill(page, "score2", "prefill-boris");
+  assert.deepEqual(await Promise.all(["age", "sbp", "tchol", "hdl"].map(key => page.locator("#score2-" + key).inputValue())), ["72", "85", "", ""], "another patient's values never stay in the form");
+  assert.equal(await page.locator('input[name="score2-smoking"]:checked').count(), 0, "prefill clears answers given for the previous patient");
+  assert.equal(await origin(page, "score2", "age"), "Из приёма от 10.04.2032");
+  assert.equal(await page.locator("#score2-tchol-origin").count(), 0);
+  assert.match(await page.locator("#score2-prefill-status").innerText(), /Не найдено: общий холестерин; холестерин ЛПВП — введите вручную\./);
+
+  await page.locator('[data-action="calc-back"]').click();
+  await openCalculator(page, "crb65");
+  assert.equal(await page.locator("#crb65-patient").inputValue(), "prefill-boris", "the chosen patient stays for the next calculator in this window");
+  await prefill(page, "crb65");
+  assert.deepEqual(await Promise.all(["confusion", "respiratory", "pressure", "age65"].map(key => page.locator("#crb65-" + key).isChecked())), [false, true, true, true]);
+  assert.equal(await origin(page, "crb65", "respiratory"), "ЧДД 32 в минуту из приёма от 10.04.2032");
+  assert.equal(await origin(page, "crb65", "pressure"), "АД 85/55 мм рт. ст. из приёма от 10.04.2032");
+  assert.equal(await origin(page, "crb65", "age65"), "Возраст 72 года из приёма от 10.04.2032");
+  assert.equal(await page.locator("#crb65-confusion-origin").count(), 0, "confusion is never guessed");
+
+  await page.locator('[data-action="calc-back"]').click();
+  await openCalculator(page, "fib4");
+  await prefill(page, "fib4", "prefill-anna");
+  assert.deepEqual(await Promise.all(["age", "ast", "alt", "platelets"].map(key => page.locator("#fib4-" + key).inputValue())), ["62", "35", "40", "180"]);
+  assert.equal(await origin(page, "fib4", "platelets"), "Из бланка «Общий анализ крови» от 18.04.2032");
+  assert.match(await resultOf(page, "fib4"), new RegExp(core.calculateFib4({age: "62", ast: "35", alt: "40", platelets: "180"}).result.value.toFixed(2).replace(".", ",")));
+
+  await page.locator('[data-action="calc-back"]').click();
+  await openCalculator(page, "egfr");
+  await prefill(page, "egfr");
+  assert.equal(await page.locator("#egfr-creatinine").inputValue(), "80");
+  assert.equal(await page.locator("#egfr-unit").inputValue(), "umol");
+  assert.match(await resultOf(page, "egfr"), new RegExp("^" + core.calculateEgfrCkdEpi2021({age: "62", sex: "female", creatinine: "80", unit: "umol"}).result.value + " "));
+  await page.locator("#egfr-unit").selectOption("mg");
+  assert.equal(await origin(page, "egfr", "creatinine"), "Изменено вручную", "changing the unit also marks the value as edited");
+
+  await page.locator('[data-action="calc-back"]').click();
+  await openCalculator(page, "findrisc");
+  await prefill(page, "findrisc");
+  assert.equal(await page.locator('input[name="findrisc-age"]:checked').getAttribute("value"), "55-64");
+  assert.equal(await page.locator('input[name="findrisc-bmi"]:checked').getAttribute("value"), "25-30");
+  assert.equal(await origin(page, "findrisc", "bmi"), "ИМТ 25,7 кг/м² по массе и росту из текущего приёма от 19.04.2032");
+
+  await page.locator('[data-action="calc-back"]').click();
+  await openCalculator(page, "phq9");
+  assert.equal(await page.locator("#phq9-patient").count(), 0, "questionnaires have nothing to take from the card");
+  assert.equal(await storageSnapshot(page), before, "prefill writes nothing to localStorage or sessionStorage");
+});
+
+test("without patient cards the prefill choice is disabled", {timeout: 25000}, async t => {
+  const page = await openApp(t);
+  await openCalculator(page, "egfr");
+  assert.deepEqual(await page.locator("#egfr-patient option").allInnerTexts(), ["Карточек пациентов нет"]);
+  assert.equal(await page.locator("#egfr-patient").isDisabled(), true);
+  assert.equal(await page.locator("#egfr-prefill").isDisabled(), true);
+  assert.equal(await page.locator("#egfr-prefill-status").isVisible(), false);
+});

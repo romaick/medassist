@@ -593,10 +593,11 @@ test("without patient cards the prefill choice is disabled", {timeout: 25000}, a
   assert.equal(await page.locator("#egfr-prefill-status").isVisible(), false);
 });
 
-test("Нормы анализов show both laboratories for every form indicator, mark differences, search all forms and never write data", {timeout: 30000}, async t => {
-  const norms = require(path.join(appRoot, "../research/lab-reference-ranges.json"));
-  const catalog = require(path.join(appRoot, "../research/investigation-catalog.json"));
+test("Нормы анализов show every form indicator as a sheet with laboratory ranges, marked differences, international guidance, search across forms and no data writes", {timeout: 30000}, async t => {
   const page = await openApp(t);
+  // The shipped data come from the page itself, so the scenario also checks an installed copy without research files.
+  const {norms, catalog} = await page.evaluate(() => ({norms: window.MedAssistLabNorms, catalog: window.MedAssistInvestigationCatalog}));
+  assert.equal(norms.panels.reduce((sum, panel) => sum + panel.rows.length, 0), catalog.panels.filter(panel => panel.kind === "lab").reduce((sum, panel) => sum + panel.fields.length, 0));
   const before = await storageSnapshot(page);
   await page.locator(".module-card").filter({hasText: "Анализы и исследования"}).locator('[data-action="norms"]').click();
   await page.locator("#norms-list table").waitFor();
@@ -605,33 +606,46 @@ test("Нормы анализов show both laboratories for every form indicato
   assert.equal(await page.locator('#main-navigation [data-action="norms"]').getAttribute("aria-current"), "page");
   assert.match(await page.locator(".norms-notice").innerText(), /Сверяйте результат с интервалом на бланке своей лаборатории/);
   assert.deepEqual(await page.locator("#norms-tabs [role=tab]").allInnerTexts(), ["ОАК", "Биохимия", "ОАМ", "HbA1c", "Коагулограмма", "Щитовидная железа"]);
-  const rows = page.locator("#norms-list tbody tr");
+  const rows = page.locator("#norms-list tr.norms-row");
+  const flat = text => text.replace(/[\s.;]+/g, "");
   for (const panel of norms.panels) {
     const tab = page.locator("#norms-tab-" + panel.panelId);
     await tab.click();
     await page.waitForFunction(id => document.getElementById("norms-tab-" + id)?.getAttribute("aria-selected") === "true" && document.querySelector("#norms-list h2")?.id === "norms-panel-" + id, panel.panelId);
     const fields = catalog.panels.find(item => item.id === panel.panelId).fields;
-    assert.deepEqual(await rows.evaluateAll(nodes => nodes.map(node => node.dataset.norm)), fields.map(field => field.id), panel.panelId + " lists every form indicator");
+    assert.deepEqual((await rows.evaluateAll(nodes => nodes.map(node => node.dataset.norm))).sort(), fields.map(field => field.id).sort(), panel.panelId + " lists every form indicator once");
+    if (fields.length > 3) assert.ok(await page.locator("#norms-list tr.norms-section").count() > 1, panel.panelId + " is split into sections");
+    const helixColumn = panel.rows.every(row => !row.lode) && panel.rows.some(row => row.helix);
+    assert.equal((await page.locator("#norms-list thead th").nth(3).innerText()).startsWith(helixColumn ? "Хеликс (Россия)" : "ЛОДЭ"), true, panel.panelId + " second laboratory column");
     assert.equal(await page.locator("#norms-list tr.differs").count(), panel.rows.filter(row => row.differs).length);
     assert.equal(await page.locator("#norms-list .norms-differs").count(), panel.rows.filter(row => row.differs).length, "each difference is marked in words");
     for (const row of panel.rows) {
-      const cells = await page.locator('#norms-list tr[data-norm="' + row.fieldId + '"] td').allInnerTexts();
-      if (row.invitro) assert.ok(cells[0].includes(row.invitro.value), panel.panelId + "/" + row.fieldId + " INVITRO"); else assert.match(cells[0], /Нет на сайте лаборатории/);
-      if (row.lode) assert.ok(cells[1].includes(row.lode.value), panel.panelId + "/" + row.fieldId + " LODE");
-      else if (row.helix) { assert.match(cells[1], /Не публикует\.\s+Для сравнения, Хеликс \(Россия\)/); assert.ok(cells[1].includes(row.helix.value)); }
-      else assert.match(cells[1], /Нет на сайте лаборатории/);
+      // Each age or sex group is its own line on the sheet, so compare the text without line breaks and sentence punctuation.
+      const [unit, invitro, second] = await page.locator('#norms-list tr[data-norm="' + row.fieldId + '"] td').allInnerTexts();
+      assert.equal(unit, fields.find(field => field.id === row.fieldId).unit || "—", panel.panelId + "/" + row.fieldId + " unit");
+      if (row.invitro) assert.ok(flat(invitro).includes(flat(row.invitro.value)), panel.panelId + "/" + row.fieldId + " INVITRO"); else assert.match(invitro, /Нет на сайте лаборатории/);
+      if (row.lode) assert.ok(flat(second).includes(flat(row.lode.value)), panel.panelId + "/" + row.fieldId + " LODE");
+      else if (row.helix) { if (!helixColumn) assert.match(second, /Не публикует\.\s+Для сравнения, Хеликс \(Россия\)/); assert.ok(flat(second).includes(flat(row.helix.value)), panel.panelId + "/" + row.fieldId + " Helix"); }
+      else assert.match(second, /Нет на сайте лаборатории/);
+      const guidance = page.locator('#norms-list tr[data-norm="' + row.fieldId + '"] + tr.norms-guidance');
+      assert.equal(await guidance.count(), (row.international || []).length ? 1 : 0, panel.panelId + "/" + row.fieldId + " guidance row");
+      for (const item of row.international || []) {
+        const text = await guidance.innerText();
+        assert.ok(text.includes(item.org + " " + item.year) && text.includes(item.text), panel.panelId + "/" + row.fieldId + " " + item.org);
+        assert.equal(await guidance.locator('a[href="' + item.url + '"][target="_blank"][rel="noopener noreferrer"]').count() > 0, true);
+      }
     }
     const links = page.locator("#norms-list .norms-sources a");
     assert.ok(await links.count() > 0);
     assert.deepEqual([...new Set(await links.evaluateAll(nodes => nodes.map(node => node.target + " " + node.rel)))], ["_blank noopener noreferrer"]);
   }
   await page.locator("#norms-search").fill("креатинин");
-  await page.waitForFunction(() => document.querySelectorAll("#norms-list tbody tr").length === 1);
+  await page.waitForFunction(() => document.querySelectorAll("#norms-list tr.norms-row").length === 1);
   assert.equal(await rows.first().getAttribute("data-norm"), "creatinine");
   assert.match(await page.locator(".norms-found").innerText(), /Найдено во всех бланках: 1/);
   assert.equal(await page.locator('#norms-tabs [aria-selected="true"]').count(), 0, "search spans every form");
   await page.locator("#norms-search").fill("ттг");
-  await page.waitForFunction(() => document.querySelector("#norms-list tbody tr")?.dataset.norm === "tsh");
+  await page.waitForFunction(() => document.querySelector("#norms-list tr.norms-row")?.dataset.norm === "tsh");
   await page.locator("#norms-search").fill("несуществующий показатель");
   await page.locator('[data-action="norms-clear"]').click();
   assert.equal(await page.locator("#norms-search").inputValue(), "");

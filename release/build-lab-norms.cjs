@@ -4,6 +4,7 @@ const path = require("node:path");
 const start = "/* Generated laboratory reference ranges. Rebuild with node release/build-lab-norms.cjs. */";
 const end = "/* End laboratory reference ranges. */";
 const hosts = {invitro: "https://www.invitro.by/", lode: "https://www.lode.by/", helix: "https://helix.ru/"};
+const kinds = ["порог диагноза", "цель лечения", "референсный предел", "классификация"];
 
 function build({
   normsPath = path.resolve(__dirname, "../medassist/research/lab-reference-ranges.json"),
@@ -31,6 +32,11 @@ function build({
           throw new Error("Invalid " + id + " value: " + panel.panelId + "/" + row.fieldId);
       }
       if (row.helix && row.lode) throw new Error("Helix is shown only where LODE publishes nothing: " + row.fieldId);
+      for (const item of row.international || []) {
+        if (!item || !item.org || !Number.isInteger(item.year) || item.year < 1990 || item.year > 2100 || !kinds.includes(item.kind) || typeof item.text !== "string" || !item.text.trim() || item.text.length > 300 ||
+          typeof item.title !== "string" || !item.title.trim() || !/^https:\/\//.test(item.url || "") || item.verified !== true)
+          throw new Error("Invalid international guidance: " + panel.panelId + "/" + row.fieldId);
+      }
       if (typeof row.differs !== "boolean" || typeof row.note !== "string" || row.note.length > 400) throw new Error("Invalid row: " + row.fieldId);
       rows += 1;
     }

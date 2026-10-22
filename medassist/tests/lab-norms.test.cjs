@@ -63,3 +63,36 @@ test("modules.js carries exactly the built reference ranges and the build is rep
     fs.rmSync(dir, {recursive: true, force: true});
   }
 });
+
+test("international guidance is shown only when verified, dated, typed and linked to the document", () => {
+  const items = norms.panels.flatMap(panel => panel.rows.flatMap(row => (row.international || []).map(item => ({panelId: panel.panelId, fieldId: row.fieldId, ...item}))));
+  for (const item of items) {
+    assert.equal(item.verified, true, item.fieldId + " " + item.org);
+    assert.ok(item.url.startsWith("https://") && item.title.trim() && item.text.length <= 300, item.fieldId + " " + item.org);
+    assert.ok(["порог диагноза", "цель лечения", "референсный предел", "классификация"].includes(item.kind));
+  }
+  const guidance = (fieldId, org) => items.filter(item => item.fieldId === fieldId && item.org === org).map(item => item.text).join(" ");
+  assert.match(guidance("hba1c", "ADA"), /≥6,5%.*5,7–6,4%/, "ADA diabetes and prediabetes thresholds");
+  assert.match(guidance("hemoglobin", "ВОЗ"), /<120 г\/л.*<130 г\/л/, "WHO 2024 anaemia cutoffs");
+  assert.ok(items.filter(item => item.fieldId === "inr").every(item => item.kind === "цель лечения" && item.text.includes("не норма")), "INR targets are never shown as a normal range");
+  assert.ok(items.length >= 50 && !items.some(item => /ERC|ISTH|AACE/.test(item.org)), "unverified sources stay out");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "medassist-norms-"));
+  try {
+    const copy = path.join(dir, "modules.js"), brokenPath = path.join(dir, "norms.json");
+    fs.writeFileSync(copy, fs.readFileSync(modulePath, "utf8"));
+    const good = {org: "ADA", year: 2026, kind: "порог диагноза", text: "Проверочная запись", title: "Standards of Care", url: "https://diabetesjournals.org/care", verified: true};
+    for (const change of [{verified: false}, {url: "http://example.com/"}, {kind: "мнение"}, {year: 26}, {title: ""}, {text: "x".repeat(301)}]) {
+      const broken = structuredClone(norms);
+      broken.panels[0].rows[0].international = [{...good, ...change}];
+      fs.writeFileSync(brokenPath, JSON.stringify(broken));
+      assert.throws(() => build({normsPath: brokenPath, modulePath: copy}), /Invalid international guidance/, JSON.stringify(change));
+    }
+    const fine = structuredClone(norms);
+    fine.panels[0].rows[0].international = [good];
+    fs.writeFileSync(brokenPath, JSON.stringify(fine));
+    build({normsPath: brokenPath, modulePath: copy});
+    assert.ok(fs.readFileSync(copy, "utf8").includes("Проверочная запись"));
+  } finally {
+    fs.rmSync(dir, {recursive: true, force: true});
+  }
+});

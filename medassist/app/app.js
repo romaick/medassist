@@ -271,7 +271,7 @@
         (modulesArea ? navButton('modules', 'Модули', 'grid') + navButton('calculators', 'Калькуляторы', 'calculator') + navButton('norms', 'Нормы анализов', 'flask') : navButton('home', 'Рабочий стол', 'home') + navButton('patients', 'Пациенты', 'user') +
         (current ? navButton('visit', 'Текущий приём', 'document') : navButton('new', 'Новый пациент', 'plus')) + navButton('followups', 'Повторные приёмы', 'calendar') + navButton('help', 'Помощь и данные', 'help') + navButton('check-updates', 'Проверить обновления', 'download')) +
         navButton('choose-area', 'Выбор раздела', 'back') +
-        '</nav></header><aside class="context-sidebar" aria-label="' + (modulesArea ? 'Сведения о модулях' : 'Пациенты и сведения о разделе') + '">' + (modulesArea ? contextModules() : contextPatients(current)) + '<div class="side-bottom"><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><div class="rail-note">' + (modulesArea ? 'Модули МедАссистента' : 'Поликлинический приём') + '<br><span>Беларусь · деморежим</span><span>Версия 0.32.0</span></div><div class="version">Прототип 0.32.0</div></div></aside><div class="workspace"><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
+        '</nav></header><aside class="context-sidebar" aria-label="' + (modulesArea ? 'Сведения о модулях' : 'Пациенты и сведения о разделе') + '">' + (modulesArea ? contextModules() : contextPatients(current)) + '<div class="side-bottom"><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><div class="rail-note">' + (modulesArea ? 'Модули МедАссистента' : 'Поликлинический приём') + '<br><span>Беларусь · деморежим</span><span>Версия 0.33.0</span></div><div class="version">Прототип 0.33.0</div></div></aside><div class="workspace"><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
         (state.migrated && !modulesArea ? '<div class="migration-notice">Прежние записи доступны со статусом «Черновик». Карточки, данные и ручные тексты сохранены. Исходное сохранение предыдущей версии не изменяется.</div>' : '') +
         ({home: renderHome, patients: renderPatients, followups: renderFollowups, patient: renderPatient, visit: renderVisit, modules: renderModules, calculators: renderCalculators, norms: renderNorms, help: renderHelp}[state.view])() +
         '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span>' + (modulesArea ? '' : '<span class="keyboard-hint"><kbd>Ctrl + K</kbd> поиск · <kbd>Ctrl + S</kbd> сохранить · <kbd>Alt + 1–5</kbd> разделы приёма · <kbd>Alt + ←</kbd> назад</span>') + '</footer></main></div></div>';
@@ -2172,20 +2172,48 @@
       return button('norms-panel', normsShort[panel.id] || panel.title, null, (selected ? 'primary active' : 'secondary') + ' compact pager-tab', 'id="norms-tab-' + panel.id + '" role="tab" data-filter="' + panel.id + '" title="' + escape(panel.title) + '" aria-controls="norms-list" aria-selected="' + selected + '" tabindex="' + (panel.id === state.normsPanel ? '0' : '-1') + '"');
     }).join('');
   }
-  function normsValue(value) {
-    return value ? escape(value.value) + (value.unit && !value.value.includes(value.unit) ? ' <span class="norms-value-unit">' + escape(value.unit) + '</span>' : '') : '<span class="norms-missing">Нет на сайте лаборатории</span>';
+  // Presentation groups of each form; indicators missing here are shown at the end, so a new form field never disappears.
+  const normsSections = {
+    cbc: [['Эритроциты и гемоглобин', ['hemoglobin', 'erythrocytes', 'hematocrit', 'mcv', 'mch', 'mchc', 'rdw-sd', 'rdw-cv']], ['Лейкоциты и лейкоцитарная формула', ['leukocytes', 'neutrophils-percent', 'neutrophils-absolute', 'bands', 'segmented', 'metamyelocytes', 'myelocytes', 'lymphocytes-percent', 'lymphocytes-absolute', 'monocytes-percent', 'monocytes-absolute', 'eosinophils-percent', 'eosinophils-absolute', 'basophils-percent', 'basophils-absolute']], ['Тромбоциты', ['platelets', 'mpv', 'pdw', 'p-lcr']], ['СОЭ и ретикулоциты', ['esr', 'reticulocytes-percent', 'reticulocytes-absolute']]],
+    biochemistry: [['Углеводный обмен', ['glucose']], ['Белки', ['total-protein', 'albumin']], ['Азотистый обмен', ['creatinine', 'urea', 'uric-acid']], ['Пигментный обмен', ['bilirubin-total', 'bilirubin-direct', 'bilirubin-indirect']], ['Ферменты', ['alt', 'ast', 'alp', 'ggt', 'amylase-pancreatic']], ['Липиды', ['cholesterol-total', 'hdl', 'ldl', 'triglycerides']], ['Электролиты', ['potassium', 'sodium', 'chloride', 'calcium-total']], ['Обмен железа', ['iron', 'ferritin']], ['Воспаление и витамины', ['crp', 'vitamin-d-25oh']]],
+    urinalysis: [['Физические свойства', ['color', 'transparency', 'specific-gravity', 'ph']], ['Химическое исследование', ['protein', 'glucose', 'ketones', 'bilirubin', 'urobilinogen', 'nitrites', 'blood-reaction', 'leukocyte-esterase']], ['Микроскопия осадка', ['leukocytes', 'erythrocytes', 'squamous-epithelium', 'casts', 'bacteria', 'mucus', 'crystals']]],
+    coagulation: [['Протромбиновый тест', ['prothrombin-quick', 'inr', 'prothrombin-time']], ['Другие показатели', ['aptt', 'thrombin-time', 'fibrinogen', 'antithrombin']]]
+  };
+  function normsGroups(panel) {
+    const groups = (normsSections[panel.id] || []).map(([title, ids]) => [title, ids.map(id => panel.rows.find(row => row.fieldId === id)).filter(Boolean)]);
+    const placed = new Set(groups.flatMap(([, rows]) => rows.map(row => row.fieldId)));
+    const rest = panel.rows.filter(row => !placed.has(row.fieldId));
+    if (rest.length) groups.push([groups.length ? 'Другие показатели' : '', rest]);
+    return groups.filter(([, rows]) => rows.length);
   }
-  function normsRow(row) {
-    const second = row.lode ? normsValue(row.lode) : row.helix ? '<span class="norms-missing">Не публикует.</span> <span class="norms-compare">Для сравнения, Хеликс (Россия): ' + normsValue(row.helix) + '</span>' : '<span class="norms-missing">Нет на сайте лаборатории</span>';
-    return '<tr' + (row.differs ? ' class="differs"' : '') + ' data-norm="' + escape(row.fieldId) + '"><th scope="row"><span class="norms-name">' + escape(row.field.name) + '</span>' + (row.field.unit ? '<span class="norms-unit">' + escape(row.field.unit) + '</span>' : '') +
-      (row.differs ? '<span class="norms-differs">' + icon('info') + 'Различаются</span>' : '') + (row.note ? '<span class="norms-note">' + escape(row.note) + '</span>' : '') + '</th>' +
-      '<td data-lab="ИНВИТРО Беларусь">' + normsValue(row.invitro) + '</td><td data-lab="ЛОДЭ">' + second + '</td></tr>';
+  // One line per age group (sentences) and per labelled group after «; » (for example «мужчины …: …; женщины …: …»).
+  function normsLines(value) {
+    return value.split(/(?<=[^.\s]{2})\.\s+(?=\S)/).flatMap(sentence => sentence.split(/;\s+(?=[^;]*:)/)).map(part => '<span class="norms-line">' + escape(part.replace(/\.$/, '')) + '</span>').join('');
+  }
+  // The laboratory unit is repeated under the value only when it differs from the form unit in the unit column.
+  const normsUnitKey = unit => String(unit || '').toLowerCase().replace(/[\s×x]/g, '');
+  function normsValue(value, unit) {
+    return value ? normsLines(value.value) + (value.unit && !value.value.includes(value.unit) && normsUnitKey(value.unit) !== normsUnitKey(unit) ? '<span class="norms-value-unit">' + escape(value.unit) + '</span>' : '') : '<span class="norms-missing">Нет на сайте лаборатории</span>';
+  }
+  function normsGuidance(row) {
+    const items = row.international || [];
+    return items.length ? '<tr class="norms-guidance"><td colspan="4"><span class="norms-guidance-label">Международные рекомендации</span><ul>' + items.map(item => '<li><a href="' + escape(item.url) + '" target="_blank" rel="noopener noreferrer">' + escape(item.org + ' ' + item.year) + '</a> · <span class="norms-guidance-kind">' + escape(item.kind) + '</span>: ' + escape(item.text) + '</li>').join('') + '</ul></td></tr>' : '';
+  }
+  function normsRow(row, notes, helixColumn) {
+    const unit = row.field.unit, second = helixColumn ? normsValue(row.helix, unit) : row.lode ? normsValue(row.lode, unit) : row.helix ? '<span class="norms-missing">Не публикует.</span> <span class="norms-compare">Для сравнения, Хеликс (Россия):</span>' + normsValue(row.helix, unit) : '<span class="norms-missing">Нет на сайте лаборатории</span>';
+    let mark = '';
+    if (row.note) { notes.push(row.note); mark = '<sup class="norms-ref" title="Примечание ' + notes.length + '">' + notes.length + '</sup>'; }
+    return '<tr class="norms-row' + (row.differs ? ' differs' : '') + '" data-norm="' + escape(row.fieldId) + '"><th scope="row"><span class="norms-name">' + escape(row.field.name) + mark + '</span>' + (row.differs ? '<span class="norms-differs">' + icon('info') + 'Различаются</span>' : '') + '</th>' +
+      '<td class="norms-unit" data-label="Ед. изм.">' + escape(row.field.unit || '—') + '</td><td data-lab="ИНВИТРО Беларусь">' + normsValue(row.invitro, unit) + '</td><td data-lab="' + (helixColumn ? 'Хеликс (Россия)' : 'ЛОДЭ') + '">' + second + '</td></tr>' + normsGuidance(row);
   }
   function normsPanelHtml(panel) {
-    const labs = window.MedAssistLabNorms.labs;
-    const links = labs.map(lab => [lab, [...new Map(panel.rows.filter(row => row[lab.id]).map(row => [row[lab.id].url, row.field.name])).entries()]]).filter(([, items]) => items.length);
-    return '<section class="norms-panel" aria-labelledby="norms-panel-' + panel.id + '"><h2 id="norms-panel-' + panel.id + '">' + escape(panel.title) + '</h2>' +
-      '<table class="norms-table"><thead><tr><th scope="col">Показатель</th><th scope="col">ИНВИТРО Беларусь</th><th scope="col">ЛОДЭ</th></tr></thead><tbody>' + panel.rows.map(normsRow).join('') + '</tbody></table>' +
+    const norms = window.MedAssistLabNorms, notes = [];
+    const helixColumn = panel.rows.every(row => !row.lode) && panel.rows.some(row => row.helix);
+    const body = normsGroups(panel).map(([title, rows]) => (title ? '<tr class="norms-section"><th colspan="4" scope="colgroup">' + escape(title) + '</th></tr>' : '') + rows.map(row => normsRow(row, notes, helixColumn)).join('')).join('');
+    const links = norms.labs.map(lab => [lab, [...new Map(panel.rows.filter(row => row[lab.id]).map(row => [row[lab.id].url, row.field.name])).entries()]]).filter(([, items]) => items.length);
+    return '<section class="norms-panel norms-sheet" aria-labelledby="norms-panel-' + panel.id + '"><header class="norms-sheet-head"><div><span class="norms-sheet-kind">Бланк · референсные значения</span><h2 id="norms-panel-' + panel.id + '">' + escape(panel.title) + '</h2></div><p>Взрослые · сверено ' + escape(dateText(norms.checkedAt)) + '</p></header>' +
+      '<table class="norms-table"><colgroup><col class="norms-col-name"><col class="norms-col-unit"><col><col></colgroup><thead><tr><th scope="col">Показатель</th><th scope="col">Ед. изм.</th><th scope="col">ИНВИТРО Беларусь</th><th scope="col">' + (helixColumn ? 'Хеликс (Россия)<span class="norms-col-note">ЛОДЭ не публикует норм для этого бланка; показано для сравнения</span>' : 'ЛОДЭ') + '</th></tr></thead><tbody>' + body + '</tbody></table>' +
+      (notes.length ? '<div class="norms-notes"><h3>Примечания</h3><ol>' + notes.map(note => '<li>' + escape(note) + '</li>').join('') + '</ol></div>' : '') +
       '<details class="norms-sources"><summary>Источники: страницы лабораторий</summary>' + links.map(([lab, items]) => '<h3>' + escape(lab.title) + ' (' + escape(lab.country) + ')</h3><ul>' + items.map(([url, name]) => '<li><a href="' + escape(url) + '" target="_blank" rel="noopener noreferrer">' + escape(name) + '</a></li>').join('') + '</ul>').join('') + '<p class="hint">Ссылки открываются в браузере и требуют интернета. Сам справочник работает офлайн.</p></details></section>';
   }
   function normsListHtml() {
@@ -2199,10 +2227,10 @@
   }
   function renderNorms() {
     const norms = window.MedAssistLabNorms, panels = normsPanels();
-    const heading = '<div class="page-heading"><div><h1>Нормы анализов</h1><p>Референсные интервалы для взрослых из опубликованных данных лабораторий ИНВИТРО Беларусь и ЛОДЭ' + (norms ? ', сверено ' + escape(dateText(norms.checkedAt)) : '') + '. Показатели — те же, что в бланках программы.</p></div></div>';
+    const heading = '<div class="page-heading"><div><h1>Нормы анализов</h1><p>Референсные интервалы для взрослых из опубликованных данных лабораторий ИНВИТРО Беларусь и ЛОДЭ' + (norms ? ', сверено ' + escape(dateText(norms.checkedAt)) : '') + '. Показатели — те же, что в бланках программы. Под показателями — пороги диагноза и цели лечения из международных рекомендаций со ссылкой на документ.</p></div></div>';
     if (!panels.length) return heading + '<div class="empty"><h3>Справочник норм не загружен</h3><p>Обновите программу штатным способом.</p></div>';
     if (!panels.some(panel => panel.id === state.normsPanel)) state.normsPanel = panels[0].id;
-    return heading + '<div class="demo-notice norms-notice" role="note">' + icon('info') + '<span><strong>Сверяйте результат с интервалом на бланке своей лаборатории.</strong> Нормы зависят от анализатора и метода. Отметка «Различаются» показывает, где лаборатории дают разные интервалы. Справочник не оценивает результаты пациента.</span></div>' +
+    return heading + '<div class="demo-notice norms-notice" role="note">' + icon('info') + '<span><strong>Сверяйте результат с интервалом на бланке своей лаборатории.</strong> Нормы зависят от анализатора и метода. Отметка «Различаются» показывает, где лаборатории дают разные интервалы. Международные рекомендации — это пороги и цели для конкретных ситуаций, а не норма лаборатории. Справочник не оценивает результаты пациента.</span></div>' +
       '<section class="card norms-card"><div class="field norms-search"><label for="norms-search">Найти показатель во всех бланках</label><input id="norms-search" type="search" autocomplete="off" maxlength="80" placeholder="Например, креатинин или ТТГ" value="' + escape(state.normsQuery) + '"></div>' +
       '<div id="norms-tabs" class="workflow-filters pager-tabs" role="tablist" aria-label="Бланки анализов">' + normsTabs() + '</div>' +
       '<div id="norms-list" class="norms-list pager-viewport" role="tabpanel" aria-labelledby="norms-tab-' + state.normsPanel + '" tabindex="0">' + normsListHtml() + '</div></section>';

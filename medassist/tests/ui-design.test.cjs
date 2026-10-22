@@ -152,8 +152,7 @@ test("global shortcuts leave an open clinical dialog and its unsaved text untouc
   }
   await page.locator("#diagnosis-cancel").click();
   await page.locator("#draft-text").focus(); await page.keyboard.press("Control+Space");
-  assert.equal(await page.locator("#shortcuts-dialog").isVisible(), true, "existing phrase shortcut still works");
-  await page.locator("#shortcuts-close").click();
+  assert.equal(await page.locator("dialog[open]").count(), 0, "Ctrl+Space no longer opens a phrase picker");
   assert.equal(await raw(page), before);
 });
 

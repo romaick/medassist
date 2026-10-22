@@ -155,6 +155,10 @@ $proof = [pscustomobject]@{ argumentCount = $args.Count; arguments = @($args); u
                     Assert-True ($proof.argumentCount -eq 0 -and $proof.arguments.Count -eq 0) 'Incoming URI reached the updater arguments.'
                     Assert-True ($proof.updater -ceq $updaterPath.Replace('/', '\')) 'Windows launched a different script.'
                 } finally { if ($null -ne $process) { $process.Dispose() } }
+                # Some Windows 11 machines fail the next launch with 0xc0000142 when a ShellExecute-started
+                # powershell.exe that hid its own window (-WindowStyle Hidden) has only just exited
+                # (about 1 in 3 back-to-back launches, 0 of 24 with this pause). The pause keeps the check on activation.
+                Start-Sleep -Milliseconds 1500
             }
         }
     }

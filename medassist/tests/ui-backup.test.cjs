@@ -147,7 +147,7 @@ test("restore preview shows counts, dates and searchable escaped patients; cance
   await selectFile(page);
   assert.equal(await page.locator("#dialog-cancel").evaluate(node => node === document.activeElement), true);
   const rows = await page.locator("#restore-summary tbody tr").allTextContents();
-  assert.deepEqual(rows.slice(0, 6), ["Пациенты11", "Приёмы11", "Личные шаблоны01", "Мои сокращения00", "Результаты и показатели01", "Записи больничных01"]);
+  assert.deepEqual(rows.slice(0, 6), ["Пациенты11", "Приёмы11", "Личные шаблоны01", "Сохранённые сокращения00", "Результаты и показатели01", "Записи больничных01"]);
   assert.match(rows.at(-1), /19.04.2032.*17.04.2032/);
   assert.match(await page.locator("#restore-patients").innerText(), /Демо <img src=x> Копия/);
   assert.equal(await page.locator("#restore-patients img").count(), 0);

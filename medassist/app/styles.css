@@ -384,14 +384,6 @@ dialog.restore-preview{width:min(760px,calc(100vw - 32px));max-width:760px;max-h
 .workflow-dialog .record-format-row label,.workflow-dialog .paste-fields label,.workflow-dialog .format-preview>label,.workflow-dialog .paste-original>label{display:block;font-size:13px;font-weight:600}
 .workflow-dialog .record-format-row input,.workflow-dialog .paste-fields input,.workflow-dialog .format-preview textarea,.workflow-dialog .paste-original textarea{display:block;width:100%;border:1px solid #cfdbd5;border-radius:7px;background:#fff;color:var(--ink);padding:10px 12px;min-height:42px;font-size:14px;margin-top:6px;font-family:inherit}
 .workflow-dialog .record-format-row input:focus,.workflow-dialog .paste-fields input:focus,.workflow-dialog .format-preview textarea:focus,.workflow-dialog .paste-original textarea:focus{outline:2px solid #b0d6c8;outline-offset:1px;border-color:var(--green)}
-.shortcuts-workspace{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:24px;align-items:start}
-.shortcuts-workspace section{min-width:0}.shortcuts-workspace h3{font-size:14px;margin:0 0 10px}
-.shortcuts-list{max-height:300px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;padding:6px;margin-bottom:12px}
-.shortcut-option{display:grid;gap:5px;text-align:left;width:100%;padding:10px 12px;border:1px solid transparent;border-radius:6px;background:white;color:var(--ink);font:inherit;cursor:pointer;overflow-wrap:anywhere}
-.shortcut-option span{font-size:12px;color:var(--muted);line-height:1.5}.shortcut-option.selected{background:#eaf5f0;border-color:var(--green)}.shortcut-option:focus-visible{outline:2px solid var(--green);outline-offset:-2px}
-.shortcut-preview{font:inherit;font-size:14px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;max-height:280px;overflow-y:auto;background:#f4f8f6;border:1px solid var(--line);border-radius:8px;padding:14px;margin:0 0 12px;min-height:90px}
-#shortcut-editor{border-top:1px solid var(--line);margin-top:18px;padding-top:18px}#shortcut-editor .actions{flex-wrap:wrap}.shortcut-trigger{justify-self:start;margin-top:4px;font-size:12px}
-@media(max-width:700px){.shortcuts-workspace{grid-template-columns:minmax(0,1fr);gap:18px}.shortcuts-list{max-height:180px}.shortcut-preview{max-height:170px}#shortcuts-dialog .dialog-actions .button{min-width:0}#shortcut-editor .actions{display:grid;grid-template-columns:minmax(0,1fr)}}
 
 /* Desktop clinical workspace. Screen scope preserves the document print layout. */
 @media screen {

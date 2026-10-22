@@ -219,7 +219,7 @@
         (modulesArea ? navButton('modules', 'Модули', 'grid') + navButton('calculators', 'Калькуляторы', 'calculator') : navButton('home', 'Рабочий стол', 'home') + navButton('patients', 'Пациенты', 'user') +
         (current ? navButton('visit', 'Текущий приём', 'document') : navButton('new', 'Новый пациент', 'plus')) + navButton('followups', 'Повторные приёмы', 'calendar') + navButton('help', 'Помощь и данные', 'help') + navButton('check-updates', 'Проверить обновления', 'download')) +
         navButton('choose-area', 'Выбор раздела', 'back') +
-        '</nav><div class="rail-note">' + (modulesArea ? 'Модули МедАссистента' : 'Поликлинический приём') + '<br><span>Беларусь · деморежим</span><span>Версия 0.26.1</span></div></header><aside class="topbar context-sidebar" aria-label="Дата, время и текущий раздел"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><div class="topbar-left"><span class="context-mode">' + (modulesArea ? 'Модули' : 'Поликлиника') + '</span><strong>' + sectionName + '</strong></div>' + (modulesArea ? '' : '<button type="button" class="search-launch" data-action="search-patients" aria-label="Найти пациента" aria-keyshortcuts="Control+K" title="Найти пациента: Ctrl + K">' + icon('search') + '<span>Найти пациента</span><kbd>Ctrl + K</kbd></button>') + '<div class="side-bottom"><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><div class="version">Прототип 0.26.1</div></div></aside><div class="workspace"><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
+        '</nav><div class="rail-note">' + (modulesArea ? 'Модули МедАссистента' : 'Поликлинический приём') + '<br><span>Беларусь · деморежим</span><span>Версия 0.27.0</span></div></header><aside class="topbar context-sidebar" aria-label="Дата, время и текущий раздел"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div><div class="topbar-left"><span class="context-mode">' + (modulesArea ? 'Модули' : 'Поликлиника') + '</span><strong>' + sectionName + '</strong></div>' + (modulesArea ? '' : '<button type="button" class="search-launch" data-action="search-patients" aria-label="Найти пациента" aria-keyshortcuts="Control+K" title="Найти пациента: Ctrl + K">' + icon('search') + '<span>Найти пациента</span><kbd>Ctrl + K</kbd></button>') + '<div class="side-bottom"><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><div class="version">Прототип 0.27.0</div></div></aside><div class="workspace"><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
         (state.migrated && !modulesArea ? '<div class="migration-notice">Прежние записи доступны со статусом «Черновик». Карточки, данные и ручные тексты сохранены. Исходное сохранение предыдущей версии не изменяется.</div>' : '') +
         ({home: renderHome, patients: renderPatients, followups: renderFollowups, patient: renderPatient, visit: renderVisit, modules: renderModules, calculators: renderCalculators, help: renderHelp}[state.view])() +
         '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span>' + (modulesArea ? '' : '<span class="keyboard-hint"><kbd>Ctrl + K</kbd> поиск · <kbd>Ctrl + S</kbd> сохранить · <kbd>Alt + 1–5</kbd> разделы приёма</span>') + '</footer></main></div></div>';
@@ -2094,14 +2094,14 @@
     {id: 'chads', rubric: 'heart', title: 'CHA₂DS₂-VASc и CHA₂DS₂-VA', summary: 'Риск инсульта при фибрилляции предсердий.'},
     {id: 'hasbled', rubric: 'heart', title: 'HAS-BLED', summary: 'Риск кровотечения при приёме антикоагулянтов.'},
     {rubric: 'heart', title: 'SCORE2', summary: 'Десятилетний риск сердечно-сосудистых событий.'},
-    {rubric: 'heart', title: 'Корригированный интервал QT', summary: 'Формулы Базетта и Фридериции.'},
+    {rubric: 'heart', id: 'qtc', title: 'Корригированный интервал QT', summary: 'Формулы Базетта и Фридериции.'},
     {id: 'crb65', rubric: 'infection', title: 'CRB-65', summary: 'Тяжесть внебольничной пневмонии без лабораторных данных.'},
     {id: 'centor', rubric: 'infection', title: 'Centor / McIsaac', summary: 'Вероятность стрептококкового тонзиллофарингита, поправка на возраст.'},
     {rubric: 'metabolic', place: 'visit', title: 'Индекс массы тела', summary: 'Рассчитывается в разделе «Осмотр» приёма по росту и массе тела.'},
-    {rubric: 'metabolic', title: 'FINDRISC', summary: 'Риск сахарного диабета 2 типа.'},
-    {rubric: 'liver', title: 'FIB-4', summary: 'Риск выраженного фиброза печени по обычным анализам.'},
-    {rubric: 'mind', title: 'PHQ-9', summary: 'Скрининг депрессии.'},
-    {rubric: 'mind', title: 'GAD-7', summary: 'Скрининг тревожного расстройства.'}
+    {rubric: 'metabolic', id: 'findrisc', title: 'FINDRISC', summary: 'Риск сахарного диабета 2 типа.'},
+    {rubric: 'liver', id: 'fib4', title: 'FIB-4', summary: 'Риск выраженного фиброза печени по обычным анализам.'},
+    {rubric: 'mind', id: 'phq9', title: 'PHQ-9', summary: 'Скрининг депрессии.'},
+    {rubric: 'mind', id: 'gad7', title: 'GAD-7', summary: 'Скрининг тревожного расстройства.'}
   ];
   function calculatorDisclaimer() {
     return '<div class="demo-notice calculator-disclaimer" role="note">' + icon('info') + '<span><strong>Не заменяет клиническое решение.</strong> Результат — оценка по опубликованной формуле. Решение принимает врач с учётом всей клинической картины.</span></div>';
@@ -2122,8 +2122,7 @@
   const calcSexField = {key: 'sex', type: 'radio', legend: 'Пол', options: [['female', 'Женский'], ['male', 'Мужской']]};
   const calcCreatinineField = {key: 'creatinine', type: 'decimal', label: 'Креатинин сыворотки', maxlength: 10, unit: {key: 'unit', label: 'Единицы креатинина', options: [['umol', 'мкмоль/л'], ['mg', 'мг/дл']]}};
   function pointsWord(value) {
-    const n = Math.abs(value) % 100, last = n % 10;
-    return n > 10 && n < 20 ? 'баллов' : last === 1 ? 'балл' : last >= 2 && last <= 4 ? 'балла' : 'баллов';
+    return plural(value, 'балл', 'балла', 'баллов');
   }
   const signed = value => value < 0 ? '−' + Math.abs(value) : String(value);
   const calculatorFactors = (factors, labels) => factors.length ? 'учтены: ' + factors.map(key => labels[key]).join(', ') : 'факторы не отмечены';
@@ -2135,6 +2134,21 @@
   const crbRisk = {low: ['низкий риск', 'менее 1%'], intermediate: ['промежуточный риск', '1–10%'], high: ['высокий риск', 'более 10%']};
   const centorLabels = {exudate: 'налёт на миндалинах', nodes: 'болезненные передние шейные лимфоузлы', fever: 'лихорадка выше 38 °C', noCough: 'нет кашля'};
   const centorAgeLabels = {child: '3–14 лет', young: '15–44 года', older: '45 лет и старше'};
+  const plural = (value, one, few, many) => { const n = Math.abs(value) % 100, last = n % 10; return n > 10 && n < 20 ? many : last === 1 ? one : last >= 2 && last <= 4 ? few : many; };
+  const yearsWord = value => plural(value, 'год', 'года', 'лет');
+  const fib4Number = value => value.toFixed(2).replace('.', ',');
+  const fib4Lower = value => value === 2 ? '2,0' : '1,30';
+  const fib4Risk = {low: ['выраженный фиброз маловероятен', 'Не выше нижнего порога: выраженный фиброз (F3–F4) маловероятен.'], indeterminate: ['неопределённая зона', 'Между порогами: для уточнения нужен следующий шаг, например эластография печени.'], high: ['высокая вероятность выраженного фиброза', '2,67 и выше: высокая вероятность выраженного фиброза (F3–F4).']};
+  const qtGrades = {normal: 'не выше верхней границы нормы', prolonged: 'удлинён', dangerous: 'опасное удлинение, более 500 мс'};
+  const findriscRisk = {low: 'низкий', slight: 'слегка повышенный', moderate: 'умеренный', high: 'высокий', veryHigh: 'очень высокий'};
+  // PHQ-9 and GAD-7 wording is the official Russian translation for Russia from phqscreeners.com, which permits reproduction.
+  const symptomAnswers = [['0', 'ни разу — 0'], ['1', 'несколько дней — 1'], ['2', 'более недели — 2'], ['3', 'почти каждый день — 3']];
+  const symptomQuestion = (number, text) => ({key: 'q' + number, type: 'radio', legend: number + '. ' + text, options: symptomAnswers});
+  const phqQuestions = ['Вам не хотелось ничего делать', 'У Вас было плохое настроение, Вы были подавлены или испытывали чувство безысходности', 'Вам было трудно заснуть, у Вас был прерывистый сон, или Вы слишком много спали', 'Вы были утомлены, или у Вас было мало сил', 'У Вас был плохой аппетит, или Вы переедали', 'Вы плохо о себе думали: считали себя неудачником (неудачницей), или были в себе разочарованы, или считали, что подвели свою семью', 'Вам было трудно сосредоточиться (например, на чтении газеты или на просмотре телепередач)', 'Вы двигались или говорили настолько медленно, что окружающие это замечали? Или, наоборот, Вы были настолько суетливы или взбудоражены, что двигались гораздо больше обычного', 'Вас посещали мысли о том, что Вам лучше было бы умереть, или о том, чтобы причинить себе какой-нибудь вред'];
+  const gadQuestions = ['Вы нервничали, тревожились или испытывали сильный стресс', 'Вы были неспособны успокоиться или контролировать свое волнение', 'Вы слишком сильно волновались по различным поводам', 'Вам было трудно расслабиться', 'Вы были настолько суетливы, что Вам было тяжело усидеть на месте', 'Вы легко злились или раздражались', 'Вы испытывали страх, словно должно произойти нечто ужасное'];
+  const phqDifficulty = {none: 'Совсем не трудно', some: 'Немного трудно', very: 'Очень трудно', extreme: 'Чрезвычайно трудно'};
+  const phqSeverity = {minimal: ['минимальная или нет', 'действий не требуется'], mild: ['лёгкая', 'наблюдение, повторить PHQ-9 при следующем визите'], moderate: ['умеренная', 'план лечения: консультирование, наблюдение и (или) фармакотерапия'], moderatelySevere: ['умеренно тяжёлая', 'активное лечение: фармакотерапия и (или) психотерапия'], severe: ['тяжёлая', 'немедленное начало фармакотерапии; при выраженных нарушениях или слабом ответе — ускоренное направление к специалисту']};
+  const gadSeverity = {minimal: 'минимальная', mild: 'лёгкая', moderate: 'умеренная', severe: 'тяжёлая'};
   const calculatorForms = {
     egfr: {
       lead: 'расчётная скорость клубочковой фильтрации по креатинину у взрослых 18 лет и старше.',
@@ -2271,6 +2285,127 @@
         calculatorSource('McIsaac WJ, White D, Tannenbaum D, Low DE. A clinical score to reduce unnecessary antibiotic use in patients with sore throat. CMAJ. 1998;158(1):75–83.', 'https://pubmed.ncbi.nlm.nih.gov/9475915/', 'PMID 9475915'),
         calculatorSource('NICE guideline NG84. Sore throat (acute): antimicrobial prescribing. 2018.', 'https://www.nice.org.uk/guidance/ng84', 'nice.org.uk/guidance/ng84')
       ]
+    },
+    fib4: {
+      lead: 'риск выраженного фиброза печени по возрасту, АСТ, АЛТ и тромбоцитам у взрослых.',
+      fields: [calcAgeField, {key: 'ast', type: 'decimal', label: 'АСТ, Ед/л', maxlength: 8}, {key: 'alt', type: 'decimal', label: 'АЛТ, Ед/л', maxlength: 8},
+        {key: 'platelets', type: 'decimal', label: 'Тромбоциты, × 10⁹/л', maxlength: 6, hint: '10⁹/л — то же, что тыс. в 1 мкл.'}],
+      empty: 'Введите возраст, АСТ, АЛТ и тромбоциты.',
+      compute: values => core.calculateFib4(values),
+      result: result => '<p class="calculator-value"><strong>' + fib4Number(result.value) + '</strong> FIB-4</p>' +
+        '<p class="calculator-category"><span class="pill' + (result.risk === 'low' ? ' neutral' : '') + '">' + fib4Risk[result.risk][0] + '</span> пороги ' + fib4Lower(result.lower) + ' и 2,67</p>' +
+        '<p class="calculator-verdict">' + fib4Risk[result.risk][1] + '</p>' +
+        (result.lowAccuracy ? '<p class="hint">В возрасте 35 лет и младше FIB-4 оценивает фиброз плохо.</p>' : ''),
+      copy: (result, values) => 'FIB-4 ' + fib4Number(result.value) + ' (' + fib4Risk[result.risk][0] + '); возраст ' + values.age.trim() + ' ' + yearsWord(Number(values.age)) + ', АСТ ' + values.ast.trim() + ' Ед/л, АЛТ ' + values.alt.trim() + ' Ед/л, тромбоциты ' + values.platelets.trim() + ' × 10⁹/л.',
+      reference: '<p class="calculator-formula">FIB-4 = возраст × АСТ / (тромбоциты × √АЛТ)</p>' +
+        '<p>Возраст в годах, АСТ и АЛТ в Ед/л, тромбоциты в 10⁹/л. Результат округляется до сотых.</p>' +
+        '<h3>Толкование (выраженный фиброз F3–F4)</h3>' + calculatorTable(['Возраст', 'Маловероятен', 'Неопределённая зона', 'Высокая вероятность'], [['до 65 лет', '1,30 и ниже', 'выше 1,30 и ниже 2,67', '2,67 и выше'], ['65 лет и старше', '2,0 и ниже', 'выше 2,0 и ниже 2,67', '2,67 и выше']]) +
+        '<p>Рекомендации EASL–EASD–EASO 2024 используют FIB-4 как первый шаг, а для уточнения — визуализирующие методы, например эластографию.</p>' +
+        '<h3>Ограничения</h3><p>Индекс создан для пациентов с ВИЧ и гепатитом C (пороги 1,45 и 3,25). Пороги 1,30 и 2,67 получены при неалкогольной жировой болезни печени, нижний порог 2,0 для 65 лет и старше — в отдельном исследовании. В 35 лет и младше индекс работает плохо. ' + calculatorProtocolNote + '</p>',
+      sources: [
+        calculatorDoi('Sterling RK, Lissen E, Clumeck N, et al. Development of a simple noninvasive index to predict significant fibrosis in patients with HIV/HCV coinfection. Hepatology. 2006;43(6):1317–1325.', '10.1002/hep.21178'),
+        calculatorDoi('Shah AG, Lydecker A, Murray K, et al. Comparison of noninvasive markers of fibrosis in patients with nonalcoholic fatty liver disease. Clin Gastroenterol Hepatol. 2009;7(10):1104–1112.', '10.1016/j.cgh.2009.05.033'),
+        calculatorDoi('McPherson S, Hardy T, Dufour JF, et al. Age as a confounding factor for the accurate non-invasive diagnosis of advanced NAFLD fibrosis. Am J Gastroenterol. 2017;112(5):740–751.', '10.1038/ajg.2016.453'),
+        calculatorDoi('EASL, EASD, EASO. EASL-EASD-EASO Clinical Practice Guidelines on the management of metabolic dysfunction-associated steatotic liver disease (MASLD). J Hepatol. 2024;81(3):492–542.', '10.1016/j.jhep.2024.04.031')
+      ],
+      sourceNote: 'Полный текст рекомендаций EASL–EASD–EASO 2024 закрыт ограничением доступа; числа порогов сверены по работам Shah 2009 и McPherson 2017.'
+    },
+    qtc: {
+      lead: 'интервал QT с поправкой на частоту сердечных сокращений по формулам Фридериции и Базетта.',
+      fields: [{key: 'qt', type: 'integer', label: 'Интервал QT, мс', maxlength: 3}, {key: 'rate', type: 'integer', label: 'ЧСС, в минуту', maxlength: 3, hint: 'RR, с = 60 / ЧСС.'}, calcSexField],
+      empty: 'Введите QT, ЧСС и пол.',
+      compute: values => core.calculateQtc(values),
+      result: result => '<p class="calculator-value"><strong>' + result.fridericia + '</strong> мс по Фридериции</p>' +
+        '<p class="calculator-category"><span class="pill' + (result.fridericiaGrade === 'normal' ? ' neutral' : '') + '">' + qtGrades[result.fridericiaGrade] + '</span></p>' +
+        '<p class="calculator-verdict">По Базетту: <strong>' + result.bazett + ' мс</strong> — ' + qtGrades[result.bazettGrade] + '.</p>' +
+        '<p class="hint">Верхняя граница нормы (99-й перцентиль) — ' + result.limit + ' мс; при QTc более 500 мс риск torsade de pointes выше в 2–3 раза. При высокой ЧСС формула Базетта завышает QTc.</p>',
+      copy: (result, values) => 'QTc по Фридериции ' + result.fridericia + ' мс (' + qtGrades[result.fridericiaGrade] + '), по Базетту ' + result.bazett + ' мс (' + qtGrades[result.bazettGrade] + '); QT ' + values.qt.trim() + ' мс, ЧСС ' + values.rate.trim() + ' в минуту.',
+      reference: '<p class="calculator-formula">QTc (Фридериция) = QT / ∛RR; QTc (Базетт) = QT / √RR</p>' +
+        '<p>QT в мс, RR в секундах = 60 / ЧСС. Результат округляется до целого.</p>' +
+        '<h3>Пороги (AHA/ACCF 2010)</h3>' + calculatorTable(['Пол', 'Верхняя граница нормы (99-й перцентиль)', 'Опасное удлинение'], [['Мужчины', '470 мс', 'более 500 мс'], ['Женщины', '480 мс', 'более 500 мс']]) +
+        '<p>При QTc более 500 мс риск torsade de pointes выше в 2–3 раза. Прирост QTc более чем на 60 мс от исходного на фоне препарата тоже требует действий.</p>' +
+        '<h3>Ограничения</h3><p>Формула Базетта перекорригирует QT при высокой ЧСС и недокорригирует при низкой, поэтому чаще ложно показывает опасное удлинение; в сравнительном исследовании формула Фридериции корригировала лучше. Это сравнение выполнено при синусовом ритме, QRS не шире 120 мс и ЧСС до 90 в минуту. QT измеряется по ЭКГ, расчёт его не проверяет.</p>',
+      sources: [
+        '<li>Bazett HC. An analysis of the time-relations of electrocardiograms. Heart. 1920;7:353–370.</li>',
+        calculatorDoi('Fridericia LS. The duration of systole in an electrocardiogram in normal humans and in patients with heart disease. 1920. Ann Noninvasive Electrocardiol. 2003;8(4):343–351.', '10.1046/j.1542-474X.2003.08413.x'),
+        calculatorDoi('Vandenberk B, Vandael E, Robyns T, et al. Which QT correction formulae to use for QT monitoring? J Am Heart Assoc. 2016;5(6):e003264.', '10.1161/JAHA.116.003264'),
+        calculatorDoi('Drew BJ, Ackerman MJ, Funk M, et al. Prevention of torsade de pointes in hospital settings: a scientific statement from the American Heart Association and the American College of Cardiology Foundation. Circulation. 2010;121(8):1047–1060.', '10.1161/CIRCULATIONAHA.109.192704')
+      ],
+      sourceNote: 'Статья Базетта 1920 года в сети не найдена; формула сверена по работам Vandenberk 2016 и Drew 2010.'
+    },
+    findrisc: {
+      lead: 'риск сахарного диабета 2 типа в ближайшие 10 лет по анкете из 8 вопросов, без анализов.',
+      referenceTitle: 'Шкала',
+      fields: [
+        {key: 'age', type: 'radio', legend: 'Возраст', options: [['lt45', 'до 45 лет — 0'], ['45-54', '45–54 года — 2'], ['55-64', '55–64 года — 3'], ['gt64', 'старше 64 лет — 4']]},
+        {key: 'bmi', type: 'radio', legend: 'Индекс массы тела, кг/м²', options: [['lt25', 'меньше 25 — 0'], ['25-30', '25–30 — 1'], ['gt30', 'больше 30 — 3']]},
+        {key: 'waist', type: 'radio', legend: 'Окружность талии', options: [['low', 'мужчины меньше 94 см, женщины меньше 80 см — 0'], ['middle', 'мужчины 94–102 см, женщины 80–88 см — 3'], ['high', 'мужчины больше 102 см, женщины больше 88 см — 4']]},
+        {key: 'activity', type: 'radio', legend: 'Физическая активность не менее 30 минут каждый день', options: [['yes', 'да — 0'], ['no', 'нет — 2']]},
+        {key: 'vegetables', type: 'radio', legend: 'Как часто едите овощи, фрукты или ягоды', options: [['daily', 'каждый день — 0'], ['notDaily', 'не каждый день — 1']]},
+        {key: 'bpDrugs', type: 'radio', legend: 'Регулярный приём препаратов от повышенного давления когда-либо', options: [['no', 'нет — 0'], ['yes', 'да — 2']]},
+        {key: 'glucose', type: 'radio', legend: 'Повышенный уровень глюкозы крови когда-либо', options: [['no', 'нет — 0'], ['yes', 'да — 5']]},
+        {key: 'family', type: 'radio', legend: 'Сахарный диабет у родственников', options: [['no', 'нет — 0'], ['second', 'дедушка или бабушка, тётя, дядя, двоюродные братья и сёстры — 3'], ['first', 'родители, брат или сестра, собственные дети — 5']]}
+      ],
+      note: 'Число после тире — баллы за ответ.',
+      empty: current => 'Ответьте на все 8 вопросов: осталось ' + current.missing.length + '.',
+      compute: values => core.scoreFindrisc(values),
+      result: result => calculatorScore(result.score, 'по FINDRISC') +
+        '<p class="calculator-category"><span class="pill' + (result.score < 12 ? ' neutral' : '') + '">' + findriscRisk[result.risk] + ' риск</span></p>' +
+        '<p class="calculator-verdict">Ориентировочно 1 из ' + result.oneIn + ' человек с таким баллом заболевает сахарным диабетом 2 типа в течение 10 лет.</p>' +
+        '<p class="hint">Анкета не ставит диагноз: глюкозу крови оценивают по действующему протоколу.</p>',
+      copy: result => 'FINDRISC — ' + result.score + ' ' + pointsWord(result.score) + ': ' + findriscRisk[result.risk] + ' риск сахарного диабета 2 типа (около 1 из ' + result.oneIn + ' за 10 лет).',
+      reference: calculatorTable(['Баллы', 'Риск', 'Заболевают за 10 лет'], [['менее 7', 'низкий', '1 из 100'], ['7–11', 'слегка повышен', '1 из 25'], ['12–14', 'умеренный', '1 из 6'], ['15–20', 'высокий', '1 из 3'], ['более 20', 'очень высокий', '1 из 2']]) +
+        '<p>Сумма от 0 до 26 баллов. Семь вопросов взяты из статьи 2003 года (0–20 баллов); вопрос о родственниках и возраст старше 64 лет добавлены в опубликованную анкету.</p>' +
+        '<h3>Ограничения</h3><p>Шкала получена на финской популяции. Русские формулировки вопросов — наш перевод, а не валидированная версия анкеты; вопрос об активности сформулирован по онлайн-версии Международной диабетической федерации. Действия при повышенном риске определяйте по действующему клиническому протоколу Минздрава Республики Беларусь.</p>',
+      sources: [
+        calculatorDoi('Lindström J, Tuomilehto J. The diabetes risk score: a practical tool to predict type 2 diabetes risk. Diabetes Care. 2003;26(3):725–731.', '10.2337/diacare.26.3.725'),
+        calculatorSource('Lindström J. Prevention of type 2 diabetes with lifestyle intervention — emphasis on dietary composition and identification of high-risk individuals. Publications of the National Public Health Institute A 18/2006. Helsinki; 2006.', 'https://www.julkari.fi/server/api/core/bitstreams/4ba40c7d-5e09-438e-bcd8-2f0e154b2f4a/content', 'julkari.fi'),
+        calculatorDoi('Manios Y, Mavrogianni C, Lambrinou CP, et al. Two-stage, school and community-based population screening successfully identifies individuals and families at high-risk for type 2 diabetes: the Feel4Diabetes-study. BMC Endocr Disord. 2020;20:12.', '10.1186/s12902-019-0478-9'),
+        calculatorSource('International Diabetes Federation. Type 2 diabetes risk assessment.', 'https://worlddiabetesday.org/type-2-diabetes-risk-assessment/', 'worlddiabetesday.org')
+      ]
+    },
+    phq9: {
+      lead: 'выраженность депрессивных симптомов по анкете из 9 вопросов. Анкету заполняет пациент, врач вносит его ответы.',
+      referenceTitle: 'Шкала',
+      fields: [{type: 'text', text: 'Как часто за последние 2 недели Вас беспокоили следующие проблемы?'}].concat(phqQuestions.map((text, index) => symptomQuestion(index + 1, text)),
+        [{key: 'difficulty', type: 'radio', legend: 'Если Вы положительно ответили на какие-нибудь пункты, то оцените, насколько трудно Вам было работать, заниматься домашними делами или общаться с людьми из-за этих проблем? (не входит в балл)', options: Object.entries(phqDifficulty)}]),
+      note: 'Вопросы — официальный русский перевод анкеты (Pfizer, phqscreeners.com); воспроизведение и распространение разрешены правообладателем.',
+      empty: current => 'Ответьте на все 9 вопросов: осталось ' + current.missing.length + '.',
+      compute: values => core.scorePhq9(values),
+      result: result => calculatorScore(result.score, 'по PHQ-9') +
+        '<p class="calculator-category"><span class="pill' + (result.score < 10 ? ' neutral' : '') + '">выраженность депрессии: ' + phqSeverity[result.severity][0] + '</span></p>' +
+        (result.item9 > 0 ? '<p class="calculator-alert"><strong>Вопрос 9 — положительный ответ.</strong> Требуется клиническая оценка суицидального риска.</p>' : '') +
+        '<p class="calculator-verdict">Предлагаемые действия по руководству PHQ — ' + phqSeverity[result.severity][1] + '.</p>',
+      copy: (result, values) => 'PHQ-9 — ' + result.score + ' ' + pointsWord(result.score) + ' (выраженность депрессии: ' + phqSeverity[result.severity][0] + '); вопрос 9 — ' + result.item9 + ' ' + pointsWord(result.item9) +
+        (phqDifficulty[values.difficulty] ? '; трудности из-за этих проблем: ' + phqDifficulty[values.difficulty].toLowerCase() : '') + '.',
+      reference: calculatorTable(['Баллы', 'Выраженность депрессии', 'Предлагаемые действия'], [['0–4', 'минимальная или нет', 'не требуются'], ['5–9', 'лёгкая', 'наблюдение, повторить PHQ-9 при следующем визите'], ['10–14', 'умеренная', 'план лечения: консультирование, наблюдение и (или) фармакотерапия'], ['15–19', 'умеренно тяжёлая', 'активное лечение: фармакотерапия и (или) психотерапия'], ['20–27', 'тяжёлая', 'немедленное начало фармакотерапии; при выраженных нарушениях или слабом ответе — ускоренное направление к специалисту']]) +
+        '<p>Каждый ответ: ни разу — 0, несколько дней — 1, более недели — 2, почти каждый день — 3; сумма от 0 до 27. 10 баллов и более — «жёлтый флаг» (возможно клинически значимое состояние), 15 и более — «красный флаг» (вероятно, нужно активное лечение). Вопрос о трудностях не входит в балл.</p>' +
+        '<h3>Ограничения</h3><p>Анкета оценивает выраженность симптомов и не заменяет клиническую беседу. При положительном ответе на вопрос 9 решение о риске самоповреждения принимается только после клинической беседы. Предлагаемые действия взяты из руководства к анкете; ' + calculatorProtocolNote.charAt(0).toLowerCase() + calculatorProtocolNote.slice(1) + '</p>',
+      sources: [
+        calculatorDoi('Kroenke K, Spitzer RL, Williams JBW. The PHQ-9: validity of a brief depression severity measure. J Gen Intern Med. 2001;16(9):606–613.', '10.1046/j.1525-1497.2001.016009606.x'),
+        calculatorSource('Instructions for Patient Health Questionnaire (PHQ) and GAD-7 measures (руководство к анкетам).', 'https://www.phqscreeners.com/images/sites/g/files/g10016261/f/201412/instructions.pdf', 'phqscreeners.com'),
+        calculatorSource('Опросник по состоянию здоровья-9 (PHQ-9), русский перевод для России.', 'https://www.phqscreeners.com/images/sites/g/files/g10060481/f/201412/PHQ9_Russian%20for%20Russia.pdf', 'phqscreeners.com')
+      ]
+    },
+    gad7: {
+      lead: 'выраженность тревоги по анкете из 7 вопросов. Анкету заполняет пациент, врач вносит его ответы.',
+      referenceTitle: 'Шкала',
+      fields: [{type: 'text', text: 'Как часто Вас за последние 14 дней беспокоили следующие проблемы?'}].concat(gadQuestions.map((text, index) => symptomQuestion(index + 1, text))),
+      note: 'Вопросы — официальный русский перевод анкеты (Pfizer, phqscreeners.com); воспроизведение и распространение разрешены правообладателем.',
+      empty: current => 'Ответьте на все 7 вопросов: осталось ' + current.missing.length + '.',
+      compute: values => core.scoreGad7(values),
+      result: result => calculatorScore(result.score, 'по GAD-7') +
+        '<p class="calculator-category"><span class="pill' + (result.score < 10 ? ' neutral' : '') + '">выраженность тревоги: ' + gadSeverity[result.severity] + '</span></p>' +
+        '<p class="calculator-verdict">' + (result.score >= 15 ? '15 баллов и более — «красный флаг»: вероятно, нужно активное лечение.' : result.score >= 10 ? '10 баллов и более — рекомендуемый порог для дальнейшей оценки тревожного расстройства.' : 'Ниже порога 10 баллов, рекомендуемого для дальнейшей оценки тревожного расстройства.') + '</p>',
+      copy: result => 'GAD-7 — ' + result.score + ' ' + pointsWord(result.score) + ' (выраженность тревоги: ' + gadSeverity[result.severity] + ').',
+      reference: calculatorTable(['Баллы', 'Выраженность тревоги'], [['0–4', 'минимальная'], ['5–9', 'лёгкая'], ['10–14', 'умеренная'], ['15–21', 'тяжёлая']]) +
+        '<p>Каждый ответ: ни разу — 0, несколько дней — 1, более недели — 2, почти каждый день — 3; сумма от 0 до 21. 10 баллов и более — рекомендуемый порог для дальнейшей оценки, 15 и более — «красный флаг».</p>' +
+        '<h3>Ограничения</h3><p>Анкета создана для генерализованного тревожного расстройства; умеренно хорошо выявляет также паническое, социальное тревожное и посттравматическое стрессовое расстройства. Не заменяет клиническую беседу. ' + calculatorProtocolNote + '</p>',
+      sources: [
+        calculatorDoi('Spitzer RL, Kroenke K, Williams JBW, Löwe B. A brief measure for assessing generalized anxiety disorder: the GAD-7. Arch Intern Med. 2006;166(10):1092–1097.', '10.1001/archinte.166.10.1092'),
+        calculatorSource('Instructions for Patient Health Questionnaire (PHQ) and GAD-7 measures (руководство к анкетам).', 'https://www.phqscreeners.com/images/sites/g/files/g10016261/f/201412/instructions.pdf', 'phqscreeners.com'),
+        calculatorSource('GAD-7, русский перевод для России.', 'https://www.phqscreeners.com/images/sites/g/files/g10060481/f/201412/GAD7_Russian%20for%20Russia.pdf', 'phqscreeners.com')
+      ]
     }
   };
   function renderCalculators() {
@@ -2289,7 +2424,7 @@
       const values = {};
       calculatorForms[id].fields.forEach(field => {
         if (field.type === 'checks') field.items.forEach(item => { values[item.key] = false; });
-        else values[field.key] = '';
+        else if (field.type !== 'text') values[field.key] = '';
         if (field.unit) values[field.unit.key] = field.unit.options[0][0];
       });
       state.calculatorInputs[id] = values;
@@ -2302,10 +2437,11 @@
     const check = calculatorForms[id].compute(values);
     const shown = {};
     Object.keys(check.errors).forEach(key => { if (state.calculatorTouched[id][key]) shown[key] = check.errors[key]; });
-    return {values, result: check.result, errors: shown};
+    return {values, result: check.result, errors: shown, missing: check.missing};
   }
   function calculatorResultHtml(id, current = calculatorState(id)) {
-    if (!current.result) return '<p class="calculator-empty">' + (Object.keys(current.errors).length ? 'Исправьте отмеченные поля.' : calculatorForms[id].empty) + '</p>';
+    const empty = calculatorForms[id].empty;
+    if (!current.result) return '<p class="calculator-empty">' + (Object.keys(current.errors).length ? 'Исправьте отмеченные поля.' : typeof empty === 'function' ? empty(current) : empty) + '</p>';
     return calculatorForms[id].result(current.result, current.values);
   }
   function calculatorCopyText() {
@@ -2320,6 +2456,7 @@
   const calculatorTextFields = form => form.fields.filter(field => field.type === 'integer' || field.type === 'decimal');
   function calculatorField(id, field, current) {
     const values = current.values;
+    if (field.type === 'text') return '<p class="calculator-intro">' + field.text + '</p>';
     if (field.type === 'radio') {
       return '<fieldset class="field calculator-choice"><legend>' + field.legend + '</legend><div class="calculator-radios">' + field.options.map(([value, label]) =>
         '<label class="calculator-radio"><input type="radio" name="' + id + '-' + field.key + '" value="' + value + '" data-calc-field="' + field.key + '"' + (values[field.key] === value ? ' checked' : '') + '> ' + label + '</label>').join('') + '</div></fieldset>';

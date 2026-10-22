@@ -738,7 +738,7 @@ button.calculator-item:focus-visible { outline: 2px solid var(--green); outline-
 .calculator-choice legend { font-weight: 600; font-size: 14px; margin-bottom: 8px; padding: 0; }
 .calculator-radios { display: flex; flex-wrap: wrap; gap: 8px 20px; }
 .calculator-radio { display: inline-flex; align-items: center; gap: 8px; font-weight: 400; cursor: pointer; }
-.calculator-radio input { width: 18px; height: 18px; margin: 0; accent-color: var(--green); }
+.field .calculator-radio input { width: 18px; height: 18px; min-height: 0; margin: 0; padding: 0; accent-color: var(--green); }
 .calculator-unit { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 .calculator-unit select { width: auto; }
 .calculator-value { margin: 0 0 8px; color: var(--green-dark); font-size: 15px; }
@@ -763,6 +763,8 @@ button.calculator-item:focus-visible { outline: 2px solid var(--green); outline-
 .calculator-points { font-weight: 600; color: var(--green-dark); font-variant-numeric: tabular-nums; }
 .calculator-note { margin: 14px 0 0; }
 .calculator-verdict { margin: 0 0 10px; line-height: 1.6; }
+.calculator-intro { margin: 0; font-weight: 600; line-height: 1.5; }
+.calculator-alert { margin: 0 0 10px; padding: 10px 12px; border: 1px solid #efc6c2; border-radius: 8px; background: #fbeceb; color: #7a2e27; line-height: 1.55; }
 @media screen and (max-width: 760px) {
   .calculator-layout { grid-template-columns: minmax(0, 1fr); }
   .calculator-list { padding: 4px 12px 10px; }

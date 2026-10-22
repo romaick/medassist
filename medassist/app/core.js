@@ -235,6 +235,87 @@
     return { result: { centor, mcIsaac: ageGroup ? centor + MCISAAC_AGE_POINTS[ageGroup] : null, ageGroup, factors, likely: centor >= 3 }, errors: {}, missing: ageGroup ? [] : ["ageGroup"] };
   }
 
+  // Reads one typed number for a calculator: empty goes to missing, a malformed or out-of-range value to errors.
+  function readCalculatorNumber(values, key, [low, high], integer, message, errors, missing) {
+    const text = typeof values[key] === "string" ? values[key].trim() : "";
+    if (!text) { missing.push(key); return null; }
+    const number = Number(text.replace(",", "."));
+    if (!(integer ? /^\d{1,4}$/.test(text) : DECIMAL_PATTERN.test(text)) || !(number >= low && number <= high)) { errors[key] = message; return null; }
+    return number;
+  }
+
+  // FIB-4: Sterling RK et al. Hepatology 2006;43(6):1317-1325: age x AST / (platelets, 10^9/L x sqrt(ALT)).
+  // Advanced fibrosis thresholds 1.30 and 2.67 (Shah AG et al. Clin Gastroenterol Hepatol 2009;7:1104-1112);
+  // at 65 and older the lower threshold is 2.0 and the upper one is unchanged (McPherson S et al. Am J Gastroenterol 2017;112:740-751).
+  function calculateFib4(input) {
+    const values = isObject(input) ? input : {};
+    const errors = {}, missing = [];
+    const age = readCalculatorNumber(values, "age", [18, 120], true, "Возраст — целое число лет от 18 до 120.", errors, missing);
+    const ast = readCalculatorNumber(values, "ast", [1, 10000], false, "АСТ — число от 1 до 10 000 Ед/л.", errors, missing);
+    const alt = readCalculatorNumber(values, "alt", [1, 10000], false, "АЛТ — число от 1 до 10 000 Ед/л.", errors, missing);
+    const platelets = readCalculatorNumber(values, "platelets", [1, 2000], false, "Тромбоциты — число от 1 до 2000 × 10⁹/л.", errors, missing);
+    if (missing.length || Object.keys(errors).length) return { result: null, errors, missing };
+    const exact = age * ast / (platelets * Math.sqrt(alt));
+    const value = Math.round(exact * 100) / 100;
+    const lower = age >= 65 ? 2 : 1.3;
+    const risk = value <= lower ? "low" : value >= 2.67 ? "high" : "indeterminate";
+    return { result: { value, exact, lower, upper: 2.67, risk, lowAccuracy: age <= 35 }, errors, missing };
+  }
+
+  // QT correction with RR = 60 / heart rate in seconds: Bazett QT / RR^1/2, Fridericia QT / RR^1/3 (Vandenberk B et al. J Am Heart Assoc 2016;5:e003264).
+  // Upper limits of normal (99th percentile) 470 ms in men and 480 ms in women; over 500 ms is dangerous (Drew BJ et al. Circulation 2010;121:1047-1060).
+  function calculateQtc(input) {
+    const values = isObject(input) ? input : {};
+    const errors = {}, missing = [];
+    const qt = readCalculatorNumber(values, "qt", [200, 800], true, "QT — целое число от 200 до 800 мс.", errors, missing);
+    const rate = readCalculatorNumber(values, "rate", [30, 250], true, "ЧСС — целое число от 30 до 250 в минуту.", errors, missing);
+    if (!["female", "male"].includes(values.sex)) missing.push("sex");
+    if (missing.length || Object.keys(errors).length) return { result: null, errors, missing };
+    const rr = 60 / rate;
+    const limit = values.sex === "female" ? 480 : 470;
+    const grade = value => value > 500 ? "dangerous" : value > limit ? "prolonged" : "normal";
+    const bazett = Math.round(qt / Math.sqrt(rr)), fridericia = Math.round(qt / Math.cbrt(rr));
+    return { result: { rr, bazett, fridericia, limit, bazettGrade: grade(bazett), fridericiaGrade: grade(fridericia) }, errors, missing };
+  }
+
+  // FINDRISC form: Lindström J, Tuomilehto J. Diabetes Care 2003;26(3):725-731, with family history and age over 64 added on the
+  // published form (Lindström J. National Public Health Institute A 18/2006). Total 0-26 and the five 10-year risk bands of that form.
+  const FINDRISC_POINTS = Object.freeze({
+    age: { "lt45": 0, "45-54": 2, "55-64": 3, "gt64": 4 }, bmi: { "lt25": 0, "25-30": 1, "gt30": 3 }, waist: { low: 0, middle: 3, high: 4 },
+    activity: { yes: 0, no: 2 }, vegetables: { daily: 0, notDaily: 1 }, bpDrugs: { no: 0, yes: 2 }, glucose: { no: 0, yes: 5 },
+    family: { no: 0, second: 3, first: 5 }
+  });
+  const FINDRISC_BANDS = Object.freeze([[21, "veryHigh", 2], [15, "high", 3], [12, "moderate", 6], [7, "slight", 25], [0, "low", 100]]);
+
+  function scoreFindrisc(input) {
+    const values = isObject(input) ? input : {};
+    const missing = Object.keys(FINDRISC_POINTS).filter(key => !Object.prototype.hasOwnProperty.call(FINDRISC_POINTS[key], values[key]));
+    if (missing.length) return { result: null, errors: {}, missing };
+    const score = Object.keys(FINDRISC_POINTS).reduce((sum, key) => sum + FINDRISC_POINTS[key][values[key]], 0);
+    const [, risk, oneIn] = FINDRISC_BANDS.find(([from]) => score >= from);
+    return { result: { score, risk, oneIn }, errors: {}, missing };
+  }
+
+  // PHQ-9 (Kroenke K et al. J Gen Intern Med 2001;16:606-613) and GAD-7 (Spitzer RL et al. Arch Intern Med 2006;166:1092-1097):
+  // every answer scores 0-3; severity cut points as in the official PHQ and GAD-7 instruction manual.
+  function scoreSymptomQuestionnaire(input, count, cuts) {
+    const values = isObject(input) ? input : {};
+    const keys = Array.from({ length: count }, (_, index) => "q" + (index + 1));
+    const missing = keys.filter(key => !["0", "1", "2", "3"].includes(values[key]));
+    if (missing.length) return { result: null, errors: {}, missing };
+    const score = keys.reduce((sum, key) => sum + Number(values[key]), 0);
+    const [, severity] = cuts.find(([from]) => score >= from);
+    return { result: { score, severity, item9: count === 9 ? Number(values.q9) : null }, errors: {}, missing };
+  }
+
+  function scorePhq9(input) {
+    return scoreSymptomQuestionnaire(input, 9, [[20, "severe"], [15, "moderatelySevere"], [10, "moderate"], [5, "mild"], [0, "minimal"]]);
+  }
+
+  function scoreGad7(input) {
+    return scoreSymptomQuestionnaire(input, 7, [[15, "severe"], [10, "moderate"], [5, "mild"], [0, "minimal"]]);
+  }
+
   function calculateAge(birthDate, visitDate) {
     if (typeof birthDate !== "string" || typeof visitDate !== "string" || !validDate(birthDate) || !validDate(visitDate) || birthDate > visitDate) return null;
     // В невисокосный год полный год для родившихся 29 февраля наступает 1 марта.
@@ -1782,5 +1863,5 @@
     return validateBundle(parsed);
   }
 
-  return Object.freeze({ validateShortcuts, upsertShortcut, removeShortcut, findShortcutAtCaret, shortcutReplacement, MAX_SHORTCUTS, MAX_SHORTCUT_CODE_LENGTH, MAX_SHORTCUT_TEXT_LENGTH, DEFAULT_RECORD_FORMAT, RECORD_SECTIONS, validateRecordFormat, setPatientNote, MAX_PERSONAL_NOTE_LENGTH, calculateAge, encounterAge, getDiagnoses, formatDiagnoses, upsertDiagnosis, removeDiagnosis, moveDiagnosis, validateDiagnoses, MAX_DIAGNOSES, MAX_DIAGNOSIS_TEXT_LENGTH, MAX_DIAGNOSIS_SUMMARY_LENGTH, DIAGNOSIS_LABELS, createPatient, createEncounter, createRepeatEncounter, createDemoEncounter, upsertInvestigation, removeInvestigation, validateInvestigations, getInvestigationSeries, getInvestigationReports, upsertInvestigationReport, removeInvestigationReport, setEncounterInvestigations, reconcileInvestigationReferences, upsertPrescription, removePrescription, formatPrescription, validatePrescriptions, setReviewStatus, setReturnVisitStatus, linkReturnVisit, getReturnVisits, getPatientBriefing, calculateBmi, calculateEgfrCkdEpi2021, calculateCockcroftGault, scoreChadsVasc, scoreHasBled, scoreCrb65, scoreCentor, calculateSickLeaveDays, calculateSickLeaveTotalDays, getSickLeaveJournal, getEncounterSickLeaveSummary, getEncounterSickLeaveAction, applyEncounterSickLeave, undoEncounterSickLeave, issueSickLeave, extendSickLeave, closeSickLeave, undoSickLeaveAction, createVisitTemplate, applyVisitTemplate, validateTemplates, generateDraft, fingerprint, validatePatient, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_PATIENTS, MAX_PATIENT_LABEL_LENGTH, MAX_SICK_LEAVES, MAX_SICK_LEAVE_EVENTS, MAX_SICK_LEAVE_NUMBER_LENGTH, MAX_TEMPLATES, MAX_TEMPLATE_NAME_LENGTH, MAX_PRESCRIPTIONS, MAX_PRESCRIPTION_FIELD_LENGTH, MAX_PRESCRIPTION_NOTE_LENGTH, MAX_INVESTIGATIONS, MAX_INVESTIGATION_REPORT_FIELDS, INVESTIGATION_FIELD_LIMITS, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
+  return Object.freeze({ validateShortcuts, upsertShortcut, removeShortcut, findShortcutAtCaret, shortcutReplacement, MAX_SHORTCUTS, MAX_SHORTCUT_CODE_LENGTH, MAX_SHORTCUT_TEXT_LENGTH, DEFAULT_RECORD_FORMAT, RECORD_SECTIONS, validateRecordFormat, setPatientNote, MAX_PERSONAL_NOTE_LENGTH, calculateAge, encounterAge, getDiagnoses, formatDiagnoses, upsertDiagnosis, removeDiagnosis, moveDiagnosis, validateDiagnoses, MAX_DIAGNOSES, MAX_DIAGNOSIS_TEXT_LENGTH, MAX_DIAGNOSIS_SUMMARY_LENGTH, DIAGNOSIS_LABELS, createPatient, createEncounter, createRepeatEncounter, createDemoEncounter, upsertInvestigation, removeInvestigation, validateInvestigations, getInvestigationSeries, getInvestigationReports, upsertInvestigationReport, removeInvestigationReport, setEncounterInvestigations, reconcileInvestigationReferences, upsertPrescription, removePrescription, formatPrescription, validatePrescriptions, setReviewStatus, setReturnVisitStatus, linkReturnVisit, getReturnVisits, getPatientBriefing, calculateBmi, calculateEgfrCkdEpi2021, calculateCockcroftGault, scoreChadsVasc, scoreHasBled, scoreCrb65, scoreCentor, calculateFib4, calculateQtc, scoreFindrisc, scorePhq9, scoreGad7, calculateSickLeaveDays, calculateSickLeaveTotalDays, getSickLeaveJournal, getEncounterSickLeaveSummary, getEncounterSickLeaveAction, applyEncounterSickLeave, undoEncounterSickLeave, issueSickLeave, extendSickLeave, closeSickLeave, undoSickLeaveAction, createVisitTemplate, applyVisitTemplate, validateTemplates, generateDraft, fingerprint, validatePatient, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_PATIENTS, MAX_PATIENT_LABEL_LENGTH, MAX_SICK_LEAVES, MAX_SICK_LEAVE_EVENTS, MAX_SICK_LEAVE_NUMBER_LENGTH, MAX_TEMPLATES, MAX_TEMPLATE_NAME_LENGTH, MAX_PRESCRIPTIONS, MAX_PRESCRIPTION_FIELD_LENGTH, MAX_PRESCRIPTION_NOTE_LENGTH, MAX_INVESTIGATIONS, MAX_INVESTIGATION_REPORT_FIELDS, INVESTIGATION_FIELD_LIMITS, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
 });

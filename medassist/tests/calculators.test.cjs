@@ -145,3 +145,84 @@ test("HAS-BLED, CRB-65 and Centor/McIsaac add one point per ticked item", () => 
   assert.equal(centor({exudate: true, nodes: true, noCough: true}).result.likely, true);
   assert.equal(centor({ageGroup: "toString"}).result.ageGroup, "", "unknown age groups are ignored");
 });
+
+test("FIB-4 matches hand-worked values and the age-specific thresholds", () => {
+  const fib4 = core.calculateFib4;
+  // 50 × 40 / (200 × √25) = 2000 / 1000 = 2.00
+  assert.deepEqual(fib4({age: "50", ast: "40", alt: "25", platelets: "200"}).result, {value: 2, exact: 2, lower: 1.3, upper: 2.67, risk: "indeterminate", lowAccuracy: false});
+  // 45 × 20 / (250 × √36) = 900 / 1500 = 0.60
+  assert.equal(fib4({age: "45", ast: "20", alt: "36", platelets: "250"}).result.risk, "low");
+  // 70 × 60 / (120 × √16) = 4200 / 480 = 8.75
+  const high = fib4({age: "70", ast: "60", alt: "16", platelets: "120"}).result;
+  assert.deepEqual([high.value, high.risk], [8.75, "high"]);
+  // With ALT 1 and platelets 100 the index is age × AST / 100: ≤1.30 is low, ≥2.67 is high, from 65 the lower threshold is 2.0.
+  const at = (age, ast) => fib4({age: String(age), ast: String(ast), alt: "1", platelets: "100"}).result;
+  assert.deepEqual([at(50, 2.6).value, at(50, 2.6).risk], [1.3, "low"], "1.30 is still low");
+  assert.equal(at(50, 2.62).risk, "indeterminate");
+  assert.deepEqual([at(50, 5.34).value, at(50, 5.34).risk], [2.67, "high"], "2.67 is already high");
+  assert.equal(at(65, 3.077).value, 2);
+  assert.deepEqual([at(65, 3.077).risk, at(64, 3.125).risk], ["low", "indeterminate"], "2.0 is low only from age 65");
+  assert.deepEqual([at(35, 1).lowAccuracy, at(36, 1).lowAccuracy], [true, false]);
+  assert.equal(fib4({age: "50", ast: "40,5", alt: "25", platelets: "200"}).result.value, 2.03, "decimal comma");
+  assert.deepEqual(fib4({}).missing, ["age", "ast", "alt", "platelets"]);
+  assert.equal(fib4({age: "17", ast: "40", alt: "25", platelets: "200"}).errors.age, "Возраст — целое число лет от 18 до 120.");
+  assert.equal(fib4({age: "50", ast: "0", alt: "25", platelets: "200"}).errors.ast, "АСТ — число от 1 до 10 000 Ед/л.");
+  assert.equal(fib4({age: "50", ast: "40", alt: "abc", platelets: "200"}).errors.alt, "АЛТ — число от 1 до 10 000 Ед/л.");
+  assert.equal(fib4({age: "50", ast: "40", alt: "25", platelets: "2001"}).errors.platelets, "Тромбоциты — число от 1 до 2000 × 10⁹/л.");
+});
+
+test("QTc by Bazett and Fridericia uses RR = 60 / heart rate and sex-specific limits", () => {
+  const qtc = core.calculateQtc;
+  // RR 0.8 s: 400 / √0.8 = 447.2; 400 / ∛0.8 = 430.9
+  assert.deepEqual(qtc({qt: "400", rate: "75", sex: "male"}).result, {rr: 0.8, bazett: 447, fridericia: 431, limit: 470, bazettGrade: "normal", fridericiaGrade: "normal"});
+  // At 60 per minute RR is 1 s and both formulas return QT unchanged.
+  const r60 = qtc({qt: "471", rate: "60", sex: "male"}).result;
+  assert.deepEqual([r60.bazett, r60.fridericia, r60.bazettGrade], [471, 471, "prolonged"]);
+  assert.equal(qtc({qt: "470", rate: "60", sex: "male"}).result.bazettGrade, "normal", "470 ms is the male upper limit");
+  assert.equal(qtc({qt: "480", rate: "60", sex: "female"}).result.bazettGrade, "normal", "480 ms is the female upper limit");
+  assert.equal(qtc({qt: "481", rate: "60", sex: "female"}).result.bazettGrade, "prolonged");
+  assert.equal(qtc({qt: "500", rate: "60", sex: "female"}).result.bazettGrade, "prolonged");
+  assert.equal(qtc({qt: "501", rate: "60", sex: "female"}).result.bazettGrade, "dangerous");
+  // RR 0.5 s: 400 / √0.5 = 565.7; 400 / ∛0.5 = 504.0 — Bazett corrects more at a fast rate.
+  const fast = qtc({qt: "400", rate: "120", sex: "male"}).result;
+  assert.deepEqual([fast.bazett, fast.fridericia, fast.bazettGrade, fast.fridericiaGrade], [566, 504, "dangerous", "dangerous"]);
+  assert.deepEqual(qtc({}).missing, ["qt", "rate", "sex"]);
+  assert.equal(qtc({qt: "199", rate: "60", sex: "male"}).errors.qt, "QT — целое число от 200 до 800 мс.");
+  assert.equal(qtc({qt: "400", rate: "75.5", sex: "male"}).errors.rate, "ЧСС — целое число от 30 до 250 в минуту.");
+});
+
+test("FINDRISC sums the published form points into the five 10-year risk bands", () => {
+  const findrisc = core.scoreFindrisc;
+  const lowest = {age: "lt45", bmi: "lt25", waist: "low", activity: "yes", vegetables: "daily", bpDrugs: "no", glucose: "no", family: "no"};
+  const highest = {age: "gt64", bmi: "gt30", waist: "high", activity: "no", vegetables: "notDaily", bpDrugs: "yes", glucose: "yes", family: "first"};
+  assert.deepEqual(findrisc(lowest).result, {score: 0, risk: "low", oneIn: 100});
+  assert.deepEqual(findrisc(highest).result, {score: 26, risk: "veryHigh", oneIn: 2}, "4+3+4+2+1+2+5+5");
+  const band = changes => findrisc({...lowest, ...changes}).result;
+  assert.deepEqual([band({age: "45-54"}).score, band({age: "55-64"}).score, band({bmi: "25-30"}).score, band({waist: "middle"}).score, band({family: "second"}).score], [2, 3, 1, 3, 3]);
+  const cases = [[6, {age: "55-64", waist: "middle"}, "low"], [7, {age: "gt64", waist: "middle"}, "slight"], [11, {age: "gt64", waist: "middle", bpDrugs: "yes", activity: "no"}, "slight"],
+    [12, {age: "gt64", waist: "middle", glucose: "yes"}, "moderate"], [14, {age: "gt64", waist: "high", glucose: "yes", vegetables: "notDaily"}, "moderate"],
+    [15, {age: "gt64", waist: "high", glucose: "yes", activity: "no"}, "high"], [20, {age: "gt64", waist: "high", glucose: "yes", family: "first", activity: "no"}, "high"],
+    [21, {age: "gt64", waist: "high", glucose: "yes", family: "first", activity: "no", vegetables: "notDaily"}, "veryHigh"]];
+  for (const [score, changes, risk] of cases) assert.deepEqual([band(changes).score, band(changes).risk], [score, risk], String(score));
+  assert.deepEqual(findrisc({}).missing, ["age", "bmi", "waist", "activity", "vegetables", "bpDrugs", "glucose", "family"]);
+  assert.deepEqual(findrisc({...lowest, family: "toString"}).missing, ["family"]);
+});
+
+test("PHQ-9 and GAD-7 add 0-3 per answer and use the manual's severity cut points", () => {
+  const answers = (count, value) => Object.fromEntries(Array.from({length: count}, (_, index) => ["q" + (index + 1), String(value)]));
+  // Spreads a total over the items one point at a time.
+  const spread = (count, total) => { const values = answers(count, 0); for (let index = 0; index < total; index++) values["q" + (index % count + 1)] = String(Math.floor(index / count) + 1); return values; };
+  const phq = values => core.scorePhq9(values).result;
+  assert.deepEqual(phq(answers(9, 0)), {score: 0, severity: "minimal", item9: 0});
+  assert.deepEqual(phq(answers(9, 3)), {score: 27, severity: "severe", item9: 3});
+  assert.deepEqual([4, 5, 9, 10, 14, 15, 19, 20].map(total => { const result = phq(spread(9, total)); assert.equal(result.score, total); return result.severity; }),
+    ["minimal", "mild", "mild", "moderate", "moderate", "moderatelySevere", "moderatelySevere", "severe"]);
+  assert.equal(phq({...answers(9, 0), q9: "1"}).item9, 1);
+  assert.deepEqual(core.scorePhq9({...answers(9, 1), q4: "4"}).missing, ["q4"]);
+  assert.deepEqual(core.scorePhq9({...answers(9, 1), q2: 2}).missing, ["q2"], "answers are the radio values");
+  const gad = values => core.scoreGad7(values).result;
+  assert.deepEqual(gad(answers(7, 3)), {score: 21, severity: "severe", item9: null});
+  assert.deepEqual([4, 5, 9, 10, 14, 15].map(total => { const result = gad(spread(7, total)); assert.equal(result.score, total); return result.severity; }),
+    ["minimal", "mild", "mild", "moderate", "moderate", "severe"]);
+  assert.deepEqual(core.scoreGad7({}).missing, ["q1", "q2", "q3", "q4", "q5", "q6", "q7"]);
+});

@@ -65,8 +65,8 @@ test("Калькуляторы sit in the Modules menu with system rubrics; only
   assert.deepEqual(await page.locator("#calculator-rubrics [role=tab]").allInnerTexts(), ["Все", "Почки", "Сердце и сосуды", "Инфекции и лёгкие", "Обмен веществ", "Печень", "Психика"]);
   assert.deepEqual(await groups(page), ["Почки", "Сердце и сосуды", "Инфекции и лёгкие", "Обмен веществ", "Печень", "Психика"]);
   assert.deepEqual(await page.locator('[data-action="calc-open"]').evaluateAll(nodes => nodes.map(node => node.dataset.calculator)),
-    ["egfr", "cockcroft", "chads", "hasbled", "crb65", "centor"], "only calculators verified against sources open");
-  assert.equal(await page.locator(".calculator-item.unavailable").filter({hasText: "Готовится"}).count(), 6);
+    ["egfr", "cockcroft", "chads", "hasbled", "qtc", "crb65", "centor", "findrisc", "fib4", "phq9", "gad7"], "only calculators verified against sources open");
+  assert.deepEqual(await page.locator(".calculator-item.unavailable").filter({hasText: "Готовится"}).allInnerTexts().then(items => items.map(item => item.split("\n")[0])), ["SCORE2"]);
   assert.match(await page.locator(".calculator-item.unavailable").filter({hasText: "Индекс массы тела"}).innerText(), /В разделе «Осмотр»/);
 
   await page.locator("#calc-rubric-kidney").click();
@@ -169,7 +169,7 @@ test("calculator list and eGFR fit a 390px screen without horizontal page scroll
   await page.locator("#calc-rubric-mind").scrollIntoViewIfNeeded();
   await page.locator("#calc-rubric-mind").click();
   assert.deepEqual(await groups(page), ["Психика"]);
-  await page.locator('[data-action="calc-open"]').count().then(count => assert.equal(count, 0));
+  assert.deepEqual(await page.locator('[data-action="calc-open"]').evaluateAll(nodes => nodes.map(node => node.dataset.calculator)), ["phq9", "gad7"]);
   await page.locator("#calc-rubric-kidney").scrollIntoViewIfNeeded();
   await page.locator("#calc-rubric-kidney").click();
   await page.locator('[data-action="calc-open"][data-calculator="egfr"]').click();
@@ -306,6 +306,123 @@ test("score calculators fit a 390px screen without horizontal page scrolling", {
     await page.locator('[data-action="calc-open"][data-calculator="' + id + '"]').click();
     await page.locator("#" + id + "-result").waitFor();
     if (id === "chads") { await page.locator("#chads-age").fill("80"); await page.locator('input[name="chads-sex"][value="female"]').check(); await page.locator("#chads-vascular").check(); }
+    assert.equal(await overflow(), 0, id);
+    const box = await page.locator(".calculator-form").boundingBox();
+    assert.equal(box.x + box.width <= 390, true, id + " form stays on screen");
+  }
+});
+
+async function answerAll(page, id, values) {
+  for (const [name, value] of Object.entries(values)) await page.locator('input[name="' + id + '-' + name + '"][value="' + value + '"]').check();
+}
+
+test("FIB-4 and corrected QT show hand-checked values, thresholds and sources", {timeout: 25000}, async t => {
+  const page = await openApp(t);
+  await openCalculator(page, "fib4");
+  await stubClipboard(page);
+  assert.equal(await page.locator("h1").innerText(), "FIB-4");
+  assert.equal(await resultOf(page, "fib4"), "Введите возраст, АСТ, АЛТ и тромбоциты.");
+  await page.locator("#fib4-age").fill("50");
+  await page.locator("#fib4-ast").fill("40");
+  await page.locator("#fib4-alt").fill("25");
+  await page.locator("#fib4-platelets").fill("0");
+  await page.locator("#fib4-age").focus();
+  assert.equal(await page.locator("#fib4-platelets-error").innerText(), "Тромбоциты — число от 1 до 2000 × 10⁹/л.");
+  await page.locator("#fib4-platelets").fill("200");
+  // 50 × 40 / (200 × √25) = 2.00
+  assert.match(await resultOf(page, "fib4"), /^2,00 FIB-4 неопределённая зона пороги 1,30 и 2,67 Между порогами/);
+  await page.locator("#fib4-age").fill("65");
+  assert.match(await resultOf(page, "fib4"), /^2,60 FIB-4 неопределённая зона пороги 2,0 и 2,67/);
+  await page.locator("#fib4-ast").fill("30");
+  assert.match(await resultOf(page, "fib4"), /^1,95 FIB-4 выраженный фиброз маловероятен пороги 2,0 и 2,67/);
+  assert.equal(await copyResult(page, "fib4"), "FIB-4 1,95 (выраженный фиброз маловероятен); возраст 65 лет, АСТ 30 Ед/л, АЛТ 25 Ед/л, тромбоциты 200 × 10⁹/л.");
+  assert.match(await page.locator(".calculator-reference").innerText(), /FIB-4 = возраст × АСТ \/ \(тромбоциты × √АЛТ\)/);
+  assert.deepEqual(await sourceLinks(page), ["https://doi.org/10.1002/hep.21178", "https://doi.org/10.1016/j.cgh.2009.05.033", "https://doi.org/10.1038/ajg.2016.453", "https://doi.org/10.1016/j.jhep.2024.04.031"]);
+
+  await page.locator('[data-action="calc-back"]').click();
+  await page.locator('[data-action="calc-open"][data-calculator="qtc"]').click();
+  assert.equal(await page.locator("h1").innerText(), "Корригированный интервал QT");
+  await page.locator("#qtc-qt").fill("400");
+  await page.locator("#qtc-rate").fill("75");
+  await page.locator('input[name="qtc-sex"][value="male"]').check();
+  // RR 0.8 s: 400 / ∛0.8 = 431; 400 / √0.8 = 447
+  assert.match(await resultOf(page, "qtc"), /^431 мс по Фридериции не выше верхней границы нормы По Базетту: 447 мс — не выше верхней границы нормы\. Верхняя граница нормы \(99-й перцентиль\) — 470 мс/);
+  await page.locator("#qtc-rate").fill("120");
+  assert.match(await resultOf(page, "qtc"), /^504 мс по Фридериции опасное удлинение, более 500 мс По Базетту: 566 мс/);
+  assert.equal(await copyResult(page, "qtc"), "QTc по Фридериции 504 мс (опасное удлинение, более 500 мс), по Базетту 566 мс (опасное удлинение, более 500 мс); QT 400 мс, ЧСС 120 в минуту.");
+  await page.locator('input[name="qtc-sex"][value="female"]').check();
+  await page.locator("#qtc-rate").fill("60");
+  await page.locator("#qtc-qt").fill("481");
+  assert.match(await resultOf(page, "qtc"), /^481 мс по Фридериции удлинён .*480 мс/);
+  assert.deepEqual(await sourceLinks(page), ["https://doi.org/10.1046/j.1542-474X.2003.08413.x", "https://doi.org/10.1161/JAHA.116.003264", "https://doi.org/10.1161/CIRCULATIONAHA.109.192704"]);
+  assert.match(await page.locator(".calculator-sources").innerText(), /Bazett HC\. An analysis of the time-relations of electrocardiograms\. Heart\. 1920;7:353–370\./);
+});
+
+test("FINDRISC counts unanswered questions and sums the form points", {timeout: 25000}, async t => {
+  const page = await openApp(t);
+  await openCalculator(page, "findrisc");
+  await stubClipboard(page);
+  assert.equal(await resultOf(page, "findrisc"), "Ответьте на все 8 вопросов: осталось 8.");
+  assert.equal(await page.locator("#findrisc-copy").isDisabled(), true);
+  await answerAll(page, "findrisc", {age: "55-64", bmi: "25-30", waist: "middle", activity: "no", vegetables: "daily", bpDrugs: "yes", glucose: "no"});
+  assert.equal(await resultOf(page, "findrisc"), "Ответьте на все 8 вопросов: осталось 1.");
+  await answerAll(page, "findrisc", {family: "second"});
+  // 3 + 1 + 3 + 2 + 0 + 2 + 0 + 3 = 14
+  assert.match(await resultOf(page, "findrisc"), /^14 баллов по FINDRISC умеренный риск Ориентировочно 1 из 6 человек/);
+  await answerAll(page, "findrisc", {family: "first"});
+  assert.match(await resultOf(page, "findrisc"), /^16 баллов по FINDRISC высокий риск Ориентировочно 1 из 3 человек/);
+  assert.equal(await copyResult(page, "findrisc"), "FINDRISC — 16 баллов: высокий риск сахарного диабета 2 типа (около 1 из 3 за 10 лет).");
+  assert.deepEqual(await page.locator(".calculator-table tbody tr").allInnerTexts().then(rows => rows.map(row => row.split("\t")[0])), ["менее 7", "7–11", "12–14", "15–20", "более 20"]);
+  assert.match(await page.locator(".calculator-reference").innerText(), /наш перевод, а не валидированная версия анкеты/);
+});
+
+test("PHQ-9 and GAD-7 use the official Russian wording, flag question 9 and copy the record line", {timeout: 30000}, async t => {
+  const page = await openApp(t);
+  const before = await storageSnapshot(page);
+  await openCalculator(page, "phq9");
+  await stubClipboard(page);
+  assert.equal(await page.locator(".calculator-intro").innerText(), "Как часто за последние 2 недели Вас беспокоили следующие проблемы?");
+  const legends = await page.locator(".calculator-form legend").allInnerTexts();
+  assert.equal(legends.length, 10);
+  assert.equal(legends[0], "1. Вам не хотелось ничего делать");
+  assert.equal(legends[8], "9. Вас посещали мысли о том, что Вам лучше было бы умереть, или о том, чтобы причинить себе какой-нибудь вред");
+  assert.deepEqual(await page.locator('input[name="phq9-q1"]').evaluateAll(nodes => nodes.map(node => node.closest("label").innerText.trim())), ["ни разу — 0", "несколько дней — 1", "более недели — 2", "почти каждый день — 3"]);
+  assert.match(await page.locator(".calculator-note").innerText(), /официальный русский перевод/);
+  assert.equal(await resultOf(page, "phq9"), "Ответьте на все 9 вопросов: осталось 9.");
+  await answerAll(page, "phq9", {q1: "2", q2: "2", q3: "1", q4: "2", q5: "1", q6: "1", q7: "1", q8: "0", q9: "0"});
+  assert.match(await resultOf(page, "phq9"), /^10 баллов по PHQ-9 выраженность депрессии: умеренная Предлагаемые действия по руководству PHQ — план лечения/);
+  assert.equal(await page.locator(".calculator-alert").count(), 0);
+  await answerAll(page, "phq9", {q9: "1", difficulty: "some"});
+  assert.match(await resultOf(page, "phq9"), /^11 баллов по PHQ-9 .*Вопрос 9 — положительный ответ\. Требуется клиническая оценка суицидального риска\./);
+  assert.equal(await copyResult(page, "phq9"), "PHQ-9 — 11 баллов (выраженность депрессии: умеренная); вопрос 9 — 1 балл; трудности из-за этих проблем: немного трудно.");
+  await page.locator('input[name="phq9-q8"][value="2"]').focus();
+  await page.keyboard.press("Space");
+  assert.match(await resultOf(page, "phq9"), /^13 баллов/, "answers work from the keyboard");
+
+  await page.locator('[data-action="calc-back"]').click();
+  await page.locator('[data-action="calc-open"][data-calculator="gad7"]').click();
+  assert.equal(await page.locator(".calculator-intro").innerText(), "Как часто Вас за последние 14 дней беспокоили следующие проблемы?");
+  assert.equal(await page.locator(".calculator-form legend").last().innerText(), "7. Вы испытывали страх, словно должно произойти нечто ужасное");
+  await answerAll(page, "gad7", {q1: "2", q2: "1", q3: "2", q4: "1", q5: "0", q6: "1", q7: "1"});
+  assert.match(await resultOf(page, "gad7"), /^8 баллов по GAD-7 выраженность тревоги: лёгкая Ниже порога 10 баллов/);
+  await answerAll(page, "gad7", {q5: "2"});
+  assert.match(await resultOf(page, "gad7"), /^10 баллов по GAD-7 выраженность тревоги: умеренная 10 баллов и более — рекомендуемый порог/);
+  assert.equal(await copyResult(page, "gad7"), "GAD-7 — 10 баллов (выраженность тревоги: умеренная).");
+  assert.deepEqual(await sourceLinks(page), ["https://doi.org/10.1001/archinte.166.10.1092", "https://www.phqscreeners.com/images/sites/g/files/g10016261/f/201412/instructions.pdf", "https://www.phqscreeners.com/images/sites/g/files/g10060481/f/201412/GAD7_Russian%20for%20Russia.pdf"]);
+  await page.locator('[data-action="calc-back"]').click();
+  await page.locator('[data-action="calc-open"][data-calculator="phq9"]').click();
+  assert.equal(await page.locator('input[name="phq9-q9"][value="1"]').isChecked(), true, "answers survive switching calculators in this window");
+  assert.equal(await storageSnapshot(page), before, "nothing is written to localStorage or sessionStorage");
+});
+
+test("FIB-4, QT, FINDRISC, PHQ-9 and GAD-7 fit a 390px screen", {timeout: 25000}, async t => {
+  const page = await openApp(t, {width: 390, height: 844});
+  const overflow = () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  for (const id of ["fib4", "qtc", "findrisc", "phq9", "gad7"]) {
+    await page.locator('#main-navigation [data-action="calculators"]').click();
+    await page.locator("#calculator-list").waitFor();
+    await page.locator('[data-action="calc-open"][data-calculator="' + id + '"]').click();
+    await page.locator("#" + id + "-result").waitFor();
     assert.equal(await overflow(), 0, id);
     const box = await page.locator(".calculator-form").boundingBox();
     assert.equal(box.x + box.width <= 390, true, id + " form stays on screen");

@@ -265,11 +265,13 @@
     else {
       const modulesArea = moduleViews.includes(state.view);
       const sectionName = {home: 'Рабочий стол', patients: 'Пациенты', followups: 'Повторные приёмы', patient: 'Карточка пациента', visit: 'Демонстрационный приём', modules: 'Возможности и развитие', calculators: 'Калькуляторы', help: 'Помощь и данные'}[state.view];
-      app.innerHTML = '<div class="shell"><header class="navigation-header"><div class="brand"><img src="icon.svg" alt=""><div><strong>Медасист</strong><small>Рабочее место врача</small></div></div><nav id="main-navigation" class="nav pager-tabs" aria-label="Главная навигация">' +
+      app.innerHTML = '<div class="shell"><header class="navigation-header"><div class="brand-row">' + backButton() + '<div class="brand"><img src="icon.svg" alt=""><div><strong>Медасист</strong><small><span class="context-mode">' + (modulesArea ? 'Модули' : 'Поликлиника') + '</span> · <span class="context-section">' + sectionName + '</span></small></div></div>' +
+        (modulesArea ? '' : '<button type="button" class="search-launch" data-action="search-patients" aria-label="Найти пациента" aria-keyshortcuts="Control+K" title="Найти пациента: Ctrl + K">' + icon('search') + '<span>Найти пациента</span><kbd>Ctrl + K</kbd></button>') +
+        '<div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div></div><nav id="main-navigation" class="nav pager-tabs" aria-label="Главная навигация">' +
         (modulesArea ? navButton('modules', 'Модули', 'grid') + navButton('calculators', 'Калькуляторы', 'calculator') : navButton('home', 'Рабочий стол', 'home') + navButton('patients', 'Пациенты', 'user') +
         (current ? navButton('visit', 'Текущий приём', 'document') : navButton('new', 'Новый пациент', 'plus')) + navButton('followups', 'Повторные приёмы', 'calendar') + navButton('help', 'Помощь и данные', 'help') + navButton('check-updates', 'Проверить обновления', 'download')) +
         navButton('choose-area', 'Выбор раздела', 'back') +
-        '</nav><div class="rail-note">' + (modulesArea ? 'Модули МедАссистента' : 'Поликлинический приём') + '<br><span>Беларусь · деморежим</span><span>Версия 0.30.0</span></div></header><aside class="topbar context-sidebar" aria-label="Дата, время и текущий раздел"><div class="current-datetime" title="Дата и время на этом компьютере"><time id="current-date"></time><time id="current-time"></time></div>' + backButton() + '<div class="topbar-left"><span class="context-mode">' + (modulesArea ? 'Модули' : 'Поликлиника') + '</span><strong>' + sectionName + '</strong></div>' + (modulesArea ? '' : '<button type="button" class="search-launch" data-action="search-patients" aria-label="Найти пациента" aria-keyshortcuts="Control+K" title="Найти пациента: Ctrl + K">' + icon('search') + '<span>Найти пациента</span><kbd>Ctrl + K</kbd></button>') + '<div class="side-bottom"><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><div class="version">Прототип 0.30.0</div></div></aside><div class="workspace"><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
+        '</nav></header><aside class="context-sidebar" aria-label="' + (modulesArea ? 'Сведения о модулях' : 'Пациенты и сведения о разделе') + '">' + (modulesArea ? contextModules() : contextPatients(current)) + '<div class="side-bottom"><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><div class="rail-note">' + (modulesArea ? 'Модули МедАссистента' : 'Поликлинический приём') + '<br><span>Беларусь · деморежим</span><span>Версия 0.31.0</span></div><div class="version">Прототип 0.31.0</div></div></aside><div class="workspace"><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
         (state.migrated && !modulesArea ? '<div class="migration-notice">Прежние записи доступны со статусом «Черновик». Карточки, данные и ручные тексты сохранены. Исходное сохранение предыдущей версии не изменяется.</div>' : '') +
         ({home: renderHome, patients: renderPatients, followups: renderFollowups, patient: renderPatient, visit: renderVisit, modules: renderModules, calculators: renderCalculators, help: renderHelp}[state.view])() +
         '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span>' + (modulesArea ? '' : '<span class="keyboard-hint"><kbd>Ctrl + K</kbd> поиск · <kbd>Ctrl + S</kbd> сохранить · <kbd>Alt + 1–5</kbd> разделы приёма · <kbd>Alt + ←</kbd> назад</span>') + '</footer></main></div></div>';
@@ -284,6 +286,22 @@
     if (state.view === 'visit') { updateValidation(); updateDraftState(); updateReviewState(); }
     observeVisitLayout();
     bindPageNavigation();
+  }
+  // Context column: recent patient cards (the current one first) open the card through the usual navigation.
+  function contextPatients(current) {
+    const selectedId = state.view === 'visit' && current ? current.patientId : state.view === 'patient' ? state.patientId : '';
+    const visitPatientId = current ? current.patientId : '';
+    const shown = [...state.patients].sort((a, b) => Number(b.id === selectedId) - Number(a.id === selectedId) || Number(b.id === visitPatientId) - Number(a.id === visitPatientId) || b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id)).slice(0, 6);
+    const details = patient => {
+      const age = core.calculateAge(patient.birthDate || '', localDate());
+      return (age === null ? '' : age + ' ' + yearsWord(age) + ' · ') + 'Код ' + shortId(patient);
+    };
+    return '<section class="context-patients" aria-labelledby="context-patients-title"><div class="side-head"><h2 id="context-patients-title">Пациенты</h2><span class="result-count" title="Всего карточек">' + state.patients.length + '</span></div>' +
+      (shown.length ? '<ul class="side-patients">' + shown.map(patient => '<li><button type="button" class="side-patient" data-action="context-patient" data-patient-id="' + escape(patient.id) + '"' + (patient.id === selectedId ? ' aria-current="true"' : '') + '><strong>' + escape(patientName(patient)) + '</strong><small>' + escape(details(patient)) + '</small>' + (patient.id === visitPatientId ? '<span class="side-current">Текущий приём</span>' : '') + '</button></li>').join('') + '</ul>' +
+        (state.patients.length > shown.length ? '<p class="side-more">Остальные карточки — в разделе «Пациенты».</p>' : '') : '<p class="side-more">Карточек пока нет.</p>') + '</section>';
+  }
+  function contextModules() {
+    return '<section class="context-modules" aria-labelledby="context-modules-title"><div class="side-head"><h2 id="context-modules-title">Модули</h2></div><p class="side-more">Калькуляторы и план развития МедАссистента. Расчёт требует проверки врачом; введённые значения не сохраняются.</p></section>';
   }
   function navButton(view, text, symbol) {
     const current = view === (state.view === 'patient' ? 'patients' : state.view);
@@ -3443,7 +3461,7 @@
       if (pending) state.pendingNew = null;
       render(); toast(reviewed ? 'Запись отмечена: проверено врачом.' : 'Запись возвращена в черновики.'); return;
     }
-    if (action === 'patient') { state.patientId = target.dataset.patientId; state.patientTab = 'history'; state.patientEditOpen = false; navigate('patient'); return; }
+    if (action === 'patient' || action === 'context-patient') { state.patientId = target.dataset.patientId; state.patientTab = 'history'; state.patientEditOpen = false; navigate('patient'); return; }
     if (action === 'repeat') {
       if (state.externalChange) { toast('Сначала загрузите сохранённую версию: данные изменились в другом окне.', true); return; }
       openRepeatDialog(); return;

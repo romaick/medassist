@@ -353,7 +353,7 @@ test("main and newly covered filters honor reduced motion without changing recor
   assert.equal(await raw(page), original.value);
 });
 
-test("global menu forms a left rail with top context, usable narrow navigation and fixed visit controls", {timeout: 25000}, async t => {
+test("top bar holds Back, brand and menu above a context column, with usable narrow navigation and fixed visit controls", {timeout: 25000}, async t => {
   const page = await openApp(t, {reducedMotion: "reduce"});
   await page.setViewportSize({width: 1366, height: 768});
   const menu = page.locator('.navigation-header .nav');
@@ -362,16 +362,19 @@ test("global menu forms a left rail with top context, usable narrow navigation a
       const box = document.querySelector(selector).getBoundingClientRect();
       return {left: box.left, right: box.right, top: box.top, bottom: box.bottom, height: box.height};
     };
-    return {header: rect('.navigation-header'), sidebar: rect('.context-sidebar'), main: rect('main'),
+    return {header: rect('.navigation-header'), sidebar: rect('.context-sidebar'), main: rect('main'), back: rect('.back-button'), brand: rect('.navigation-header .brand'),
       menuRows: [...document.querySelectorAll('.navigation-header .nav button')].map(node => node.getBoundingClientRect().top),
       menuColumns: [...document.querySelectorAll('.navigation-header .nav button')].map(node => node.getBoundingClientRect().left)};
   });
-  assert.ok(desktop.header.right <= desktop.sidebar.left + 1, "the navigation rail leaves space for top context");
-  assert.ok(desktop.header.right <= desktop.main.left + 1, "the workspace sits beside the rail");
-  assert.ok(desktop.sidebar.bottom <= desktop.main.top + 1, "date and current section sit above the workspace");
-  assert.equal(desktop.header.height, 768, "the navigation rail spans the viewport");
-  assert.equal(new Set(desktop.menuRows).size, desktop.menuRows.length, "navigation entries occupy separate rows");
-  assert.equal(new Set(desktop.menuColumns).size, 1, "navigation entries align in one column");
+  assert.equal(desktop.header.left, 0);
+  assert.equal(desktop.header.right, 1366, "the top bar spans the window");
+  assert.ok(desktop.back.right <= desktop.brand.left, "Back stands before the brand");
+  assert.ok(desktop.sidebar.top >= desktop.header.bottom - 1, "the context column starts below the top bar");
+  assert.ok(desktop.main.top >= desktop.header.bottom - 1, "the workspace starts below the top bar");
+  assert.ok(desktop.sidebar.right <= desktop.main.left + 1, "the workspace sits beside the context column");
+  assert.equal(Math.round(desktop.sidebar.right - desktop.sidebar.left), 220, "the context column keeps its width");
+  assert.equal(new Set(desktop.menuRows).size, 1, "navigation entries share one row");
+  assert.equal(new Set(desktop.menuColumns).size, desktop.menuColumns.length, "navigation entries stand side by side");
   assert.equal(await page.locator("#current-date").textContent(), "19 апреля(04) 2032");
   assert.equal(await page.locator("#current-time").textContent(), "11:00");
   for (const name of ["patients", "followups", "help", "home"]) {
@@ -386,13 +389,12 @@ test("global menu forms a left rail with top context, usable narrow navigation a
   const pinned = await page.evaluate(() => {
     const head = document.querySelector(".visit-context").getBoundingClientRect();
     const actions = document.querySelector(".visit-action-bar").getBoundingClientRect();
-    const side = document.querySelector(".navigation-header").getBoundingClientRect();
-    return {headTop: head.top, sideTop: side.top, actionBottom: actions.bottom, actionLeft: actions.left, sideRight: side.right};
+    const side = document.querySelector(".context-sidebar").getBoundingClientRect();
+    return {headTop: head.top, actionBottom: actions.bottom, actionLeft: actions.left, sideRight: side.right};
   });
   assert.ok(pinned.headTop >= -1 && pinned.headTop <= 1, "visit identity stays at the viewport top");
-  assert.ok(pinned.sideTop >= -1 && pinned.sideTop <= 1, "navigation stays visible while scrolling");
   assert.equal(pinned.actionBottom, 768);
-  assert.equal(pinned.actionLeft, pinned.sideRight);
+  assert.equal(pinned.actionLeft, pinned.sideRight, "visit actions start at the context column");
   await page.setViewportSize({width: 390, height: 844});
   await menu.locator('[data-action="help"]').click();
   const narrow = await page.evaluate(() => {
@@ -411,6 +413,28 @@ test("global menu forms a left rail with top context, usable narrow navigation a
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
 });
 
+test("context column lists recent cards, marks the open one and opens a card without touching records", {timeout: 18000}, async t => {
+  const page = await openApp(t);
+  await seed(page);
+  await page.locator("#main-navigation").waitFor();
+  const stored = await raw(page);
+  const entries = page.locator('.context-sidebar [data-action="context-patient"]');
+  assert.equal(await entries.count(), 4);
+  assert.equal(await page.locator('.context-sidebar [aria-current="true"]').count(), 0, "no card is selected on the desk");
+  await entries.filter({hasText: "Тестов Борис Вымышленный"}).click();
+  await selected(cardTab(page, "history"));
+  assert.equal(await page.locator("#patient-heading").textContent(), "Тестов Борис Вымышленный");
+  assert.equal(await page.locator('.context-sidebar [aria-current="true"]').getAttribute("data-patient-id"), "nav-return");
+  assert.equal(await entries.first().getAttribute("data-patient-id"), "nav-return", "the open card leads the list");
+  await page.locator('#patient-history [data-action="open"][data-id="nav-visit-return"]').click();
+  await selected(visitTab(page, "basic"));
+  assert.match(await page.locator('.context-sidebar [aria-current="true"]').innerText(), /Текущий приём/);
+  assert.equal(await page.locator('[data-action="go-back"]').getAttribute("aria-label"), "Назад: карточка «Тестов Борис Вымышленный»");
+  assert.equal(await raw(page), stored, "the context column never writes records");
+  await page.setViewportSize({width: 390, height: 844});
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  assert.equal(await entries.first().isVisible(), true, "recent cards stay reachable on a narrow window");
+});
 test("New patient becomes Current visit in the same menu slot and returns to the saved encounter", {timeout: 18000}, async t => {
   const page = await openApp(t);
   const menu = page.locator("#main-navigation");

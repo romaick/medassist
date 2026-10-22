@@ -65,8 +65,8 @@ test("Калькуляторы sit in the Modules menu with system rubrics; only
   assert.deepEqual(await page.locator("#calculator-rubrics [role=tab]").allInnerTexts(), ["Все", "Почки", "Сердце и сосуды", "Инфекции и лёгкие", "Обмен веществ", "Печень", "Психика"]);
   assert.deepEqual(await groups(page), ["Почки", "Сердце и сосуды", "Инфекции и лёгкие", "Обмен веществ", "Печень", "Психика"]);
   assert.deepEqual(await page.locator('[data-action="calc-open"]').evaluateAll(nodes => nodes.map(node => node.dataset.calculator)),
-    ["egfr", "cockcroft", "chads", "hasbled", "qtc", "crb65", "centor", "findrisc", "fib4", "phq9", "gad7"], "only calculators verified against sources open");
-  assert.deepEqual(await page.locator(".calculator-item.unavailable").filter({hasText: "Готовится"}).allInnerTexts().then(items => items.map(item => item.split("\n")[0])), ["SCORE2"]);
+    ["egfr", "cockcroft", "chads", "hasbled", "score2", "qtc", "crb65", "centor", "findrisc", "fib4", "phq9", "gad7"], "only calculators verified against sources open");
+  assert.deepEqual(await page.locator(".calculator-item.unavailable").filter({hasText: "Готовится"}).allInnerTexts().then(items => items.map(item => item.split("\n")[0])), [], "every listed calculator is ready");
   assert.match(await page.locator(".calculator-item.unavailable").filter({hasText: "Индекс массы тела"}).innerText(), /В разделе «Осмотр»/);
 
   await page.locator("#calc-rubric-kidney").click();
@@ -427,4 +427,46 @@ test("FIB-4, QT, FINDRISC, PHQ-9 and GAD-7 fit a 390px screen", {timeout: 25000}
     const box = await page.locator(".calculator-form").boundingBox();
     assert.equal(box.x + box.width <= 390, true, id + " form stays on screen");
   }
+});
+
+test("SCORE2 and SCORE2-OP reproduce the published examples, explain their limits and fit 390px", {timeout: 25000}, async t => {
+  const page = await openApp(t);
+  await openCalculator(page, "score2");
+  await stubClipboard(page);
+  assert.equal(await page.locator("h1").innerText(), "SCORE2 и SCORE2-OP");
+  assert.equal(await resultOf(page, "score2"), "Введите возраст, пол, курение, САД, общий холестерин и ЛПВП.");
+  assert.match(await page.locator("#score2-age-hint").innerText(), /70 лет и старше — SCORE2-OP/);
+  await page.locator("#score2-age").fill("101");
+  await page.locator("#score2-sbp").focus();
+  assert.equal(await page.locator("#score2-age-error").innerText(), "Возраст — целое число лет от 40 до 100: SCORE2 для 40–69 лет, SCORE2-OP для 70 лет и старше.");
+  await page.locator("#score2-age").fill("50");
+  await page.locator('input[name="score2-sex"][value="male"]').check();
+  await page.locator('input[name="score2-smoking"][value="yes"]').check();
+  await page.locator("#score2-sbp").fill("140");
+  await page.locator("#score2-tchol").fill("5,5");
+  await page.locator("#score2-hdl").fill("1,3");
+  assert.match(await resultOf(page, "score2"), /^14,0 % за 10 лет по SCORE2 очень высокий риск пороги для этого возраста: 5,0 и 10,0 %/);
+  await page.locator('input[name="score2-sex"][value="female"]').check();
+  assert.match(await resultOf(page, "score2"), /^13,7 % за 10 лет по SCORE2 очень высокий риск/);
+  await page.locator("#score2-age").fill("75");
+  // SCORE2-OP supplement example (woman, 75, smoker, SBP 140, cholesterol 5.5, HDL 1.3): 24.4% before, 45.5% after very high-risk rescaling.
+  assert.match(await resultOf(page, "score2"), /^45,5 % за 10 лет по SCORE2-OP очень высокий риск пороги для этого возраста: 7,5 и 15,0 %/);
+  await page.locator("#score2-age").fill("50");
+  assert.equal(await copyResult(page, "score2"), "SCORE2 (регион очень высокого риска) — 13,7% за 10 лет: очень высокий риск; возраст 50 лет, курит, САД 140 мм рт. ст., общий холестерин 5,5 ммоль/л, ЛПВП 1,3 ммоль/л.");
+  await page.locator("#score2-age").fill("45");
+  await page.locator('input[name="score2-smoking"][value="no"]').check();
+  await page.locator("#score2-sbp").fill("110");
+  await page.locator("#score2-tchol").fill("4.5");
+  await page.locator("#score2-hdl").fill("1.6");
+  assert.match(await resultOf(page, "score2"), /^1,9 % за 10 лет по SCORE2 низкий или умеренный риск пороги для этого возраста: 2,5 и 7,5 %/);
+  const reference = await page.locator(".calculator-reference").innerText();
+  assert.match(reference, /0,5836 и 0,8294 у мужчин, 0,9412 и 0,8329 у женщин/);
+  assert.match(reference, /0,05 и 0,70 у мужчин, 0,38 и 0,69 у женщин/);
+  assert.match(reference, /70 лет и старше\tменее 7,5%/);
+  assert.match(reference, /Беларусь в него входит/);
+  assert.match(reference, /сверены по вторичным источникам/);
+  assert.deepEqual(await sourceLinks(page), ["https://doi.org/10.1093/eurheartj/ehab309", "https://doi.org/10.1093/eurheartj/ehab312", "https://doi.org/10.1093/eurheartj/ehab484", "https://doi.org/10.1038/s44161-024-00438-8", "https://doi.org/10.1093/eurheartj/ehad539"]);
+  assert.match(await page.locator(".calculator-sources + .hint").innerText(), /14,0% у мужчин и 13,7% у женщин/);
+  await page.setViewportSize({width: 390, height: 844});
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), 0);
 });

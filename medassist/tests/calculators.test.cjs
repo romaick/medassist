@@ -226,3 +226,49 @@ test("PHQ-9 and GAD-7 add 0-3 per answer and use the manual's severity cut point
     ["minimal", "mild", "mild", "moderate", "moderate", "severe"]);
   assert.deepEqual(core.scoreGad7({}).missing, ["q1", "q2", "q3", "q4", "q5", "q6", "q7"]);
 });
+
+test("SCORE2 reproduces the published very high-risk example and the ESC 2021 age-specific categories", () => {
+  const score2 = core.calculateScore2;
+  const base = {age: "50", sex: "male", smoking: "yes", sbp: "140", tchol: "5.5", hdl: "1.3"};
+  // SCORE2 abstract: 50-year-old smoker, SBP 140, total cholesterol 5.5, HDL 1.3 — 14.0% for men and 13.7% for women in very high-risk countries.
+  assert.equal(score2(base).result.percent, 14);
+  assert.ok(Math.abs(score2(base).result.exact - 14.0486) < 0.001);
+  assert.equal(score2({...base, sex: "female"}).result.percent, 13.7);
+  assert.equal(score2({...base, tchol: "5,5", hdl: "1,3"}).result.percent, 14, "decimal comma");
+  // At the centring values (age 60, SBP 120, cholesterol 6, HDL 1.3, non-smoker) the linear predictor is 0:
+  // 1 − 0.9605 = 0.0395 → 1 − exp(−exp(0.5836 + 0.8294 × ln(−ln 0.9605))) = 11.745%.
+  assert.ok(Math.abs(score2({age: "60", sex: "male", smoking: "no", sbp: "120", tchol: "6", hdl: "1.3"}).result.exact - 11.7451) < 0.001);
+  assert.deepEqual(score2(base).result.limits, [5, 10]);
+  assert.equal(score2(base).result.category, "veryHigh");
+  assert.deepEqual(score2({...base, age: "49"}).result.limits, [2.5, 7.5], "under 50 the thresholds are 2.5 and 7.5%");
+  const category = changes => score2({...base, ...changes}).result;
+  const low = category({age: "45", smoking: "no", sbp: "110", tchol: "4.5", hdl: "1.6", sex: "female"});
+  assert.deepEqual([low.percent, low.category], [1.9, "lowModerate"]);
+  const mid = category({age: "55", smoking: "no", sbp: "120", tchol: "5", hdl: "1.4", sex: "female"});
+  assert.deepEqual([mid.percent, mid.category], [6.2, "high"]);
+  assert.deepEqual(score2({}).missing, ["age", "sex", "smoking", "sbp", "tchol", "hdl"]);
+  for (const age of ["39", "101", "55.5"]) assert.equal(score2({...base, age}).errors.age, "Возраст — целое число лет от 40 до 100: SCORE2 для 40–69 лет, SCORE2-OP для 70 лет и старше.", age);
+  assert.equal(score2({...base, sbp: "301"}).errors.sbp, "САД — целое число от 60 до 300 мм рт. ст.");
+  assert.equal(score2({...base, tchol: "0.5"}).errors.tchol, "Общий холестерин — число от 1 до 20 ммоль/л.");
+  assert.equal(score2({...base, hdl: "6"}).errors.hdl, "Холестерин ЛПВП — число от 0,2 до 5 ммоль/л.");
+  assert.equal(score2({...base, smoking: "sometimes"}).missing[0], "smoking");
+});
+
+test("SCORE2-OP reproduces the supplement's worked example and uses the very high-risk rescaling factors from age 70", () => {
+  const score2 = core.calculateScore2;
+  const example = {age: "75", sex: "female", smoking: "yes", sbp: "140", tchol: "5.5", hdl: "1.3"};
+  // Supplementary methods table 2: linear predictor 0.5029 (women) and 0.3298 (men); unrecalibrated 10-year risk 24.4% and 29.7%.
+  const woman = score2(example).result, man = score2({...example, sex: "male"}).result;
+  assert.deepEqual([woman.model, man.model], ["SCORE2-OP", "SCORE2-OP"]);
+  assert.ok(Math.abs(woman.uncalibrated - 24.42) < 0.01, String(woman.uncalibrated));
+  assert.ok(Math.abs(man.uncalibrated - 29.66) < 0.01, String(man.uncalibrated));
+  // Very high-risk region (supplementary methods table 1): women 0.38 / 0.69, men 0.05 / 0.70.
+  // Women: 1 − exp(−exp(0.38 + 0.69 × ln(−ln(1 − 0.24424)))) = 45.53%; men: 1 − exp(−exp(0.05 + 0.70 × ln(−ln(1 − 0.29659)))) = 39.71%.
+  assert.deepEqual([woman.percent, man.percent], [45.5, 39.7]);
+  assert.deepEqual([woman.limits, woman.category], [[7.5, 15], "veryHigh"]);
+  assert.equal(score2({...example, age: "69"}).result.model, "SCORE2");
+  assert.equal(score2({...example, age: "70"}).result.model, "SCORE2-OP");
+  assert.equal(score2({...example, age: "100"}).result.model, "SCORE2-OP");
+  const low = score2({age: "72", sex: "female", smoking: "no", sbp: "125", tchol: "5", hdl: "1.8"}).result;
+  assert.deepEqual([low.percent, low.category], [25.7, "veryHigh"]);
+});

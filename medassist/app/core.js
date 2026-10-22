@@ -316,6 +316,47 @@
     return scoreSymptomQuestionnaire(input, 7, [[15, "severe"], [10, "moderate"], [5, "mild"], [0, "minimal"]]);
   }
 
+  // SCORE2 (age 40-69): SCORE2 working group and ESC Cardiovascular risk collaboration. Eur Heart J 2021;42(25):2439-2454.
+  // SCORE2-OP (age 70 and older): SCORE2-OP working group. Eur Heart J 2021;42(25):2455-2467, Table 2 and supplementary
+  // methods tables 1-2 (baseline survival, mean linear predictor, region rescaling factors).
+  // 10-year fatal and non-fatal CVD risk without CVD or diabetes (the diabetes term is 0), recalibrated to the very high-risk
+  // region that includes Belarus. Categories follow the ESC 2021 prevention guideline: 2.5/7.5% under 50, 5/10% at 50-69, 7.5/15% from 70.
+  // Each factor is centred and scaled as (value - centre) / step; interactions multiply by the centred age.
+  const SCORE2_CENTRES = Object.freeze({ age: [60, 5], sbp: [120, 20], tchol: [6, 1], hdl: [1.3, 0.5] });
+  const SCORE2_OP_CENTRES = Object.freeze({ age: [73, 1], sbp: [150, 1], tchol: [6, 1], hdl: [1.4, 1] });
+  const SCORE2_MODELS = Object.freeze({
+    male: { centres: SCORE2_CENTRES, age: 0.3742, smoking: 0.6012, sbp: 0.2777, tchol: 0.1458, hdl: -0.2698, smokingAge: -0.0755, sbpAge: -0.0255, tcholAge: -0.0281, hdlAge: 0.0426, survival: 0.9605, meanLinear: 0, scale: [0.5836, 0.8294] },
+    female: { centres: SCORE2_CENTRES, age: 0.4648, smoking: 0.7744, sbp: 0.3131, tchol: 0.1002, hdl: -0.2606, smokingAge: -0.1088, sbpAge: -0.0277, tcholAge: -0.0226, hdlAge: 0.0613, survival: 0.9776, meanLinear: 0, scale: [0.9412, 0.8329] }
+  });
+  const SCORE2_OP_MODELS = Object.freeze({
+    male: { centres: SCORE2_OP_CENTRES, age: 0.0634, smoking: 0.3524, sbp: 0.0094, tchol: 0.0850, hdl: -0.3564, smokingAge: -0.0247, sbpAge: -0.0005, tcholAge: 0.0073, hdlAge: 0.0091, survival: 0.7576, meanLinear: 0.0929, scale: [0.05, 0.7] },
+    female: { centres: SCORE2_OP_CENTRES, age: 0.0789, smoking: 0.4921, sbp: 0.0102, tchol: 0.0605, hdl: -0.3040, smokingAge: -0.0255, sbpAge: -0.0004, tcholAge: -0.0009, hdlAge: 0.0154, survival: 0.8082, meanLinear: 0.229, scale: [0.38, 0.69] }
+  });
+
+  function calculateScore2(input) {
+    const values = isObject(input) ? input : {};
+    const errors = {}, missing = [];
+    const age = readCalculatorNumber(values, "age", [40, 100], true, "Возраст — целое число лет от 40 до 100: SCORE2 для 40–69 лет, SCORE2-OP для 70 лет и старше.", errors, missing);
+    if (!["female", "male"].includes(values.sex)) missing.push("sex");
+    if (!["yes", "no"].includes(values.smoking)) missing.push("smoking");
+    const sbp = readCalculatorNumber(values, "sbp", [60, 300], true, "САД — целое число от 60 до 300 мм рт. ст.", errors, missing);
+    const tchol = readCalculatorNumber(values, "tchol", [1, 20], false, "Общий холестерин — число от 1 до 20 ммоль/л.", errors, missing);
+    const hdl = readCalculatorNumber(values, "hdl", [0.2, 5], false, "Холестерин ЛПВП — число от 0,2 до 5 ммоль/л.", errors, missing);
+    if (missing.length || Object.keys(errors).length) return { result: null, errors, missing };
+    const older = age >= 70;
+    const model = (older ? SCORE2_OP_MODELS : SCORE2_MODELS)[values.sex];
+    const centred = (key, value) => (value - model.centres[key][0]) / model.centres[key][1];
+    const a = centred("age", age), s = centred("sbp", sbp), c = centred("tchol", tchol), h = centred("hdl", hdl), smoker = values.smoking === "yes" ? 1 : 0;
+    const linear = model.age * a + model.smoking * smoker + model.sbp * s + model.tchol * c + model.hdl * h +
+      model.smokingAge * a * smoker + model.sbpAge * a * s + model.tcholAge * a * c + model.hdlAge * a * h;
+    const uncalibrated = 1 - model.survival ** Math.exp(linear - model.meanLinear);
+    const exact = 100 * (1 - Math.exp(-Math.exp(model.scale[0] + model.scale[1] * Math.log(-Math.log(1 - uncalibrated)))));
+    const percent = Math.round(exact * 10) / 10;
+    const limits = older ? [7.5, 15] : age < 50 ? [2.5, 7.5] : [5, 10];
+    const category = percent < limits[0] ? "lowModerate" : percent < limits[1] ? "high" : "veryHigh";
+    return { result: { model: older ? "SCORE2-OP" : "SCORE2", percent, exact, uncalibrated: 100 * uncalibrated, limits, category }, errors, missing };
+  }
+
   function calculateAge(birthDate, visitDate) {
     if (typeof birthDate !== "string" || typeof visitDate !== "string" || !validDate(birthDate) || !validDate(visitDate) || birthDate > visitDate) return null;
     // В невисокосный год полный год для родившихся 29 февраля наступает 1 марта.
@@ -1863,5 +1904,5 @@
     return validateBundle(parsed);
   }
 
-  return Object.freeze({ validateShortcuts, upsertShortcut, removeShortcut, findShortcutAtCaret, shortcutReplacement, MAX_SHORTCUTS, MAX_SHORTCUT_CODE_LENGTH, MAX_SHORTCUT_TEXT_LENGTH, DEFAULT_RECORD_FORMAT, RECORD_SECTIONS, validateRecordFormat, setPatientNote, MAX_PERSONAL_NOTE_LENGTH, calculateAge, encounterAge, getDiagnoses, formatDiagnoses, upsertDiagnosis, removeDiagnosis, moveDiagnosis, validateDiagnoses, MAX_DIAGNOSES, MAX_DIAGNOSIS_TEXT_LENGTH, MAX_DIAGNOSIS_SUMMARY_LENGTH, DIAGNOSIS_LABELS, createPatient, createEncounter, createRepeatEncounter, createDemoEncounter, upsertInvestigation, removeInvestigation, validateInvestigations, getInvestigationSeries, getInvestigationReports, upsertInvestigationReport, removeInvestigationReport, setEncounterInvestigations, reconcileInvestigationReferences, upsertPrescription, removePrescription, formatPrescription, validatePrescriptions, setReviewStatus, setReturnVisitStatus, linkReturnVisit, getReturnVisits, getPatientBriefing, calculateBmi, calculateEgfrCkdEpi2021, calculateCockcroftGault, scoreChadsVasc, scoreHasBled, scoreCrb65, scoreCentor, calculateFib4, calculateQtc, scoreFindrisc, scorePhq9, scoreGad7, calculateSickLeaveDays, calculateSickLeaveTotalDays, getSickLeaveJournal, getEncounterSickLeaveSummary, getEncounterSickLeaveAction, applyEncounterSickLeave, undoEncounterSickLeave, issueSickLeave, extendSickLeave, closeSickLeave, undoSickLeaveAction, createVisitTemplate, applyVisitTemplate, validateTemplates, generateDraft, fingerprint, validatePatient, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_PATIENTS, MAX_PATIENT_LABEL_LENGTH, MAX_SICK_LEAVES, MAX_SICK_LEAVE_EVENTS, MAX_SICK_LEAVE_NUMBER_LENGTH, MAX_TEMPLATES, MAX_TEMPLATE_NAME_LENGTH, MAX_PRESCRIPTIONS, MAX_PRESCRIPTION_FIELD_LENGTH, MAX_PRESCRIPTION_NOTE_LENGTH, MAX_INVESTIGATIONS, MAX_INVESTIGATION_REPORT_FIELDS, INVESTIGATION_FIELD_LIMITS, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
+  return Object.freeze({ validateShortcuts, upsertShortcut, removeShortcut, findShortcutAtCaret, shortcutReplacement, MAX_SHORTCUTS, MAX_SHORTCUT_CODE_LENGTH, MAX_SHORTCUT_TEXT_LENGTH, DEFAULT_RECORD_FORMAT, RECORD_SECTIONS, validateRecordFormat, setPatientNote, MAX_PERSONAL_NOTE_LENGTH, calculateAge, encounterAge, getDiagnoses, formatDiagnoses, upsertDiagnosis, removeDiagnosis, moveDiagnosis, validateDiagnoses, MAX_DIAGNOSES, MAX_DIAGNOSIS_TEXT_LENGTH, MAX_DIAGNOSIS_SUMMARY_LENGTH, DIAGNOSIS_LABELS, createPatient, createEncounter, createRepeatEncounter, createDemoEncounter, upsertInvestigation, removeInvestigation, validateInvestigations, getInvestigationSeries, getInvestigationReports, upsertInvestigationReport, removeInvestigationReport, setEncounterInvestigations, reconcileInvestigationReferences, upsertPrescription, removePrescription, formatPrescription, validatePrescriptions, setReviewStatus, setReturnVisitStatus, linkReturnVisit, getReturnVisits, getPatientBriefing, calculateBmi, calculateEgfrCkdEpi2021, calculateCockcroftGault, scoreChadsVasc, scoreHasBled, scoreCrb65, scoreCentor, calculateFib4, calculateQtc, scoreFindrisc, scorePhq9, scoreGad7, calculateScore2, calculateSickLeaveDays, calculateSickLeaveTotalDays, getSickLeaveJournal, getEncounterSickLeaveSummary, getEncounterSickLeaveAction, applyEncounterSickLeave, undoEncounterSickLeave, issueSickLeave, extendSickLeave, closeSickLeave, undoSickLeaveAction, createVisitTemplate, applyVisitTemplate, validateTemplates, generateDraft, fingerprint, validatePatient, validateEncounter, validateBundle, serializeBundle, parseBundle, MAX_ENCOUNTERS, MAX_PATIENTS, MAX_PATIENT_LABEL_LENGTH, MAX_SICK_LEAVES, MAX_SICK_LEAVE_EVENTS, MAX_SICK_LEAVE_NUMBER_LENGTH, MAX_TEMPLATES, MAX_TEMPLATE_NAME_LENGTH, MAX_PRESCRIPTIONS, MAX_PRESCRIPTION_FIELD_LENGTH, MAX_PRESCRIPTION_NOTE_LENGTH, MAX_INVESTIGATIONS, MAX_INVESTIGATION_REPORT_FIELDS, INVESTIGATION_FIELD_LIMITS, MAX_TEXT_LENGTH, MAX_DRAFT_LENGTH, SCHEMA_VERSION });
 });

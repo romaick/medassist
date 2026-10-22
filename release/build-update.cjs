@@ -14,6 +14,16 @@ const files = names.map(name => {
 const update = {format: 'medassist-update', formatVersion: 1, version: version.version, dataSchemaVersion: version.dataSchemaVersion, files};
 const output = path.join(__dirname, 'medassist-update.json');
 const serialized = JSON.stringify(update);
-if (Buffer.byteLength(serialized) > 2 * 1024 * 1024) throw new Error('Update exceeds the installed updater limit of 2 MiB.');
+// The updater rejects a package over either limit, so the build reads both from Update-Core.ps1 and stops first.
+const core = fs.readFileSync(path.resolve(__dirname, '../medassist/updater/Update-Core.ps1'), 'utf8');
+const limit = name => {
+  const match = core.match(new RegExp('\\$script:' + name + ' = (\\d+) \\* 1024 \\* 1024'));
+  if (!match) throw new Error('Cannot read ' + name + ' from Update-Core.ps1.');
+  return Number(match[1]) * 1024 * 1024;
+};
+const packageLimit = limit('MedAssistPackageLimit'), decodedLimit = limit('MedAssistDecodedLimit');
+const decoded = files.reduce((sum, file) => sum + Buffer.from(file.contentBase64, 'base64').length, 0);
+if (decoded > decodedLimit) throw new Error('Application files total ' + decoded + ' bytes, over the updater limit of ' + decodedLimit + '.');
+if (Buffer.byteLength(serialized) > packageLimit) throw new Error('Update package is ' + Buffer.byteLength(serialized) + ' bytes, over the updater limit of ' + packageLimit + '.');
 fs.writeFileSync(output, serialized);
-console.log(JSON.stringify({version: update.version, files: names, bytes: fs.statSync(output).size, output}));
+console.log(JSON.stringify({version: update.version, files: names, bytes: fs.statSync(output).size, decoded, packageLimit, decodedLimit, output}));

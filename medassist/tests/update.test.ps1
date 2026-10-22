@@ -205,12 +205,37 @@ Check 'Malformed Base64, response limits and decoded limits are enforced' {
     $document = New-FixturePackage
     $document.files[0].contentBase64 = '!invalid!'
     Expect-Error { Parse-Fixture $document } 'Malformed Base64 accepted.'
-    Expect-Error { Load-UpdatePackage (' ' * (2 * 1024 * 1024 + 1)) } 'Oversized response accepted.'
+    Expect-Error { Load-UpdatePackage (' ' * ($script:MedAssistPackageLimit + 1)) } 'Oversized response accepted.'
     $document = New-FixturePackage
-    $bytes = New-Object byte[] (1024 * 1024 + 1)
+    $bytes = New-Object byte[] ($script:MedAssistDecodedLimit + 1)
     $document.files[0].contentBase64 = [Convert]::ToBase64String($bytes)
     $document.files[0].sha256 = Get-UpdateHash $bytes
     Expect-Error { Parse-Fixture $document } 'Oversized decoded content accepted.'
+}
+
+Check 'Limits leave room for the application and match the release build' {
+    Assert-True ($script:MedAssistPackageLimit -eq 6 * 1024 * 1024 -and $script:MedAssistDecodedLimit -eq 4 * 1024 * 1024) 'Unexpected updater size limits.'
+    $build = [IO.File]::ReadAllText((Join-Path $PSScriptRoot '../../release/build-update.cjs'))
+    Assert-True ($build.Contains('MedAssistPackageLimit') -and $build.Contains('MedAssistDecodedLimit')) 'The release build does not read the updater limits.'
+}
+
+# 0.26.0 passed the fixture checks but was larger than the 1 MiB that the updater then accepted, so the real files are checked too.
+Check 'Current application files pass the production parser as one package' {
+    $app = Join-Path $PSScriptRoot '../app'
+    $version = Read-UpdateVersionJson ([IO.File]::ReadAllText((Join-Path $app 'version.json')))
+    $files = @()
+    foreach ($name in $script:MedAssistAppFiles) {
+        $bytes = [IO.File]::ReadAllBytes((Join-Path $app $name))
+        $files += [pscustomobject]@{ name = $name; sha256 = Get-UpdateHash $bytes; contentBase64 = [Convert]::ToBase64String($bytes) }
+    }
+    $package = Parse-Fixture ([pscustomobject]@{ format = 'medassist-update'; formatVersion = 1; version = $version.version; dataSchemaVersion = $version.dataSchemaVersion; files = $files })
+    Assert-True ($package.Version -ceq $version.version -and $package.Files.Count -eq 9) 'The current application did not load as a package.'
+}
+
+Check 'Published release package passes the production parser' {
+    $json = [IO.File]::ReadAllText((Join-Path $PSScriptRoot '../../release/medassist-update.json'), (New-Object Text.UTF8Encoding($false, $true)))
+    $package = Load-UpdatePackage $json
+    Assert-True ($package.Files.Count -eq 9) 'The release package did not load.'
 }
 
 Check 'Apply revalidates the bundle and rejects unsafe local application trees' {

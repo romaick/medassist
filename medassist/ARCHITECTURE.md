@@ -1,4 +1,8 @@
-# МедАссистент 0.26.0: архитектура
+# МедАссистент 0.26.1: архитектура
+
+## Пределы обновлятора — 0.26.1
+
+В updater/Update-Core.ps1 $MedAssistPackageLimit = 6 MiB (JSON пакета и ответ сервера), $MedAssistDecodedLimit = 4 MiB (сумма 9 файлов после Base64). До 0.26.1 было 2 и 1 MiB, поэтому 0.26.0 (1 073 756 байт) отклонялся с «Decoded application exceeds 1 MiB». release/build-update.cjs читает оба значения из Update-Core.ps1 и прерывает сборку при превышении. update.test.ps1 прогоняет Load-UpdatePackage на текущих файлах app и на release/medassist-update.json. Обновлятор не входит в 9 файлов пакета, поэтому установленные копии получают новый Update-Core.ps1 только ручной заменой.
 
 ## Калькуляторы — 0.26.0
 

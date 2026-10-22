@@ -1,8 +1,10 @@
 Set-StrictMode -Version 2.0
 
 $script:MedAssistAppFiles = @('index.html', 'styles.css', 'exam-options.js', 'core.js', 'storage.js', 'modules.js', 'app.js', 'icon.svg', 'version.json')
-$script:MedAssistPackageLimit = 2 * 1024 * 1024
-$script:MedAssistDecodedLimit = 1024 * 1024
+# Size limits bound memory use while a package is read and checked. release/build-update.cjs reads both values from here.
+# Updaters before 0.26.1 used 2 MiB and 1 MiB and cannot install 0.26.0 or later.
+$script:MedAssistPackageLimit = 6 * 1024 * 1024
+$script:MedAssistDecodedLimit = 4 * 1024 * 1024
 
 function Assert-UpdateProperties {
     param($Value, [string[]]$Names)
@@ -40,7 +42,7 @@ function Read-UpdateVersionJson {
 
 function Load-UpdatePackage {
     param([Parameter(Mandatory = $true)][string]$Json)
-    if ([Text.Encoding]::UTF8.GetByteCount($Json) -gt $script:MedAssistPackageLimit) { throw 'Update package exceeds 2 MiB.' }
+    if ([Text.Encoding]::UTF8.GetByteCount($Json) -gt $script:MedAssistPackageLimit) { throw 'Update package exceeds 6 MiB.' }
     $document = ConvertFrom-Json -InputObject ($Json.TrimStart([char]0xFEFF)) -ErrorAction Stop
     Assert-UpdateProperties $document @('format', 'formatVersion', 'version', 'dataSchemaVersion', 'files')
     if ($document.format -isnot [string] -or $document.format -cne 'medassist-update') { throw 'Invalid update package format.' }
@@ -58,7 +60,7 @@ function Load-UpdatePackage {
         $bytes = [Convert]::FromBase64String($file.contentBase64)
         if ([Convert]::ToBase64String($bytes) -cne $file.contentBase64) { throw 'Non-canonical Base64 data.' }
         $total += $bytes.Length
-        if ($total -gt $script:MedAssistDecodedLimit) { throw 'Decoded application exceeds 1 MiB.' }
+        if ($total -gt $script:MedAssistDecodedLimit) { throw 'Decoded application exceeds 4 MiB.' }
         if ((Get-UpdateHash $bytes) -ine $file.sha256) { throw ('Checksum mismatch: ' + $file.name) }
         $files.Add([pscustomobject]@{ Name = $file.name; Sha256 = $file.sha256.ToLowerInvariant(); Bytes = $bytes })
     }
@@ -87,12 +89,12 @@ function Get-MedAssistUpdate {
     try {
         $response = $client.GetAsync($address, [Net.Http.HttpCompletionOption]::ResponseHeadersRead, $cancel.Token).GetAwaiter().GetResult()
         if ([int]$response.StatusCode -ne 200) { throw ('Update server returned HTTP ' + [int]$response.StatusCode + '. Redirects are not followed.') }
-        if ($null -ne $response.Content.Headers.ContentLength -and $response.Content.Headers.ContentLength -gt $script:MedAssistPackageLimit) { throw 'Update response exceeds 2 MiB.' }
+        if ($null -ne $response.Content.Headers.ContentLength -and $response.Content.Headers.ContentLength -gt $script:MedAssistPackageLimit) { throw 'Update response exceeds 6 MiB.' }
         $stream = $response.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
         $buffer = New-Object byte[] 8192
         do {
             $count = $stream.ReadAsync($buffer, 0, $buffer.Length, $cancel.Token).GetAwaiter().GetResult()
-            if ($buffered.Length + $count -gt $script:MedAssistPackageLimit) { throw 'Update response exceeds 2 MiB.' }
+            if ($buffered.Length + $count -gt $script:MedAssistPackageLimit) { throw 'Update response exceeds 6 MiB.' }
             if ($count -gt 0) { $buffered.Write($buffer, 0, $count) }
         } while ($count -gt 0)
         $utf8 = New-Object Text.UTF8Encoding($false, $true)

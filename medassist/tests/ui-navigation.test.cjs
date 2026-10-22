@@ -758,3 +758,98 @@ test("desktop and narrow navigation stay within the screen and scroll the active
     await check(cardTab(page, "history"), width + " card first");
   }
 });
+
+const back = page => page.locator('[data-action="go-back"]');
+const shownView = page => page.locator("#app").getAttribute("data-view");
+async function goBackTo(page, view, label) {
+  if (label) assert.equal(await back(page).getAttribute("aria-label"), "Назад: " + label);
+  await back(page).click();
+  await page.waitForFunction(view => document.getElementById("app").dataset.view === view, view);
+}
+
+test("Back returns through left screens and restores the patient module, visit section and calculator", {timeout: 26000}, async t => {
+  const page = await openApp(t);
+  await seed(page);
+  await page.locator("#main-navigation").waitFor();
+  assert.equal(await back(page).isDisabled(), true, "nothing to return to after opening the program");
+  assert.equal(await back(page).getAttribute("aria-keyshortcuts"), "Alt+ArrowLeft");
+  const stored = await raw(page);
+
+  await openCard(page);
+  await choose(cardTab(page, "sick"));
+  await click(page, "followups");
+  await goBackTo(page, "patient", "карточка «Тестов Антон Вымышленный»");
+  await selected(cardTab(page, "sick"));
+  await goBackTo(page, "patients", "Пациенты");
+  await goBackTo(page, "home", "Рабочий стол");
+  assert.equal(await back(page).isDisabled(), true, "the oldest screen ends the way back");
+
+  await openVisit(page);
+  await choose(visitTab(page, "draft"));
+  await click(page, "help");
+  assert.match(await page.locator(".keyboard-shortcuts").innerText(), /Alt \+ ←\s+Вернуться к предыдущему листу/);
+  await goBackTo(page, "visit", "приём «Тестов Антон Вымышленный»");
+  await selected(visitTab(page, "draft"));
+  assert.equal(await page.locator("#draft-text").inputValue(), "ДЕМО: сохранённый ручной текст main");
+
+  await click(page, "choose-area");
+  await page.locator('[data-action="enter-modules"]').click();
+  await click(page, "calculators");
+  await page.locator('[data-action="calc-open"][data-calculator="egfr"]').click();
+  await page.locator(".calculator-heading h1").waitFor();
+  await page.keyboard.press("Alt+ArrowLeft");
+  await page.locator('[data-action="calc-open"][data-calculator="egfr"]').waitFor();
+  assert.equal(await back(page).getAttribute("aria-label"), "Назад: Модули");
+  await page.keyboard.press("Alt+ArrowLeft");
+  await page.waitForFunction(() => document.getElementById("app").dataset.view === "modules");
+  await page.keyboard.press("Alt+ArrowLeft");
+  await page.waitForFunction(() => document.getElementById("app").dataset.view === "visit");
+  await selected(visitTab(page, "draft"));
+  assert.equal(page.url().split("#")[0], url, "Alt + Left never leaves the page");
+
+  await click(page, "followups");
+  const prevented = await page.evaluate(() => {
+    const event = new MouseEvent("mouseup", {bubbles: true, cancelable: true, button: 3});
+    document.getElementById("main").dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+  assert.equal(prevented, true, "the mouse back button does not leave the page");
+  await page.waitForFunction(() => document.getElementById("app").dataset.view === "visit");
+  assert.equal(await raw(page), stored, "going back never writes records");
+});
+
+test("Back skips a discarded empty form and a deleted patient card", {timeout: 18000}, async t => {
+  const page = await openApp(t);
+  await seed(page);
+  await page.locator("#main-navigation").waitFor();
+  const stored = await raw(page);
+  await click(page, "followups");
+  await click(page, "new");
+  await click(page, "patients");
+  assert.equal(await raw(page), stored, "the empty form was discarded without records");
+  await goBackTo(page, "followups", "Повторные приёмы");
+
+  await openCard(page, "plain");
+  await click(page, "help");
+  await page.locator('[data-action="reset"]').click();
+  await page.locator("#dialog-accept").click();
+  await page.waitForFunction(() => document.getElementById("app").dataset.view === "home");
+  await goBackTo(page, "help", "Помощь и данные");
+  await goBackTo(page, "patients", "Пациенты");
+  await goBackTo(page, "followups", "Повторные приёмы");
+
+  await page.reload();
+  await page.locator("#main-navigation").waitFor();
+  assert.equal(await back(page).isDisabled(), true, "the way back is kept only in the open window");
+});
+
+test("narrow screen keeps Back as an icon button inside the top bar", {timeout: 14000}, async t => {
+  const page = await openApp(t);
+  await page.setViewportSize({width: 390, height: 844});
+  await click(page, "patients");
+  const box = await back(page).boundingBox();
+  assert.ok(box && box.x >= 0 && box.x + box.width <= 390 && box.width <= 44, JSON.stringify(box));
+  assert.equal(await back(page).locator("span").isVisible(), false);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await goBackTo(page, "home", "Рабочий стол");
+});

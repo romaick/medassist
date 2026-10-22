@@ -824,6 +824,43 @@ dialog.restore-preview{width:min(760px,calc(100vw - 32px));max-width:760px;max-h
   .area-card { min-height: 0; padding: 16px 18px; gap: 8px; }
 }
 
+/* Нормы анализов (Modules): read-only reference table of two laboratories. */
+@media screen {
+  .design-refresh .norms-card { padding: 18px 0 10px; }
+  .design-refresh .norms-search { padding: 0 24px 14px; max-width: 584px; }
+  .design-refresh .norms-list { padding: 4px 24px 12px; outline: none; }
+  .design-refresh .norms-panel + .norms-panel { margin-top: 28px; }
+  .design-refresh .norms-panel h2 { margin: 10px 0; font-size: 16px; }
+  .design-refresh .norms-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 14px; }
+  .design-refresh .norms-table th, .design-refresh .norms-table td { padding: 11px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+  .design-refresh .norms-table thead th { background: var(--bg); color: var(--muted); font-size: 12px; font-weight: 500; }
+  .design-refresh .norms-table thead th:first-child { width: 34%; }
+  .design-refresh .norms-table td { font-variant-numeric: tabular-nums; line-height: 1.55; }
+  .design-refresh .norms-name { display: block; font-weight: 600; }
+  .design-refresh .norms-unit { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; font-weight: 400; }
+  .design-refresh .norms-differs { display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; padding: 2px 7px; border-radius: 4px; background: var(--warning-bg); color: var(--amber); font-size: 12px; font-weight: 500; }
+  .design-refresh .norms-differs .icon { width: 13px; height: 13px; }
+  .design-refresh .norms-table tr.differs td { background: #fffcf4; }
+  .design-refresh .norms-note { display: block; margin-top: 6px; color: var(--muted); font-size: 12px; font-weight: 400; line-height: 1.5; }
+  .design-refresh .norms-missing { color: var(--muted); }
+  .design-refresh .norms-compare { display: block; margin-top: 4px; font-size: 13px; }
+  .design-refresh .norms-value-unit { color: var(--muted); }
+  .design-refresh .norms-found { margin: 4px 0 6px; color: var(--muted); font-size: 13px; }
+  .design-refresh .norms-sources { margin-top: 12px; font-size: 13px; }
+  .design-refresh .norms-sources summary { width: fit-content; color: var(--green); font-weight: 600; cursor: pointer; }
+  .design-refresh .norms-sources h3 { margin: 12px 0 4px; font-size: 13px; }
+  .design-refresh .norms-sources ul { margin: 0; padding-left: 20px; }
+  .design-refresh .norms-sources li { margin: 2px 0; }
+}
+@media screen and (max-width: 760px) {
+  .design-refresh .norms-search, .design-refresh .norms-list { padding-inline: 14px; }
+  .design-refresh .norms-table, .design-refresh .norms-table tbody, .design-refresh .norms-table tr, .design-refresh .norms-table th, .design-refresh .norms-table td { display: block; width: 100%; }
+  .design-refresh .norms-table thead { display: none; }
+  .design-refresh .norms-table tr { padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .design-refresh .norms-table th, .design-refresh .norms-table td { padding: 3px 0; border: 0; }
+  .design-refresh .norms-table td::before { content: attr(data-lab); display: block; color: var(--muted); font-size: 12px; }
+}
+
 /* Calculators (Modules area) */
 .calculator-disclaimer { margin-bottom: 18px; }
 .calculator-disclaimer strong { color: var(--ink); }

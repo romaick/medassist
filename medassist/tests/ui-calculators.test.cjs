@@ -53,7 +53,7 @@ async function fillEgfr(page, {age, sex, creatinine, unit}) {
 
 test("Калькуляторы sit in the Modules menu with system rubrics; only ready calculators open", {timeout: 25000}, async t => {
   const page = await openApp(t);
-  assert.deepEqual(await page.locator("#main-navigation button").evaluateAll(nodes => nodes.map(node => node.dataset.action)), ["modules", "calculators", "choose-area"]);
+  assert.deepEqual(await page.locator("#main-navigation button").evaluateAll(nodes => nodes.map(node => node.dataset.action)), ["modules", "calculators", "norms", "choose-area"]);
   const moduleCard = page.locator(".module-card").filter({hasText: "Калькуляторы"});
   assert.match(await moduleCard.locator(".pill").innerText(), /Доступно/);
   await moduleCard.locator('[data-action="calculators"]').click();
@@ -591,4 +591,58 @@ test("without patient cards the prefill choice is disabled", {timeout: 25000}, a
   assert.equal(await page.locator("#egfr-patient").isDisabled(), true);
   assert.equal(await page.locator("#egfr-prefill").isDisabled(), true);
   assert.equal(await page.locator("#egfr-prefill-status").isVisible(), false);
+});
+
+test("Нормы анализов show both laboratories for every form indicator, mark differences, search all forms and never write data", {timeout: 30000}, async t => {
+  const norms = require(path.join(appRoot, "../research/lab-reference-ranges.json"));
+  const catalog = require(path.join(appRoot, "../research/investigation-catalog.json"));
+  const page = await openApp(t);
+  const before = await storageSnapshot(page);
+  await page.locator(".module-card").filter({hasText: "Анализы и исследования"}).locator('[data-action="norms"]').click();
+  await page.locator("#norms-list table").waitFor();
+  assert.equal(await view(page), "norms");
+  assert.match(await page.title(), / — модули$/);
+  assert.equal(await page.locator('#main-navigation [data-action="norms"]').getAttribute("aria-current"), "page");
+  assert.match(await page.locator(".norms-notice").innerText(), /Сверяйте результат с интервалом на бланке своей лаборатории/);
+  assert.deepEqual(await page.locator("#norms-tabs [role=tab]").allInnerTexts(), ["ОАК", "Биохимия", "ОАМ", "HbA1c", "Коагулограмма", "Щитовидная железа"]);
+  const rows = page.locator("#norms-list tbody tr");
+  for (const panel of norms.panels) {
+    const tab = page.locator("#norms-tab-" + panel.panelId);
+    await tab.click();
+    await page.waitForFunction(id => document.getElementById("norms-tab-" + id)?.getAttribute("aria-selected") === "true" && document.querySelector("#norms-list h2")?.id === "norms-panel-" + id, panel.panelId);
+    const fields = catalog.panels.find(item => item.id === panel.panelId).fields;
+    assert.deepEqual(await rows.evaluateAll(nodes => nodes.map(node => node.dataset.norm)), fields.map(field => field.id), panel.panelId + " lists every form indicator");
+    assert.equal(await page.locator("#norms-list tr.differs").count(), panel.rows.filter(row => row.differs).length);
+    assert.equal(await page.locator("#norms-list .norms-differs").count(), panel.rows.filter(row => row.differs).length, "each difference is marked in words");
+    for (const row of panel.rows) {
+      const cells = await page.locator('#norms-list tr[data-norm="' + row.fieldId + '"] td').allInnerTexts();
+      if (row.invitro) assert.ok(cells[0].includes(row.invitro.value), panel.panelId + "/" + row.fieldId + " INVITRO"); else assert.match(cells[0], /Нет на сайте лаборатории/);
+      if (row.lode) assert.ok(cells[1].includes(row.lode.value), panel.panelId + "/" + row.fieldId + " LODE");
+      else if (row.helix) { assert.match(cells[1], /Не публикует\.\s+Для сравнения, Хеликс \(Россия\)/); assert.ok(cells[1].includes(row.helix.value)); }
+      else assert.match(cells[1], /Нет на сайте лаборатории/);
+    }
+    const links = page.locator("#norms-list .norms-sources a");
+    assert.ok(await links.count() > 0);
+    assert.deepEqual([...new Set(await links.evaluateAll(nodes => nodes.map(node => node.target + " " + node.rel)))], ["_blank noopener noreferrer"]);
+  }
+  await page.locator("#norms-search").fill("креатинин");
+  await page.waitForFunction(() => document.querySelectorAll("#norms-list tbody tr").length === 1);
+  assert.equal(await rows.first().getAttribute("data-norm"), "creatinine");
+  assert.match(await page.locator(".norms-found").innerText(), /Найдено во всех бланках: 1/);
+  assert.equal(await page.locator('#norms-tabs [aria-selected="true"]').count(), 0, "search spans every form");
+  await page.locator("#norms-search").fill("ттг");
+  await page.waitForFunction(() => document.querySelector("#norms-list tbody tr")?.dataset.norm === "tsh");
+  await page.locator("#norms-search").fill("несуществующий показатель");
+  await page.locator('[data-action="norms-clear"]').click();
+  assert.equal(await page.locator("#norms-search").inputValue(), "");
+  assert.equal(await page.evaluate(() => document.activeElement.id), "norms-search");
+  await page.waitForFunction(() => document.querySelector("#norms-list h2")?.id === "norms-panel-thyroid");
+  await page.locator('#main-navigation [data-action="calculators"]').click();
+  await page.locator("#calculator-list").waitFor();
+  assert.equal(await page.locator('[data-action="go-back"]').getAttribute("aria-label"), "Назад: Нормы анализов");
+  await page.locator('[data-action="go-back"]').click();
+  await page.locator("#norms-tab-thyroid[aria-selected=true]").waitFor();
+  await page.setViewportSize({width: 390, height: 844});
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, "no horizontal page scroll on a narrow window");
+  assert.equal(await storageSnapshot(page), before, "the reference never writes local or session data");
 });

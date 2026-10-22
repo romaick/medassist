@@ -100,7 +100,7 @@ test("Модули open as a separate area without polyclinic search and return 
   await page.locator('#main-navigation [data-action="modules"][aria-current="page"]').waitFor();
   assert.equal(await view(page), "modules");
   assert.match(await page.title(), / — модули$/);
-  assert.deepEqual(await menuActions(page), ["modules", "calculators", "choose-area"]);
+  assert.deepEqual(await menuActions(page), ["modules", "calculators", "norms", "choose-area"]);
   assert.equal(await page.locator(".context-mode").innerText(), "Модули");
   assert.equal(await page.locator('[data-action="search-patients"]').count(), 0);
   assert.equal(await page.locator(".module-card").count() > 0, true);
@@ -115,6 +115,8 @@ test("Модули open as a separate area without polyclinic search and return 
   await page.locator('#main-navigation [data-action="modules"]').focus();
   await page.keyboard.press("ArrowDown");
   assert.equal(await page.evaluate(() => document.activeElement.dataset.action), "calculators");
+  await page.keyboard.press("ArrowDown");
+  assert.equal(await page.evaluate(() => document.activeElement.dataset.action), "norms");
   await page.keyboard.press("ArrowDown");
   assert.equal(await page.evaluate(() => document.activeElement.dataset.action), "choose-area");
   await page.keyboard.press("Enter");

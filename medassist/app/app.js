@@ -271,7 +271,7 @@
         (modulesArea ? navButton('modules', 'Модули', 'grid') + navButton('calculators', 'Калькуляторы', 'calculator') + navButton('norms', 'Нормы анализов', 'flask') : navButton('home', 'Рабочий стол', 'home') + navButton('patients', 'Пациенты', 'user') +
         (current ? navButton('visit', 'Текущий приём', 'document') : navButton('new', 'Новый пациент', 'plus')) + navButton('followups', 'Повторные приёмы', 'calendar') + navButton('help', 'Помощь и данные', 'help') + navButton('check-updates', 'Проверить обновления', 'download')) +
         navButton('choose-area', 'Выбор раздела', 'back') +
-        '</nav></header><aside class="context-sidebar" aria-label="' + (modulesArea ? 'Сведения о модулях' : 'Пациенты и сведения о разделе') + '">' + (modulesArea ? contextModules() : contextPatients(current)) + '<div class="side-bottom"><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><div class="rail-note">' + (modulesArea ? 'Модули МедАссистента' : 'Поликлинический приём') + '<br><span>Беларусь · деморежим</span><span>Версия 0.34.0</span></div><div class="version">Прототип 0.34.0</div></div></aside><div class="workspace"><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
+        '</nav></header><aside class="context-sidebar" aria-label="' + (modulesArea ? 'Сведения о модулях' : 'Пациенты и сведения о разделе') + '">' + (modulesArea ? contextModules() : contextPatients(current)) + '<div class="side-bottom"><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><div class="rail-note">' + (modulesArea ? 'Модули МедАссистента' : 'Поликлинический приём') + '<br><span>Беларусь · деморежим</span><span>Версия 0.35.0</span></div><div class="version">Прототип 0.35.0</div></div></aside><div class="workspace"><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
         (state.migrated && !modulesArea ? '<div class="migration-notice">Прежние записи доступны со статусом «Черновик». Карточки, данные и ручные тексты сохранены. Исходное сохранение предыдущей версии не изменяется.</div>' : '') +
         ({home: renderHome, patients: renderPatients, followups: renderFollowups, patient: renderPatient, visit: renderVisit, modules: renderModules, calculators: renderCalculators, norms: renderNorms, help: renderHelp}[state.view])() +
         '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span>' + (modulesArea ? '' : '<span class="keyboard-hint"><kbd>Ctrl + K</kbd> поиск · <kbd>Ctrl + S</kbd> сохранить · <kbd>Alt + 1–5</kbd> разделы приёма · <kbd>Alt + ←</kbd> назад</span>') + '</footer></main></div></div>';
@@ -2156,6 +2156,7 @@
   }
   // «Нормы анализов»: the research registry of published intervals and orientation values for the lab form fields (window.MedAssistLabRegistry).
   // Read-only: nothing is saved and no patient result is judged; the registry approval flags stay false.
+  // Since 0.35.0 the details carry the audit of 23.10.2026: current guidance, guidance not checked against the full text, previous editions and the audit result.
   const normsKinds = [['cbc', 'ОАК'], ['biochemistry', 'Биохимия крови'], ['urinalysis', 'Общий анализ мочи'], ['coagulation', 'Коагулограмма'], ['thyroid', 'Щитовидная железа'], ['hba1c', 'HbA1c']];
   const normsText = value => value.toLocaleLowerCase('ru').replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
   const normsQualitative = ['качественно', 'качественно / безразмерно', 'безразмерно'];
@@ -2166,9 +2167,12 @@
   }
   const normsSource = id => normsRegistry().sources.find(source => source.id === id);
   // The compact row shows a Belarusian published example first, then the first other reference, then a labelled research example. Display order, not clinical ranking.
+  // Entries marked unconfirmed never reach the row; without a confirmed candidate the row says so instead of showing a number.
   function normsPrimary(row) {
-    return row.referenceIntervals.find(item => item.source.startsWith('BY-')) || row.referenceIntervals[0] || row.researchExamples[0];
+    const references = row.referenceIntervals.filter(item => item.status !== 'unconfirmed'), research = row.researchExamples.filter(item => item.status !== 'unconfirmed');
+    return references.find(item => item.source.startsWith('BY-')) || references[0] || research[0] || null;
   }
+  const normsDecisions = {kept: 'сохранено после проверки', corrected: 'исправлено', replaced: 'заменено новой редакцией', retired: 'перенесено в историю', 'pending-verification': 'ожидает проверки'};
   function normsOrigin(item, research) {
     if (research) return 'Исследовательский пример · ' + item.source;
     if (item.kind.includes('Желательный')) return 'Желательный уровень · ЛОДЭ';
@@ -2184,35 +2188,39 @@
   }
   function normsEntry(item) {
     const source = normsSource(item.source);
-    return '<div class="norms-entry"><strong>' + escape(item.value + (item.unit ? ' ' + item.unit : '')) + '</strong><p>' + escape(item.kind) + '</p><p>' + normsLink(item.source) + '</p>' +
+    return '<div class="norms-entry"><strong>' + escape(item.value + (item.unit ? ' ' + item.unit : '')) + '</strong>' + (item.status === 'unconfirmed' ? '<p class="norms-flag">Не подтверждено — не применять без сверки с первоисточником</p>' : '') + '<p>' + escape(item.kind) + '</p><p>' + normsLink(item.source) + '</p>' +
       (item.scope ? '<p>' + escape(item.scope) + '</p>' : '') + (item.method ? '<p>Метод: ' + escape(item.method) + '</p>' : '') + (item.specimen ? '<p>Материал: ' + escape(item.specimen) + '</p>' : '') +
-      (item.verification && item.verification !== source?.verification ? '<p>Проверка записи: ' + escape(item.verification) + '</p>' : '') + (source ? '<p>Проверка' + (item.verification && item.verification !== source.verification ? ' источника' : '') + ': ' + escape(source.verification + (source.checkedAt ? ' · ' + dateText(source.checkedAt) : '')) + '</p>' : '') + '</div>';
+      (item.archivedFrom ? '<p>' + escape(item.archivedFrom) + '</p>' : '') +
+      (item.verification && item.verification !== source?.verification ? '<p>Проверка записи: ' + escape(item.verification) + '</p>' : '') + (source ? '<p>Проверка' + (item.verification && item.verification !== source.verification ? ' источника' : '') + ': ' + escape(source.verification + (source.checkedAt ? ' · ' + dateText(source.checkedAt) : '')) + '</p>' + (source.recheck ? '<p>' + escape(source.recheck) + '</p>' : '') : '') + '</div>';
   }
-  // Guidance verified for Medasist 0.33.0 (research/lab-reference-ranges.json, field international) stays available as its own labelled block.
-  function normsGuidance(row) {
-    const norms = window.MedAssistLabNorms;
-    const items = norms?.panels.find(panel => panel.panelId === row.panelId)?.rows.find(item => item.fieldId === row.fieldId)?.international || [];
-    return items.length ? '<div class="norms-block norms-clinical"><h4>Международные рекомендации, сверенные для Medasist 0.33.0 (' + escape(dateText(norms.checkedAt)) + ') — пороги и цели, не референсный интервал</h4><ul class="norms-guidance">' +
-      items.map(item => '<li><a href="' + escape(item.url) + '" target="_blank" rel="noopener noreferrer">' + escape(item.org + ' ' + item.year) + '</a> · ' + escape(item.kind) + ': ' + escape(item.text) + '</li>').join('') + '</ul></div>' : '';
+  // The audit result of the row: verdict, what Medasist did with it, the release re-check and what stays unconfirmed.
+  function normsAudit(row) {
+    const audit = row.audit;
+    return audit ? '<div class="norms-block norms-audit"><h4>Аудит ' + escape(dateText(audit.reviewedAt)) + '</h4><p>Вывод аудита: ' + escape(audit.verdict) + '. Решение: ' + escape(normsDecisions[audit.decision] || audit.decision) + '.</p><p>' + escape(audit.summary) + '</p>' +
+      audit.recheck.map(line => '<p>' + escape(line) + '</p>').join('') +
+      (audit.unverified.length ? '<p>Не подтверждено:</p><ul>' + audit.unverified.map(line => '<li>' + escape(line) + '</li>').join('') + '</ul>' : '') + '</div>' : '';
   }
   function normsDetails(row) {
-    const blocks = [['Референсы и опубликованные ориентиры', row.referenceIntervals, ''], ['Исследовательские примеры — не локальные нормы', row.researchExamples, ' norms-research'], ['Клинические пороги и цели — не референсный интервал', row.clinicalLimits, ' norms-clinical']];
+    const blocks = [['Референсы и опубликованные ориентиры', row.referenceIntervals, ''], ['Исследовательские примеры — не локальные нормы', row.researchExamples, ' norms-research'], ['Клинические пороги и цели — не референсный интервал', row.clinicalLimits, ' norms-clinical'],
+      ['Не подтверждено полностью — не применять без сверки с первоисточником', (row.unconfirmed || []).map(item => ({...item, status: 'unconfirmed'})), ' norms-unconfirmed'], ['История — прежние редакции, не действующие рекомендации', row.history || [], ' norms-history']];
     return '<tr class="norms-details" id="' + normsDetailId(row) + '" hidden><td colspan="4"><div class="norms-detail-body"><h3>' + escape(row.name) + '</h3>' +
-      blocks.filter(([, items]) => items.length).map(([title, items, kind]) => '<div class="norms-block' + kind + '"><h4>' + title + '</h4>' + items.map(normsEntry).join('') + '</div>').join('') + normsGuidance(row) +
+      (normsPrimary(row) ? '' : '<p class="norms-flag">Нет подтверждённого интервала. ' + escape(row.noCandidateReason || '') + '</p>') +
+      blocks.filter(([, items]) => items.length).map(([title, items, kind]) => '<div class="norms-block' + kind + '"><h4>' + title + '</h4>' + items.map(normsEntry).join('') + '</div>').join('') + normsAudit(row) +
       '<h4>Единицы и применимость</h4><p>Единица справочника: ' + escape(row.displayUnit) + '. В основной строке сохранена единица выбранного источника.</p><p>' + escape(row.unitStatus) + '</p>' +
       (row.unitAudit.belarusPublicationConfirmed ? '' : '<p>† Формат единицы в отдельном бланке Беларуси не подтверждён.' + (row.unitAudit.note ? ' ' + escape(row.unitAudit.note) : '') + '</p>') +
       '<p>' + escape(row.readiness) + '</p>' + (row.notes.length ? '<ul>' + row.notes.map(note => '<li>' + escape(note) + '</li>').join('') + '</ul>' : '') +
       '<h4>Проверенные и проверявшиеся источники этой строки</h4><ul>' + row.sources.map(id => {
         const source = normsSource(id);
-        return '<li>' + normsLink(id) + (source ? '<p>' + escape(source.verification + (source.location ? ' · ' + source.location : '')) + '</p>' + (source.note ? '<p>' + escape(source.note) + '</p>' : '') : '') + '</li>';
+        return '<li>' + normsLink(id) + (source ? '<p>' + escape(source.verification + (source.location ? ' · ' + source.location : '')) + '</p>' + (source.recheck ? '<p>' + escape(source.recheck) + '</p>' : '') + (source.note ? '<p>' + escape(source.note) + '</p>' : '') : '') + '</li>';
       }).join('') + '</ul></div></td></tr>';
   }
   function normsRow(row, index) {
-    const item = normsPrimary(row), research = !row.referenceIntervals.length;
-    const unit = normsQualitative.includes(item.unit || row.displayUnit) ? '—' : item.unit || row.displayUnit;
-    return '<tr class="norms-row' + (index % 2 === 0 ? ' norms-zebra' : '') + '" data-norm="' + escape(row.key) + '" data-kind="' + (research ? 'research' : 'reference') + '" data-source="' + escape(item.source) + '"><th scope="row">' + escape(row.shortName) + '</th><td class="norms-abbr">' + escape(row.abbreviation) + '</td>' +
-      '<td class="norms-unit" data-original-unit="' + escape(item.unit || '') + '">' + escape(unit) + (row.unitAudit.belarusPublicationConfirmed ? '' : '<span class="norms-dagger" title="Формат единицы в отдельном бланке Беларуси не подтверждён"> †</span>') + '</td>' +
-      '<td class="norms-range"><button type="button" class="norms-ref" data-action="norms-toggle" aria-expanded="false" aria-controls="' + normsDetailId(row) + '" aria-label="' + escape(row.name + ': ' + item.value + '. Источник и условия применения') + '"><span class="norms-value">' + escape(item.value) + '</span><span class="norms-origin">' + escape(normsOrigin(item, research)) + '</span></button></td></tr>' + normsDetails(row);
+    const item = normsPrimary(row), research = Boolean(item) && !row.referenceIntervals.includes(item);
+    const value = item ? item.value : 'Нет подтверждённого интервала', origin = item ? normsOrigin(item, research) : 'Причина — в подробностях';
+    const unit = !item ? '—' : normsQualitative.includes(item.unit || row.displayUnit) ? '—' : item.unit || row.displayUnit;
+    return '<tr class="norms-row' + (index % 2 === 0 ? ' norms-zebra' : '') + '" data-norm="' + escape(row.key) + '" data-kind="' + (!item ? 'none' : research ? 'research' : 'reference') + '" data-source="' + escape(item ? item.source : '') + '"><th scope="row">' + escape(row.shortName) + '</th><td class="norms-abbr">' + escape(row.abbreviation) + '</td>' +
+      '<td class="norms-unit" data-original-unit="' + escape(item?.unit || '') + '">' + escape(unit) + (row.unitAudit.belarusPublicationConfirmed ? '' : '<span class="norms-dagger" title="Формат единицы в отдельном бланке Беларуси не подтверждён"> †</span>') + '</td>' +
+      '<td class="norms-range"><button type="button" class="norms-ref" data-action="norms-toggle" aria-expanded="false" aria-controls="' + normsDetailId(row) + '" aria-label="' + escape(row.name + ': ' + value + '. Источник и условия применения') + '"><span class="norms-value">' + escape(value) + '</span><span class="norms-origin">' + escape(origin) + '</span></button></td></tr>' + normsDetails(row);
   }
   function normsRows() {
     const registry = normsRegistry(), query = normsText(state.normsQuery);
@@ -2227,7 +2235,7 @@
     return '<header class="norms-sheet-head"><div><h2 id="norms-title">' + escape(query ? 'Поиск во всех видах анализа' : rows[0].panelName) + '</h2><p>Реестр источников · применимость не утверждена</p></div><span class="norms-count">' + (query ? 'Найдено: ' : 'Показателей: ') + rows.length + '</span></header>' +
       '<div class="norms-table-wrap" role="region" aria-labelledby="norms-title" tabindex="0"><table class="norms-table"><colgroup><col class="norms-col-name"><col class="norms-col-abbr"><col class="norms-col-unit"><col class="norms-col-range"></colgroup>' +
       '<thead><tr><th scope="col">Показатель</th><th scope="col">Обозна&shy;чение</th><th scope="col">Ед. источ&shy;ника</th><th scope="col">Интервал / опубликованный ориентир</th></tr></thead><tbody>' + body + '</tbody></table></div>' +
-      '<footer class="norms-sheet-foot"><span>М — мужчины; Ж — женщины. — Без физической единицы.' + (rows.some(row => !row.unitAudit.belarusPublicationConfirmed) ? ' † Формат единицы в отдельном бланке Беларуси не подтверждён.' : '') + '</span><span>Нажмите на значение: источник, возраст, метод и ограничения. Пороги и цели лечения — отдельно внутри подробностей.</span><span>Кандидаты из исследовательского реестра. Клиническая переносимость не подтверждена.</span></footer>';
+      '<footer class="norms-sheet-foot"><span>М — мужчины; Ж — женщины. — Без физической единицы.' + (rows.some(row => !row.unitAudit.belarusPublicationConfirmed) ? ' † Формат единицы в отдельном бланке Беларуси не подтверждён.' : '') + '</span><span>Нажмите на значение: источник, возраст, метод и ограничения. Пороги и цели лечения, неподтверждённое и прежние редакции — отдельно внутри подробностей.</span><span>Кандидаты из исследовательского реестра' + (normsRegistry().audit ? ', аудит ' + escape(dateText(normsRegistry().audit.reviewedAt)) : '') + '. Клиническая переносимость не подтверждена.</span></footer>';
   }
   function renderNorms() {
     const registry = normsRegistry();

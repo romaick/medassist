@@ -596,9 +596,10 @@ test("without patient cards the prefill choice is disabled", {timeout: 25000}, a
 // «Нормы анализов»: the agreed compact sheet. The display rule below is rewritten independently of app.js.
 const normsKinds = [["cbc", "ОАК"], ["biochemistry", "Биохимия крови"], ["urinalysis", "Общий анализ мочи"], ["coagulation", "Коагулограмма"], ["thyroid", "Щитовидная железа"], ["hba1c", "HbA1c"]];
 function normsExpected(row) {
-  const item = row.referenceIntervals.find(entry => entry.source.startsWith("BY-")) || row.referenceIntervals[0] || row.researchExamples[0];
+  const confirmed = list => list.filter(entry => entry.status !== "unconfirmed");
+  const item = confirmed(row.referenceIntervals).find(entry => entry.source.startsWith("BY-")) || confirmed(row.referenceIntervals)[0] || confirmed(row.researchExamples)[0];
   const unit = ["качественно", "качественно / безразмерно", "безразмерно"].includes(item.unit || row.displayUnit) ? "—" : item.unit || row.displayUnit;
-  return {item, research: !row.referenceIntervals.length, unit: unit + (row.unitAudit.belarusPublicationConfirmed ? "" : " †")};
+  return {item, research: !row.referenceIntervals.includes(item), unit: unit + (row.unitAudit.belarusPublicationConfirmed ? "" : " †")};
 }
 async function openNorms(t, viewport) {
   const page = await openApp(t, viewport);
@@ -673,7 +674,7 @@ test("Нормы анализов show all 86 registry rows in six kinds with th
   assert.equal(await storageSnapshot(page), before, "the reference never writes local or session data");
 });
 
-test("Нормы анализов open details under the value with every candidate, separate clinical limits and links, by mouse and keyboard", {timeout: 90000}, async t => {
+test("Нормы анализов open details under the value with every candidate, separate clinical limits, the audit and links, by mouse and keyboard", {timeout: 120000}, async t => {
   const page = await openNorms(t);
   const registry = await page.evaluate(() => window.MedAssistLabRegistry);
   const sources = new Map(registry.sources.map(source => [source.id, source]));
@@ -688,13 +689,19 @@ test("Нормы анализов open details under the value with every candid
       await button.click();
       assert.equal(await button.getAttribute("aria-expanded"), "true", row.key);
       const text = (await detail.innerText()).replace(/\s+/g, " ");
-      for (const entry of [...row.referenceIntervals, ...row.researchExamples, ...row.clinicalLimits]) {
+      for (const entry of [...row.referenceIntervals, ...row.researchExamples, ...row.clinicalLimits, ...row.unconfirmed, ...row.history]) {
         assert.ok(text.includes((entry.value + (entry.unit ? " " + entry.unit : "")).replace(/\s+/g, " ")), row.key + " shows " + entry.value);
         assert.ok(text.includes(entry.kind), row.key + " kind");
         if (entry.scope) assert.ok(text.includes(entry.scope.replace(/\s+/g, " ")), row.key + " keeps the full scope text");
+        if (entry.archivedFrom) assert.ok(text.includes(entry.archivedFrom), row.key + " dates the archived wording");
       }
       assert.equal(text.includes("Клинические пороги и цели — не референсный интервал"), row.clinicalLimits.length > 0, row.key + " clinical block");
       assert.equal(text.includes("Исследовательские примеры — не локальные нормы"), row.researchExamples.length > 0, row.key + " research block");
+      assert.equal(text.includes("Не подтверждено полностью — не применять без сверки с первоисточником"), row.unconfirmed.length > 0, row.key + " unconfirmed block");
+      assert.equal(text.includes("История — прежние редакции, не действующие рекомендации"), row.history.length > 0, row.key + " history block");
+      assert.ok(!text.includes("Международные рекомендации, сверенные для Medasist 0.33.0"), row.key + " the old guidance block is not repeated next to the audited one");
+      assert.ok(text.includes("Аудит 23.10.2026") && text.includes(row.audit.summary.replace(/\s+/g, " ")), row.key + " audit result");
+      for (const line of [...row.audit.unverified, ...row.audit.recheck]) assert.ok(text.includes(line.replace(/\s+/g, " ")), row.key + " " + line.slice(0, 40));
       for (const note of row.notes) assert.ok(text.includes(note.replace(/\s+/g, " ")), row.key + " note");
       const links = await detail.locator("a").evaluateAll(nodes => nodes.map(node => [node.getAttribute("href"), node.target, node.rel]));
       for (const sid of row.sources) assert.ok(links.some(([href]) => href === sources.get(sid).url), row.key + " links " + sid);
@@ -707,6 +714,12 @@ test("Нормы анализов open details under the value with every candid
   await chooseKind(page, "coagulation", "Коагулограмма");
   const inr = page.locator('#norms-list tr[data-norm="coagulation/inr"]');
   assert.match(await inr.locator(".norms-value").innerText(), /^0,8–1,2$/, "INR reference, not the treatment target, in the row");
+  await inr.locator(".norms-ref").click();
+  const inrDetail = page.locator("#norms-detail-coagulation-inr");
+  assert.doesNotMatch(await inrDetail.locator(".norms-clinical").innerText(), /2,5–4,0|ESC\/EACTS 2021/, "the superseded valve matrix is not current guidance");
+  assert.match(await inrDetail.locator(".norms-unconfirmed").innerText(), /3,0 \(2,5–3,5\)[\s\S]*Не подтверждено — не применять без сверки с первоисточником/, "the 2025 valve table is visibly unconfirmed");
+  assert.match(await inrDetail.locator(".norms-history").innerText(), /ESC\/EACTS 2021[\s\S]*Показывалось в Medasist 0\.33\.0–0\.34\.0/);
+  await inr.locator(".norms-ref").click();
   await chooseKind(page, "cbc", "Общий анализ крови");
   await page.locator("#norms-kind").focus();
   await page.keyboard.press("Tab");
@@ -727,6 +740,30 @@ test("Нормы анализов open details under the value with every candid
   await page.keyboard.press("ArrowDown");
   await page.waitForFunction(() => document.getElementById("norms-title")?.textContent === "Биохимический анализ крови");
   assert.equal(await page.evaluate(() => document.activeElement.id), "norms-kind", "arrows keep focus on the analysis choice");
+});
+
+test("Нормы анализов show «Нет подтверждённого интервала» with its reason when no candidate is confirmed, never a substitute number", {timeout: 60000}, async t => {
+  const page = await openNorms(t);
+  // The shipped registry has no such row after the release re-check; the scenario marks one row unconfirmed in this window only.
+  const original = await page.evaluate(() => {
+    const row = window.MedAssistLabRegistry.rows.find(item => item.key === "cbc/esr");
+    const value = row.referenceIntervals[0].value;
+    row.referenceIntervals = row.referenceIntervals.map(entry => ({...entry, status: "unconfirmed"}));
+    row.noCandidateReason = "Проверочная причина: повторная сверка не завершена.";
+    return value;
+  });
+  await chooseKind(page, "biochemistry", "Биохимический анализ крови");
+  await chooseKind(page, "cbc", "Общий анализ крови");
+  const esr = page.locator('#norms-list tr[data-norm="cbc/esr"]');
+  assert.equal(await esr.getAttribute("data-kind"), "none");
+  assert.equal(await esr.locator(".norms-value").innerText(), "Нет подтверждённого интервала");
+  assert.equal(await esr.locator(".norms-origin").innerText(), "Причина — в подробностях");
+  assert.equal((await esr.locator(".norms-unit").innerText()).trim(), "—");
+  await esr.locator(".norms-ref").click();
+  const detail = (await page.locator("#norms-detail-cbc-esr").innerText()).replace(/\s+/g, " ");
+  assert.ok(detail.includes("Нет подтверждённого интервала. Проверочная причина: повторная сверка не завершена."), "the reason is stated");
+  assert.ok(detail.includes(original) && detail.includes("Не подтверждено — не применять без сверки с первоисточником"), "the unconfirmed number stays visible only with its mark");
+  assert.deepEqual((await contrastReport(page)).weak, [], "the empty state stays readable");
 });
 
 test("Нормы анализов search all kinds, keep Back and the shell, stay readable against forced white text and fit 1366–320 px", {timeout: 90000}, async t => {

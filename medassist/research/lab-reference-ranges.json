@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "checkedAt": "2026-10-23",
   "title": "Референсные интервалы взрослых для показателей бланков программы",
-  "scope": "Значения скопированы с опубликованных страниц лабораторий. Хеликс показывается только там, где ЛОДЭ не публикует значений. Сверять результат нужно с интервалом на бланке лаборатории, где выполнен анализ.",
+  "scope": "Значения скопированы с опубликованных страниц лабораторий. Хеликс показывается только там, где ЛОДЭ не публикует значений. Сверять результат нужно с интервалом на бланке лаборатории, где выполнен анализ. С Medasist 0.35.0 поле international — архив редакции 0.33.0 с решением аудита 23.10.2026 по каждой записи; в интерфейсе показывается действующая редакция из lab-reference-registry.json.",
   "labs": [
     {
       "id": "invitro",
@@ -50,7 +50,17 @@
               "text": "Анемия у взрослых 15–65 лет: небеременные женщины Hb <120 г/л, мужчины <130 г/л (5-й перцентиль). Беременность: I триместр <110, II <105, III <110 г/л.",
               "title": "Guideline on haemoglobin cutoffs to define anaemia in individuals and populations",
               "url": "https://iris.who.int/handle/10665/376196",
-              "verified": true
+              "verified": true,
+              "id": "cbc/hemoglobin#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "подтверждено с условиями",
+                "decision": "kept",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка cbc/hemoglobin."
+              }
             },
             {
               "org": "ВОЗ",
@@ -59,7 +69,17 @@
               "text": "Тяжесть анемии (г/л): женщины небеременные — лёгкая 110–119, средняя 80–109, тяжёлая <80; мужчины — 110–129 / 80–109 / <80; беременные I и III трим. — 100–109 / 70–99 / <70; II трим. — 95–104 / 70–94 / <70.",
               "title": "Guideline on haemoglobin cutoffs to define anaemia in individuals and populations",
               "url": "https://iris.who.int/handle/10665/376196",
-              "verified": true
+              "verified": true,
+              "id": "cbc/hemoglobin#2",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "подтверждено с условиями",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка cbc/hemoglobin."
+              }
             },
             {
               "org": "ICC",
@@ -68,7 +88,17 @@
               "text": "Цитопения (анемия) для критериев МДС/CCUS: Hb <13 г/дл у мужчин, <12 г/дл у женщин. Большой критерий истинной полицитемии: Hb >16,5 г/дл у мужчин и >16,0 г/дл у женщин.",
               "title": "International Consensus Classification of Myeloid Neoplasms and Acute Leukemias: integrating morphologic, clinical, and genomic data",
               "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9479031/",
-              "verified": true
+              "verified": true,
+              "id": "cbc/hemoglobin#3",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "подтверждено с условиями",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка cbc/hemoglobin."
+              }
             }
           ]
         },
@@ -127,7 +157,17 @@
               "text": "Большой критерий истинной полицитемии: гематокрит >49% у мужчин и >48% у женщин (альтернатива порогу Hb).",
               "title": "International Consensus Classification of Myeloid Neoplasms and Acute Leukemias: integrating morphologic, clinical, and genomic data",
               "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9479031/",
-              "verified": true
+              "verified": true,
+              "id": "cbc/hematocrit#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "подтверждено с условиями",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка cbc/hematocrit."
+              }
             }
           ]
         },
@@ -154,7 +194,17 @@
               "text": "Тромбоцитопения для критериев МДС/CCUS: <150×10^9/л. Большой критерий эссенциальной тромбоцитемии: ≥450×10^9/л.",
               "title": "International Consensus Classification of Myeloid Neoplasms and Acute Leukemias: integrating morphologic, clinical, and genomic data",
               "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9479031/",
-              "verified": true
+              "verified": true,
+              "id": "cbc/platelets#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "подтверждено с условиями",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка cbc/platelets."
+              }
             },
             {
               "org": "ASH",
@@ -163,7 +213,17 @@
               "text": "ИТП у взрослых: пороги для решений — глюкокортикоиды vs наблюдение при <30 vs ≥30×10^9/л; госпитализация при <20×10^9/л. Длительность: впервые выявленная <3 мес, персистирующая 3–12, хроническая >12 мес.",
               "title": "American Society of Hematology 2019 guidelines for immune thrombocytopenia",
               "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6963252/",
-              "verified": true
+              "verified": true,
+              "id": "cbc/platelets#2",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "требуется исправление и обновление",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка cbc/platelets."
+              }
             }
           ]
         },
@@ -334,7 +394,17 @@
               "text": "Нейтропения у взрослых европеоидов: АЧН <1,8×10^9/л. Лёгкая 1,0–1,5 (до 1,8 у взрослых), умеренная 0,5–1,0, тяжёлая <0,5×10^9/л. Хроническая — длительность >3 мес.",
               "title": "The European Guidelines on Diagnosis and Management of Neutropenia in Adults and Children: A Consensus Between the European Hematology Association and the EuNet-INNOCHRON COST Action",
               "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10065839/",
-              "verified": true
+              "verified": true,
+              "id": "cbc/neutrophils-absolute#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "подтверждено с условиями",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка cbc/neutrophils-absolute."
+              }
             },
             {
               "org": "EHA",
@@ -343,7 +413,17 @@
               "text": "У лиц африканского и ближневосточного происхождения (ACKR1/DARC-ассоциированная нейтропения) АЧН 0,5–1,5×10^9/л может быть нормой.",
               "title": "The European Guidelines on Diagnosis and Management of Neutropenia in Adults and Children: A Consensus Between the European Hematology Association and the EuNet-INNOCHRON COST Action",
               "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10065839/",
-              "verified": true
+              "verified": true,
+              "id": "cbc/neutrophils-absolute#2",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "уточнить область применения",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка cbc/neutrophils-absolute."
+              }
             }
           ]
         },
@@ -450,7 +530,17 @@
               "text": "Эозинофилия крови: >0,5×10^9/л (норма 0,05–0,5). Лёгкая эозинофилия 0,5–1,49; умеренная гиперэозинофилия 1,5–5,0; тяжёлая >5,0×10^9/л.",
               "title": "Proposed refined diagnostic criteria and classification of eosinophil disorders and related syndromes",
               "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9797433/",
-              "verified": true
+              "verified": true,
+              "id": "cbc/eosinophils-absolute#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "подтверждено с оговоркой границы",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка cbc/eosinophils-absolute."
+              }
             },
             {
               "org": "ICOG-EO",
@@ -459,7 +549,17 @@
               "text": "Гиперэозинофилия (HE): ≥1,5×10^9/л в периферической крови при двух исследованиях с интервалом ≥2 недель (и/или тканевая HE).",
               "title": "Proposed refined diagnostic criteria and classification of eosinophil disorders and related syndromes",
               "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9797433/",
-              "verified": true
+              "verified": true,
+              "id": "cbc/eosinophils-absolute#2",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "уточнить критерий",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка cbc/eosinophils-absolute."
+              }
             }
           ]
         },
@@ -595,7 +695,17 @@
               "text": "Глюкоза плазмы натощак ≥7,0 ммоль/л (≥126 мг/дл) — сахарный диабет (при отсутствии явной гипергликемии требуется подтверждение); 5,6–6,9 ммоль/л (100–125 мг/дл) — предиабет (нарушенная гликемия натощак)",
               "title": "2. Diagnosis and Classification of Diabetes: Standards of Care in Diabetes—2026",
               "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12690183/",
-              "verified": true
+              "verified": true,
+              "id": "biochemistry/glucose#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "confirmed_with_scope",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка biochemistry/glucose."
+              }
             },
             {
               "org": "ВОЗ",
@@ -604,7 +714,17 @@
               "text": "ВОЗ (подтверждает критерии 1999/2006): нижняя граница нарушенной гликемии натощак — 6,1 ммоль/л (110 мг/дл), а не 5,6 как у ADA",
               "title": "Use of Glycated Haemoglobin (HbA1c) in the Diagnosis of Diabetes Mellitus: Abbreviated Report of a WHO Consultation — 1. Introduction",
               "url": "https://www.ncbi.nlm.nih.gov/books/NBK304268/",
-              "verified": true
+              "verified": true,
+              "id": "biochemistry/glucose#2",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "confirmed",
+                "decision": "kept",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка biochemistry/glucose."
+              }
             },
             {
               "org": "ADA",
@@ -613,7 +733,17 @@
               "text": "Цель при диабете для многих небеременных взрослых: капиллярная глюкоза плазмы перед едой 4,4–7,2 ммоль/л (80–130 мг/дл); относится к самоконтролю, не к венозной плазме",
               "title": "6. Glycemic Goals, Hypoglycemia, and Hyperglycemic Crises: Standards of Care in Diabetes—2026",
               "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12690178/",
-              "verified": true
+              "verified": true,
+              "id": "biochemistry/glucose#3",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "confirmed",
+                "decision": "kept",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка biochemistry/glucose."
+              }
             }
           ]
         },
@@ -672,7 +802,17 @@
               "text": "ADA 2026 (рис. 11.1, по консенсусу ADA–KDIGO): G1 ≥90, G2 60–89, G3a 45–59, G3b 30–44, G4 15–29, G5 <15 мл/мин/1,73 м². рСКФ рассчитывать по креатинину формулой CKD-EPI 2021",
               "title": "11. Chronic Kidney Disease and Risk Management: Standards of Care in Diabetes—2026",
               "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12690176/",
-              "verified": true
+              "verified": true,
+              "id": "biochemistry/creatinine#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "scope_correction",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка biochemistry/creatinine."
+              }
             }
           ]
         },
@@ -715,7 +855,17 @@
               "text": "Подагра на уратснижающей терапии: мочевая кислота <360 мкмоль/л (<6 мг/дл); при тяжёлой подагре (тофусы, частые атаки) <300 мкмоль/л (<5 мг/дл)",
               "title": "2016 updated EULAR evidence-based recommendations for the management of gout",
               "url": "https://pubmed.ncbi.nlm.nih.gov/27457514/",
-              "verified": true
+              "verified": true,
+              "id": "biochemistry/uric-acid#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "confirmed_with_scope",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка biochemistry/uric-acid."
+              }
             },
             {
               "org": "ACR",
@@ -724,7 +874,17 @@
               "text": "Подагра: всем на уратснижающей терапии — достигать и поддерживать урат сыворотки <6 мг/дл [пересчёт ≈357 мкмоль/л] (сильная рекомендация)",
               "title": "2020 American College of Rheumatology Guideline for the Management of Gout",
               "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10563586/",
-              "verified": true
+              "verified": true,
+              "id": "biochemistry/uric-acid#2",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "confirmed",
+                "decision": "kept",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка biochemistry/uric-acid."
+              }
             }
           ]
         },
@@ -751,7 +911,17 @@
               "text": "Общий билирубин сыворотки обычно <1,1 мг/дл [пересчёт ≈18,8 мкмоль/л]; при повышении — фракционировать на прямой и непрямой",
               "title": "ACG Clinical Guideline: Evaluation of Abnormal Liver Chemistries",
               "url": "https://journals.lww.com/ajg/fulltext/2017/01000/acg_clinical_guideline__evaluation_of_abnormal.13.aspx",
-              "verified": true
+              "verified": true,
+              "id": "biochemistry/bilirubin-total#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "scope_correction",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка biochemistry/bilirubin-total."
+              }
             }
           ]
         },
@@ -790,7 +960,17 @@
               "text": "Непрямой ≈70% общего. Синдром Жильбера: общий билирубин обычно <3 мг/дл [≈51 мкмоль/л], почти никогда >6 [≈103]; гемолиз редко >5 мг/дл [≈86]. Пересчёт ×17,1",
               "title": "ACG Clinical Guideline: Evaluation of Abnormal Liver Chemistries",
               "url": "https://journals.lww.com/ajg/fulltext/2017/01000/acg_clinical_guideline__evaluation_of_abnormal.13.aspx",
-              "verified": true
+              "verified": true,
+              "id": "biochemistry/bilirubin-indirect#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "scope_correction",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка biochemistry/bilirubin-indirect."
+              }
             }
           ]
         },
@@ -817,7 +997,17 @@
               "text": "«Истинно здоровая» норма АЛТ: мужчины 29–33 Ед/л, женщины 19–25 Ед/л; значения выше требуют оценки",
               "title": "ACG Clinical Guideline: Evaluation of Abnormal Liver Chemistries",
               "url": "https://journals.lww.com/ajg/fulltext/2017/01000/acg_clinical_guideline__evaluation_of_abnormal.13.aspx",
-              "verified": true
+              "verified": true,
+              "id": "biochemistry/alt#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "correction_required",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка biochemistry/alt."
+              }
             },
             {
               "org": "ACG",
@@ -826,7 +1016,17 @@
               "text": "Повышение АЛТ/АСТ: пограничное <2×ВГН, лёгкое 2–5×, умеренное 5–15×, тяжёлое >15×ВГН, массивное >10 000 Ед/л",
               "title": "ACG Clinical Guideline: Evaluation of Abnormal Liver Chemistries",
               "url": "https://journals.lww.com/ajg/fulltext/2017/01000/acg_clinical_guideline__evaluation_of_abnormal.13.aspx",
-              "verified": true
+              "verified": true,
+              "id": "biochemistry/alt#2",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "confirmed_with_scope",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка biochemistry/alt."
+              }
             }
           ]
         },
@@ -853,7 +1053,17 @@
               "text": "Повышение АСТ/АЛТ: пограничное <2×ВГН, лёгкое 2–5×, умеренное 5–15×, тяжёлое >15×ВГН, массивное >10 000 Ед/л. Половых ВГН для АСТ в рекомендации нет (только для АЛТ)",
               "title": "ACG Clinical Guideline: Evaluation of Abnormal Liver Chemistries",
               "url": "https://journals.lww.com/ajg/fulltext/2017/01000/acg_clinical_guideline__evaluation_of_abnormal.13.aspx",
-              "verified": true
+              "verified": true,
+              "id": "biochemistry/ast#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "confirmed_with_scope",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка biochemistry/ast."
+              }
             }
           ]
         },
@@ -880,7 +1090,17 @@
               "text": "ВГН ЩФ — по местной лаборатории. Тип поражения по R = (АЛТ/ВГН)/(ЩФ/ВГН): >5 гепатоцеллюлярный, <2 холестатический, 2–5 смешанный",
               "title": "ACG Clinical Guideline: Evaluation of Abnormal Liver Chemistries",
               "url": "https://journals.lww.com/ajg/fulltext/2017/01000/acg_clinical_guideline__evaluation_of_abnormal.13.aspx",
-              "verified": true
+              "verified": true,
+              "id": "biochemistry/alp#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "confirmed",
+                "decision": "kept",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка biochemistry/alp."
+              }
             }
           ]
         },
@@ -923,7 +1143,17 @@
               "text": "Острый панкреатит: 2 из 3 критериев, один из них — амилаза и/или липаза сыворотки >3×ВГН (наряду с типичной болью и данными визуализации)",
               "title": "American College of Gastroenterology Guidelines: Management of Acute Pancreatitis",
               "url": "https://journals.lww.com/ajg/fulltext/10.14309/ajg.0000000000002645",
-              "verified": true
+              "verified": true,
+              "id": "biochemistry/amylase-pancreatic#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "scope_correction",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка biochemistry/amylase-pancreatic."
+              }
             }
           ]
         },
@@ -950,7 +1180,17 @@
               "text": "Целевого ОХС нет. Вторичная цель по не-ЛПВП-ХС (ОХС − ЛПВП): <2,2 / <2,6 / <3,4 ммоль/л (<85/100/130 мг/дл) при очень высоком / высоком / умеренном риске",
               "title": "2019 ESC/EAS Guidelines for the management of dyslipidaemias: lipid modification to reduce cardiovascular risk",
               "url": "https://academic.oup.com/eurheartj/article/41/1/111/5556353",
-              "verified": true
+              "verified": true,
+              "id": "biochemistry/cholesterol-total#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "confirmed_with_scope",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка biochemistry/cholesterol-total."
+              }
             },
             {
               "org": "ESC/EAS",
@@ -959,7 +1199,18 @@
               "text": "«Идеальный» ОХС ≤4 ммоль/л (≤155 мг/дл) — для расчёта «сердечно-сосудистого возраста»; ОХС ≥8 ммоль/л (≥310 мг/дл) без лечения — признак, требующий исключить СГХС",
               "title": "2019 ESC/EAS Guidelines for the management of dyslipidaemias: lipid modification to reduce cardiovascular risk",
               "url": "https://academic.oup.com/eurheartj/article/41/1/111/5556353",
-              "verified": true
+              "verified": true,
+              "id": "biochemistry/cholesterol-total#2",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "historical_context",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits",
+                  "history"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка biochemistry/cholesterol-total."
+              }
             }
           ]
         },
@@ -986,7 +1237,17 @@
               "text": "Цели по ЛПВП-ХС нет. Высокий ЛПВП до ~2,3 ммоль/л (90 мг/дл) связан с меньшим риском; при более высоких значениях риск АССЗ может расти, как предиктор не используется",
               "title": "2019 ESC/EAS Guidelines for the management of dyslipidaemias: lipid modification to reduce cardiovascular risk",
               "url": "https://academic.oup.com/eurheartj/article/41/1/111/5556353",
-              "verified": true
+              "verified": true,
+              "id": "biochemistry/hdl#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "confirmed_with_scope",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка biochemistry/hdl."
+              }
             }
           ]
         },
@@ -1013,7 +1274,17 @@
               "text": "Цели ЛПНП-ХС: очень высокий риск <1,4 ммоль/л (<55 мг/дл) и снижение ≥50%; высокий <1,8 (<70) и ≥50%; умеренный <2,6 (<100); низкий <3,0 ммоль/л (<116 мг/дл)",
               "title": "2019 ESC/EAS Guidelines for the management of dyslipidaemias: lipid modification to reduce cardiovascular risk",
               "url": "https://academic.oup.com/eurheartj/article/41/1/111/5556353",
-              "verified": true
+              "verified": true,
+              "id": "biochemistry/ldl#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "confirmed",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка biochemistry/ldl."
+              }
             },
             {
               "org": "ESC/EAS",
@@ -1022,7 +1293,17 @@
               "text": "Фокусное обновление 2025: целевые уровни ЛПНП-ХС по категориям риска не изменены (те же, что в 2019); риск оценивать по SCORE2/SCORE2-OP",
               "title": "2025 Focused Update of the 2019 ESC/EAS Guidelines for the management of dyslipidaemias",
               "url": "https://academic.oup.com/eurheartj/article/46/42/4359/8234482",
-              "verified": true
+              "verified": true,
+              "id": "biochemistry/ldl#2",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "scope_correction",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка biochemistry/ldl."
+              }
             }
           ]
         },
@@ -1049,7 +1330,19 @@
               "text": "Цели по ТГ нет; <1,7 ммоль/л (<150 мг/дл) — более низкий риск. Препараты для снижения ТГ — у пациентов высокого риска при ТГ >2,3 ммоль/л (>200 мг/дл); риск панкреатита значим при >10 ммоль/л",
               "title": "2019 ESC/EAS Guidelines for the management of dyslipidaemias: lipid modification to reduce cardiovascular risk",
               "url": "https://academic.oup.com/eurheartj/article/41/1/111/5556353",
-              "verified": true
+              "verified": false,
+              "id": "biochemistry/triglycerides#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "update_required",
+                "decision": "replaced",
+                "shownIn": [
+                  "clinicalLimits",
+                  "unconfirmed",
+                  "history"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка biochemistry/triglycerides."
+              }
             },
             {
               "org": "ACG",
@@ -1058,7 +1351,17 @@
               "text": "Острый панкреатит без камней и алкоголя: ТГ считать причиной, предпочтительно при >1000 мг/дл [пересчёт ≈11,3 ммоль/л]",
               "title": "American College of Gastroenterology Guidelines: Management of Acute Pancreatitis",
               "url": "https://journals.lww.com/ajg/fulltext/10.14309/ajg.0000000000002645",
-              "verified": true
+              "verified": true,
+              "id": "biochemistry/triglycerides#2",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "confirmed_with_scope",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка biochemistry/triglycerides."
+              }
             }
           ]
         },
@@ -1101,7 +1404,17 @@
               "text": "Гипонатриемия — Na <135 ммоль/л: лёгкая 130–135, умеренная 125–129, глубокая <125 ммоль/л (ионселективный электрод)",
               "title": "Clinical practice guideline on diagnosis and treatment of hyponatraemia",
               "url": "https://academic.oup.com/ejendo/article/170/3/G1/6668028",
-              "verified": true
+              "verified": true,
+              "id": "biochemistry/sodium#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "scope_correction",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка biochemistry/sodium."
+              }
             }
           ]
         },
@@ -1176,7 +1489,17 @@
               "text": "Взрослые: дефицит железа — ферритин <15 мкг/л у здоровых; <70 мкг/л при инфекции/воспалении",
               "title": "WHO guideline on use of ferritin concentrations to assess iron status in individuals and populations",
               "url": "https://www.ncbi.nlm.nih.gov/books/NBK569877/",
-              "verified": true
+              "verified": true,
+              "id": "biochemistry/ferritin#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "update_required",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка biochemistry/ferritin."
+              }
             },
             {
               "org": "ВОЗ",
@@ -1185,7 +1508,17 @@
               "text": "Риск перегрузки железом: >150 мкг/л у менструирующих женщин, >200 мкг/л у мужчин и неменструирующих женщин (здоровые); >500 мкг/л у взрослых с заболеваниями",
               "title": "WHO guideline on use of ferritin concentrations to assess iron status in individuals and populations",
               "url": "https://www.ncbi.nlm.nih.gov/books/NBK569877/",
-              "verified": true
+              "verified": true,
+              "id": "biochemistry/ferritin#2",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "confirmed_with_scope",
+                "decision": "kept",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка biochemistry/ferritin."
+              }
             }
           ]
         },
@@ -1228,7 +1561,17 @@
               "text": "25(OH)D: <30 нмоль/л (12 нг/мл) — риск дефицита; 30–50 (12–20) — у части риск недостаточности; ≥50 нмоль/л (20 нг/мл) — достаточно почти всем; >125 нмоль/л (50 нг/мл) — повод для беспокойства",
               "title": "Dietary Reference Intakes for Calcium and Vitamin D (Summary)",
               "url": "https://www.ncbi.nlm.nih.gov/books/NBK56050/",
-              "verified": true
+              "verified": true,
+              "id": "biochemistry/vitamin-d-25oh#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "scope_correction",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка biochemistry/vitamin-d-25oh."
+              }
             },
             {
               "org": "Endocrine Society",
@@ -1237,7 +1580,17 @@
               "text": "Дефицит 25(OH)D <20 нг/мл (50 нмоль/л); недостаточность 21–29 нг/мл [пересчёт 52,5–72,5 нмоль/л]; при лечении цель >30 нг/мл [пересчёт >75 нмоль/л]. Заменено версией 2024",
               "title": "Evaluation, Treatment, and Prevention of Vitamin D Deficiency: an Endocrine Society Clinical Practice Guideline",
               "url": "https://academic.oup.com/jcem/article/96/7/1911/2833671",
-              "verified": true
+              "verified": false,
+              "id": "biochemistry/vitamin-d-25oh#2",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "historical_superseded",
+                "decision": "retired",
+                "shownIn": [
+                  "history"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка biochemistry/vitamin-d-25oh."
+              }
             },
             {
               "org": "Endocrine Society",
@@ -1246,7 +1599,17 @@
               "text": "Версия 2024 (заменяет 2011): пороги 25(OH)D для достаточности и цели профилактики не установлены; рутинное определение 25(OH)D не рекомендуется без показаний",
               "title": "Vitamin D for the Prevention of Disease: An Endocrine Society Clinical Practice Guideline",
               "url": "https://pubmed.ncbi.nlm.nih.gov/38828931/",
-              "verified": true
+              "verified": true,
+              "id": "biochemistry/vitamin-d-25oh#3",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "confirmed_with_scope",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка biochemistry/vitamin-d-25oh."
+              }
             }
           ]
         }
@@ -1310,7 +1673,17 @@
               "text": "Профилактика мочекаменной болезни (не норма!): потребление жидкости 2,5–3,0 л/сут, диурез 2,0–2,5 л/сут, удельный вес мочи <1,010.",
               "title": "EAU Guidelines on Urolithiasis",
               "url": "https://uroweb.org/guidelines/urolithiasis/chapter/metabolic-evaluation-and-recurrence-prevention",
-              "verified": true
+              "verified": true,
+              "id": "urinalysis/specific-gravity#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "confirmed_with_scope",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка urinalysis/specific-gravity."
+              }
             }
           ]
         },
@@ -1337,7 +1710,17 @@
               "text": "pH <5,5 в суточной моче — гиперкислая моча (риск уратных камней). Подозрение на ПТА: pH суточной мочи >6,2 и утренней натощак >5,8. Цистиновые камни: цель лечения pH >7,5.",
               "title": "EAU Guidelines on Urolithiasis",
               "url": "https://uroweb.org/guidelines/urolithiasis/chapter/metabolic-evaluation-and-recurrence-prevention",
-              "verified": true
+              "verified": true,
+              "id": "urinalysis/ph#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "scope_correction",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка urinalysis/ph."
+              }
             }
           ]
         },
@@ -1364,7 +1747,17 @@
               "text": "Категории альбуминурии (АКС): A1 <30 мг/г (<3 мг/ммоль) — норма/незначительно повышена; A2 30–300 мг/г (3–30) — умеренно; A3 >300 мг/г (>30) — значительно. Маркер ХБП: АКС ≥30 мг/г ≥3 мес.",
               "title": "KDIGO 2024 Clinical Practice Guideline for the Evaluation and Management of Chronic Kidney Disease",
               "url": "https://kdigo.org/guidelines/ckd-evaluation-and-management/",
-              "verified": true
+              "verified": true,
+              "id": "urinalysis/protein#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "confirmed_with_scope",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка urinalysis/protein."
+              }
             },
             {
               "org": "KDIGO",
@@ -1373,7 +1766,17 @@
               "text": "Положительный результат тест-полоски на альбумин/белок подтверждать количественно (АКС или БКС). АКС ≥300 мг/г примерно соответствует БКС ≥500 мг/г (≥50 мг/ммоль).",
               "title": "KDIGO 2024 Clinical Practice Guideline for the Evaluation and Management of Chronic Kidney Disease",
               "url": "https://kdigo.org/guidelines/ckd-evaluation-and-management/",
-              "verified": true
+              "verified": true,
+              "id": "urinalysis/protein#2",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "scope_correction",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка urinalysis/protein."
+              }
             },
             {
               "org": "KDIGO",
@@ -1382,7 +1785,17 @@
               "text": "Соответствие категорий: A1 — белок <150 мг/сут, БКС <150 мг/г, полоска «отрицательно–следы»; A2 — 150–500, «следы–+»; A3 — >500, «+ и более».",
               "title": "KDIGO 2012 Clinical Practice Guideline for the Evaluation and Management of Chronic Kidney Disease",
               "url": "https://kdigo.org/wp-content/uploads/2017/02/KDIGO_2012_CKD_GL.pdf",
-              "verified": true
+              "verified": false,
+              "id": "urinalysis/protein#3",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "historical_only",
+                "decision": "retired",
+                "shownIn": [
+                  "history"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка urinalysis/protein."
+              }
             }
           ]
         },
@@ -1509,7 +1922,17 @@
               "text": "Уретрит (объективный признак): ≥10 ПЯЛ в поле зрения ×1000 в осадке первой порции мочи или положительный тест на лейкоцитарную эстеразу в первой порции. Пиурия не диагностична при катетер-ассоциированной ИМП.",
               "title": "EAU Guidelines on Urological Infections",
               "url": "https://uroweb.org/guidelines/urological-infections/chapter/the-guideline",
-              "verified": true
+              "verified": true,
+              "id": "urinalysis/leukocytes#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "correction_required",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка urinalysis/leukocytes."
+              }
             },
             {
               "org": "IDSA",
@@ -1518,7 +1941,17 @@
               "text": "Бессимптомная бактериурия определяется по количеству КОЕ независимо от наличия пиурии; пиурия сама по себе не показание к лечению.",
               "title": "Clinical Practice Guideline for the Management of Asymptomatic Bacteriuria: 2019 Update by the Infectious Diseases Society of America",
               "url": "https://academic.oup.com/cid/article/68/10/e83/5407612",
-              "verified": true
+              "verified": true,
+              "id": "urinalysis/leukocytes#2",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "confirmed_with_scope",
+                "decision": "kept",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка urinalysis/leukocytes."
+              }
             }
           ]
         },
@@ -1545,7 +1978,17 @@
               "text": "Микрогематурия: ≥3 эритроцитов в поле зрения высокого увеличения в одном правильно собранном образце (микроскопия). Положительная полоска требует микроскопического подтверждения.",
               "title": "Microhematuria: AUA/SUFU Guideline (2020)",
               "url": "https://www.auanet.org/guidelines-and-quality/guidelines/microhematuria",
-              "verified": true
+              "verified": true,
+              "id": "urinalysis/erythrocytes#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "confirmed_update_year",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка urinalysis/erythrocytes."
+              }
             },
             {
               "org": "AUA/SUFU",
@@ -1554,7 +1997,17 @@
               "text": "Стратификация риска уротелиального рака по степени гематурии: 3–10 эр/п.з. — низкий, 11–25 — промежуточный, >25 эр/п.з. — высокий риск (вместе с возрастом, курением и др.).",
               "title": "Microhematuria: AUA/SUFU Guideline (2020)",
               "url": "https://www.auanet.org/guidelines-and-quality/guidelines/microhematuria",
-              "verified": true
+              "verified": true,
+              "id": "urinalysis/erythrocytes#2",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "scope_correction",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка urinalysis/erythrocytes."
+              }
             },
             {
               "org": "KDIGO",
@@ -1563,7 +2016,17 @@
               "text": "Повод для направления к нефрологу: эритроцитарные цилиндры или >20 эритроцитов в п.з. высокого увеличения, стойко и без явной причины.",
               "title": "KDIGO 2024 Clinical Practice Guideline for the Evaluation and Management of Chronic Kidney Disease",
               "url": "https://kdigo.org/guidelines/ckd-evaluation-and-management/",
-              "verified": true
+              "verified": true,
+              "id": "urinalysis/erythrocytes#3",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "confirmed_with_scope",
+                "decision": "kept",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка urinalysis/erythrocytes."
+              }
             }
           ]
         },
@@ -1622,7 +2085,17 @@
               "text": "Бессимптомная бактериурия: рост ≥10^5 КОЕ/мл в средней порции (2 пробы подряд у женщин, 1 у мужчин). Катетер-ассоциированная ИМП: ≥10^3 КОЕ/мл в одной пробе из катетера.",
               "title": "EAU Guidelines on Urological Infections",
               "url": "https://uroweb.org/guidelines/urological-infections/chapter/the-guideline",
-              "verified": true
+              "verified": true,
+              "id": "urinalysis/bacteria#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "scope_correction",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка urinalysis/bacteria."
+              }
             },
             {
               "org": "IDSA",
@@ -1631,7 +2104,17 @@
               "text": "Бессимптомная бактериурия: ≥10^5 КОЕ/мл (≥10^8 КОЕ/л); у женщин 2 последовательные пробы (желательно в пределах 2 нед), у мужчин достаточно одной.",
               "title": "Clinical Practice Guideline for the Management of Asymptomatic Bacteriuria: 2019 Update by the Infectious Diseases Society of America",
               "url": "https://academic.oup.com/cid/article/68/10/e83/5407612",
-              "verified": true
+              "verified": true,
+              "id": "urinalysis/bacteria#2",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "confirmed_with_scope",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка urinalysis/bacteria."
+              }
             }
           ]
         },
@@ -1695,7 +2178,17 @@
               "text": "HbA1c ≥6,5% — порог диагноза диабета (при стандартизованном методе и контроле качества); <6,5% не исключает диабет по глюкозе; для промежуточных значений рекомендаций нет",
               "title": "Use of Glycated Haemoglobin (HbA1c) in the Diagnosis of Diabetes Mellitus: Abbreviated Report of a WHO Consultation — 2. Glycated haemoglobin (HbA1c) for the diagnosis of diabetes",
               "url": "https://www.ncbi.nlm.nih.gov/books/NBK304271/",
-              "verified": true
+              "verified": true,
+              "id": "hba1c/hba1c#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "confirmed",
+                "decision": "kept",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка hba1c/hba1c."
+              }
             },
             {
               "org": "ADA",
@@ -1704,7 +2197,17 @@
               "text": "HbA1c ≥6,5% (≥48 ммоль/моль) — сахарный диабет; 5,7–6,4% (39–47 ммоль/моль) — предиабет",
               "title": "2. Diagnosis and Classification of Diabetes: Standards of Care in Diabetes—2026",
               "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12690183/",
-              "verified": true
+              "verified": true,
+              "id": "hba1c/hba1c#2",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "confirmed_with_scope",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка hba1c/hba1c."
+              }
             },
             {
               "org": "ADA",
@@ -1713,7 +2216,17 @@
               "text": "Цель для многих небеременных взрослых с диабетом: HbA1c <7% (<53 ммоль/моль) без тяжёлых гипогликемий; цели индивидуализируются",
               "title": "6. Glycemic Goals, Hypoglycemia, and Hyperglycemic Crises: Standards of Care in Diabetes—2026",
               "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12690178/",
-              "verified": true
+              "verified": true,
+              "id": "hba1c/hba1c#3",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "confirmed_with_scope",
+                "decision": "kept",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка hba1c/hba1c."
+              }
             }
           ]
         }
@@ -1757,7 +2270,17 @@
               "text": "Цель терапии АВК при ФП (не норма!): МНО 2,0–3,0; время в терапевтическом диапазоне (TTR) >70%. При TTR <70% рекомендован переход на ПОАК.",
               "title": "2024 ESC Guidelines for the management of atrial fibrillation developed in collaboration with the European Association for Cardio-Thoracic Surgery (EACTS)",
               "url": "https://academic.oup.com/eurheartj/article/45/36/3314/7738779",
-              "verified": true
+              "verified": true,
+              "id": "coagulation/inr#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "scope_correction",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка coagulation/inr."
+              }
             },
             {
               "org": "ASH",
@@ -1766,7 +2289,17 @@
               "text": "Цель терапии АВК при ВТЭ (не норма!): МНО 2,0–3,0 предпочтительнее низкого диапазона 1,5–1,9 (сильная рекомендация).",
               "title": "American Society of Hematology 2020 guidelines for management of venous thromboembolism: treatment of deep vein thrombosis and pulmonary embolism",
               "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7556153/",
-              "verified": true
+              "verified": true,
+              "id": "coagulation/inr#2",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "scope_correction",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка coagulation/inr."
+              }
             },
             {
               "org": "ESC/EACTS",
@@ -1775,7 +2308,18 @@
               "text": "Механические протезы клапанов (не норма!): целевое медианное МНО 2,5–4,0 по тромбогенности протеза и факторам риска: низкая 2,5/3,0; средняя 3,0/3,5; высокая 3,5/4,0 (без/с ≥1 фактором риска).",
               "title": "2021 ESC/EACTS Guidelines for the management of valvular heart disease",
               "url": "https://academic.oup.com/eurheartj/article/43/7/561/6358470",
-              "verified": true
+              "verified": false,
+              "id": "coagulation/inr#3",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "outdated_replace",
+                "decision": "replaced",
+                "shownIn": [
+                  "unconfirmed",
+                  "history"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка coagulation/inr."
+              }
             }
           ]
         },
@@ -1887,7 +2431,17 @@
               "text": "Субклинический гипотиреоз: умеренно повышенный ТТГ 4,0–10,0 мЕд/л и более выраженный >10 мЕд/л. У пожилых >80 лет ТТГ 4,0–7,0 мЕд/л может быть физиологичен; учитывать возрастные референсы.",
               "title": "2013 ETA Guideline: Management of Subclinical Hypothyroidism",
               "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3923601/",
-              "verified": true
+              "verified": true,
+              "id": "thyroid/tsh#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "confirmed_with_scope",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка thyroid/tsh."
+              }
             },
             {
               "org": "ETA",
@@ -1896,7 +2450,18 @@
               "text": "L-тироксин рекомендован при ТТГ >10 мЕд/л у лиц <65 лет. Цель лечения: ТТГ в нижней половине референса (0,4–2,5 мЕд/л); у лиц >70–75 лет допустимо около 1–5 мЕд/л.",
               "title": "2013 ETA Guideline: Management of Subclinical Hypothyroidism",
               "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3923601/",
-              "verified": true
+              "verified": false,
+              "id": "thyroid/tsh#2",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "update_context",
+                "decision": "replaced",
+                "shownIn": [
+                  "clinicalLimits",
+                  "history"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка thyroid/tsh."
+              }
             },
             {
               "org": "ATA",
@@ -1905,7 +2470,17 @@
               "text": "Цель заместительной терапии: ТТГ в пределах референса (0,4–4,0 мЕд/л); у лиц старше 70–80 лет разумно повышать целевой ТТГ до 4–6 мЕд/л.",
               "title": "Guidelines for the Treatment of Hypothyroidism: Prepared by the American Thyroid Association Task Force on Thyroid Hormone Replacement",
               "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4267409/",
-              "verified": true
+              "verified": true,
+              "id": "thyroid/tsh#3",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "confirmed_historical",
+                "decision": "corrected",
+                "shownIn": [
+                  "clinicalLimits"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка thyroid/tsh."
+              }
             },
             {
               "org": "ETA",
@@ -1914,7 +2489,17 @@
               "text": "Беременность, если нет местных триместр-специфичных референсов: верхний предел ТТГ I триместр 2,5, II — 3,0, III — 3,5 мЕд/л.",
               "title": "2014 European Thyroid Association Guidelines for the Management of Subclinical Hypothyroidism in Pregnancy and in Children",
               "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4109520/",
-              "verified": true
+              "verified": false,
+              "id": "thyroid/tsh#4",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "outdated_replace",
+                "decision": "replaced",
+                "shownIn": [
+                  "history"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка thyroid/tsh."
+              }
             }
           ]
         },
@@ -1941,7 +2526,17 @@
               "text": "Беременность, I триместр: нижний предел свТ4 (2,5-й перцентиль, иммуноанализ) около 0,80 нг/дл (≈10,30 пмоль/л); референсы зависят от метода.",
               "title": "2014 European Thyroid Association Guidelines for the Management of Subclinical Hypothyroidism in Pregnancy and in Children",
               "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4109520/",
-              "verified": true
+              "verified": false,
+              "id": "thyroid/ft4#1",
+              "audit": {
+                "reviewedAt": "2026-10-23",
+                "status": "historical_not_reference",
+                "decision": "retired",
+                "shownIn": [
+                  "history"
+                ],
+                "note": "Текст 0.33.0 сохранён для истории и не показывается; действующая редакция — lab-reference-registry.json, строка thyroid/ft4."
+              }
             }
           ]
         },
@@ -1963,5 +2558,6 @@
         }
       ]
     }
-  ]
+  ],
+  "auditedAt": "2026-10-23"
 }

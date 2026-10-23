@@ -1,4 +1,12 @@
-# МедАссистент 0.34.0: архитектура
+# МедАссистент 0.35.0: архитектура
+
+## Нормы анализов: внедрение аудита 23.10.2026 — 0.35.0
+
+research/lab-reference-registry.json, revision 19-international-audit-2026-10-23: у каждой из 86 строк объект audit (reviewedAt, verdict, decision kept/corrected/replaced/retired/pending-verification, summary, unverified, recheck) и две новые группы рядом с referenceIntervals, researchExamples и clinicalLimits: unconfirmed (утверждения без сверки полного текста; в основную строку и в действующий блок не попадают) и history (прежние редакции с archivedFrom). clinicalLimits — единственное место действующих порогов и целей; у записей claimIds на утверждения 0.33.0 или added: true для новых записей аудита. Источники аудита добавлены под их идентификаторами; у источников, перечитанных при выпуске, поле recheck. Кандидат со status: unconfirmed не попадает в основную строку; если подтверждённого кандидата нет, строка показывает «Нет подтверждённого интервала», а причина берётся из noCandidateReason (сборка без причины останавливается).
+
+research/lab-reference-ranges.json, поле international — архив редакции 0.33.0: у каждого из 59 утверждений id (ключ#номер) и audit (reviewedAt, status аудита, decision, shownIn); verified = true только для kept/corrected. В интерфейсе этот блок больше не показывается: его действующая редакция находится в реестре. build-lab-registry.cjs читает этот файл и требует, чтобы каждое утверждение было представлено в своей строке, retired не было в clinicalLimits, а kept/corrected — было. build-lab-norms.cjs проверяет решения аудита у каждого утверждения.
+
+app.js: normsPrimary пропускает неподтверждённых кандидатов; normsDetails выводит блоки «Клинические пороги и цели», «Не подтверждено полностью — не применять без сверки с первоисточником», «История — прежние редакции, не действующие рекомендации» и «Аудит дата»; normsGuidance удалён. styles.css: рамки .norms-unconfirmed, .norms-history, .norms-audit и пометка .norms-flag в закреплённых цветах бланка. Тесты: lab-registry.test.cjs (5), lab-norms.test.cjs (архив и решения), четыре сценария норм в ui-calculators.test.cjs, включая пустое состояние.
 
 ## Нормы анализов: компактный бланк и реестр источников — 0.34.0
 

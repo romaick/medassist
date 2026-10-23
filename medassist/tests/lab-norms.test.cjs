@@ -64,34 +64,37 @@ test("modules.js carries exactly the built reference ranges and the build is rep
   }
 });
 
-test("international guidance is shown only when verified, dated, typed and linked to the document", () => {
-  const items = norms.panels.flatMap(panel => panel.rows.flatMap(row => (row.international || []).map(item => ({panelId: panel.panelId, fieldId: row.fieldId, ...item}))));
+test("the 0.33.0 international guidance is an archive: every claim is dated, typed, linked and carries the audit decision of 23.10.2026", () => {
+  const items = norms.panels.flatMap(panel => panel.rows.flatMap(row => (row.international || []).map((item, index) => ({panelId: panel.panelId, fieldId: row.fieldId, index, ...item}))));
+  assert.equal(items.length, 59, "the audited 0.33.0 claims are all kept in the archive");
+  const decisions = {};
   for (const item of items) {
-    assert.equal(item.verified, true, item.fieldId + " " + item.org);
-    assert.ok(item.url.startsWith("https://") && item.title.trim() && item.text.length <= 300, item.fieldId + " " + item.org);
+    assert.equal(item.id, item.panelId + "/" + item.fieldId + "#" + (item.index + 1));
+    assert.ok(item.url.startsWith("https://") && item.title.trim() && item.text.length <= 300, item.id);
     assert.ok(["порог диагноза", "цель лечения", "референсный предел", "классификация"].includes(item.kind));
+    assert.equal(item.audit.reviewedAt, "2026-10-23", item.id);
+    assert.equal(item.verified, ["kept", "corrected"].includes(item.audit.decision), item.id + " the old verified flag is not carried over blindly");
+    decisions[item.audit.decision] = (decisions[item.audit.decision] || 0) + 1;
   }
-  const guidance = (fieldId, org) => items.filter(item => item.fieldId === fieldId && item.org === org).map(item => item.text).join(" ");
-  assert.match(guidance("hba1c", "ADA"), /≥6,5%.*5,7–6,4%/, "ADA diabetes and prediabetes thresholds");
-  assert.match(guidance("hemoglobin", "ВОЗ"), /<120 г\/л.*<130 г\/л/, "WHO 2024 anaemia cutoffs");
-  assert.ok(items.filter(item => item.fieldId === "inr").every(item => item.kind === "цель лечения" && item.text.includes("не норма")), "INR targets are never shown as a normal range");
-  assert.ok(items.length >= 50 && !items.some(item => /ERC|ISTH|AACE/.test(item.org)), "unverified sources stay out");
+  assert.deepEqual(decisions, {kept: 10, corrected: 42, replaced: 4, retired: 3});
+  const decision = id => items.find(item => item.id === id).audit.decision;
+  assert.equal(decision("coagulation/inr#3"), "replaced", "ESC/EACTS 2021 valve matrix is superseded");
+  assert.equal(decision("thyroid/tsh#4"), "replaced", "ETA 2014 pregnancy TSH limits are superseded by ATA 2026");
+  for (const id of ["urinalysis/protein#3", "biochemistry/vitamin-d-25oh#2", "thyroid/ft4#1"]) assert.equal(decision(id), "retired", id);
+  assert.ok(items.filter(item => item.fieldId === "inr").every(item => item.kind === "цель лечения" && item.text.includes("не норма")), "INR targets are never a normal range");
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "medassist-norms-"));
   try {
     const copy = path.join(dir, "modules.js"), brokenPath = path.join(dir, "norms.json");
     fs.writeFileSync(copy, fs.readFileSync(modulePath, "utf8"));
-    const good = {org: "ADA", year: 2026, kind: "порог диагноза", text: "Проверочная запись", title: "Standards of Care", url: "https://diabetesjournals.org/care", verified: true};
-    for (const change of [{verified: false}, {url: "http://example.com/"}, {kind: "мнение"}, {year: 26}, {title: ""}, {text: "x".repeat(301)}]) {
+    const good = structuredClone(norms.panels[0].rows[0].international[0]);
+    for (const [change, error] of [[{url: "http://example.com/"}, /Invalid international guidance/], [{kind: "мнение"}, /Invalid international guidance/], [{year: 26}, /Invalid international guidance/], [{title: ""}, /Invalid international guidance/],
+      [{text: "x".repeat(301)}, /Invalid international guidance/], [{verified: "да"}, /Invalid international guidance/], [{audit: undefined}, /Missing audit decision/], [{id: "cbc/hemoglobin#9"}, /Missing audit decision/],
+      [{audit: {...good.audit, decision: "approved"}}, /Missing audit decision/], [{audit: {...good.audit, shownIn: []}}, /Missing audit decision/], [{verified: false}, /Missing audit decision/]]) {
       const broken = structuredClone(norms);
-      broken.panels[0].rows[0].international = [{...good, ...change}];
+      broken.panels[0].rows[0].international[0] = {...good, ...change};
       fs.writeFileSync(brokenPath, JSON.stringify(broken));
-      assert.throws(() => build({normsPath: brokenPath, modulePath: copy}), /Invalid international guidance/, JSON.stringify(change));
+      assert.throws(() => build({normsPath: brokenPath, modulePath: copy}), error, JSON.stringify(change));
     }
-    const fine = structuredClone(norms);
-    fine.panels[0].rows[0].international = [good];
-    fs.writeFileSync(brokenPath, JSON.stringify(fine));
-    build({normsPath: brokenPath, modulePath: copy});
-    assert.ok(fs.readFileSync(copy, "utf8").includes("Проверочная запись"));
   } finally {
     fs.rmSync(dir, {recursive: true, force: true});
   }

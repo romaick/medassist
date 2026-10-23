@@ -5,6 +5,9 @@ const start = "/* Generated laboratory reference ranges. Rebuild with node relea
 const end = "/* End laboratory reference ranges. */";
 const hosts = {invitro: "https://www.invitro.by/", lode: "https://www.lode.by/", helix: "https://helix.ru/"};
 const kinds = ["порог диагноза", "цель лечения", "референсный предел", "классификация"];
+// Since 0.35.0 the international field is the archive of the 0.33.0 wording; each claim carries the decision of the audit of 23.10.2026.
+const decisions = ["kept", "corrected", "replaced", "retired", "pending-verification"];
+const shownIn = ["clinicalLimits", "unconfirmed", "history"];
 
 function build({
   normsPath = path.resolve(__dirname, "../medassist/research/lab-reference-ranges.json"),
@@ -32,11 +35,15 @@ function build({
           throw new Error("Invalid " + id + " value: " + panel.panelId + "/" + row.fieldId);
       }
       if (row.helix && row.lode) throw new Error("Helix is shown only where LODE publishes nothing: " + row.fieldId);
-      for (const item of row.international || []) {
+      (row.international || []).forEach((item, index) => {
         if (!item || !item.org || !Number.isInteger(item.year) || item.year < 1990 || item.year > 2100 || !kinds.includes(item.kind) || typeof item.text !== "string" || !item.text.trim() || item.text.length > 300 ||
-          typeof item.title !== "string" || !item.title.trim() || !/^https:\/\//.test(item.url || "") || item.verified !== true)
+          typeof item.title !== "string" || !item.title.trim() || !/^https:\/\//.test(item.url || "") || typeof item.verified !== "boolean")
           throw new Error("Invalid international guidance: " + panel.panelId + "/" + row.fieldId);
-      }
+        const audit = item.audit;
+        if (item.id !== panel.panelId + "/" + row.fieldId + "#" + (index + 1) || !audit || !/^\d{4}-\d{2}-\d{2}$/.test(audit.reviewedAt || "") || !audit.status || !decisions.includes(audit.decision) ||
+          !Array.isArray(audit.shownIn) || !audit.shownIn.length || audit.shownIn.some(group => !shownIn.includes(group)) || item.verified !== ["kept", "corrected"].includes(audit.decision))
+          throw new Error("Missing audit decision: " + panel.panelId + "/" + row.fieldId);
+      });
       if (typeof row.differs !== "boolean" || typeof row.note !== "string" || row.note.length > 400) throw new Error("Invalid row: " + row.fieldId);
       rows += 1;
     }

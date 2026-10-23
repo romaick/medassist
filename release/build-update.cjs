@@ -4,6 +4,8 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 require('./build-icd.cjs')();
 require('./build-investigations.cjs')();
+require('./build-lab-norms.cjs')();
+require('./build-lab-registry.cjs')();
 const app = path.resolve(__dirname, '../medassist/app');
 const version = JSON.parse(fs.readFileSync(path.join(app, 'version.json'), 'utf8'));
 const names = ['index.html', 'styles.css', 'exam-options.js', 'core.js', 'storage.js', 'modules.js', 'app.js', 'icon.svg', 'version.json'];

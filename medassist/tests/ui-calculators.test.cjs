@@ -593,11 +593,48 @@ test("without patient cards the prefill choice is disabled", {timeout: 25000}, a
   assert.equal(await page.locator("#egfr-prefill-status").isVisible(), false);
 });
 
-test("Нормы анализов show every form indicator as a sheet with laboratory ranges, marked differences, international guidance, search across forms and no data writes", {timeout: 30000}, async t => {
+// «Нормы анализов»: the agreed compact sheet. The display rule below is rewritten independently of app.js.
+const normsKinds = [["cbc", "ОАК"], ["biochemistry", "Биохимия крови"], ["urinalysis", "Общий анализ мочи"], ["coagulation", "Коагулограмма"], ["thyroid", "Щитовидная железа"], ["hba1c", "HbA1c"]];
+function normsExpected(row) {
+  const item = row.referenceIntervals.find(entry => entry.source.startsWith("BY-")) || row.referenceIntervals[0] || row.researchExamples[0];
+  const unit = ["качественно", "качественно / безразмерно", "безразмерно"].includes(item.unit || row.displayUnit) ? "—" : item.unit || row.displayUnit;
+  return {item, research: !row.referenceIntervals.length, unit: unit + (row.unitAudit.belarusPublicationConfirmed ? "" : " †")};
+}
+async function openNorms(t, viewport) {
+  const page = await openApp(t, viewport);
+  await page.locator('#main-navigation [data-action="norms"]').click();
+  await page.locator("#norms-list table").waitFor();
+  return page;
+}
+async function chooseKind(page, id, title) {
+  await page.locator("#norms-kind").selectOption(id);
+  await page.waitForFunction(text => document.getElementById("norms-title")?.textContent === text, title);
+}
+// Every visible text inside the sheet: its text fill against the nearest painted background (WCAG ratio) and its size.
+const contrastReport = page => page.evaluate(() => {
+  const rgb = value => (value.match(/[\d.]+/g) || []).map(Number);
+  const lum = ([r, g, b]) => [r, g, b].map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }).reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+  const background = node => { for (let el = node; el; el = el.parentElement) { const c = rgb(getComputedStyle(el).backgroundColor); if (c.length === 3 || c[3] > 0) return c.slice(0, 3); } return [255, 255, 255]; };
+  const weak = [];
+  let count = 0;
+  for (const el of document.querySelectorAll(".norms-compact *")) {
+    if (![...el.childNodes].some(node => node.nodeType === 3 && node.textContent.trim())) continue;
+    const box = el.getBoundingClientRect(), style = getComputedStyle(el);
+    if (!box.width || !box.height || style.visibility === "hidden") continue;
+    const [a, b] = [lum(rgb(style.webkitTextFillColor || style.color)), lum(background(el))].sort((x, y) => y - x);
+    const ratio = (a + 0.05) / (b + 0.05);
+    count += 1;
+    if (ratio < 4.5 || parseFloat(style.fontSize) < 12) weak.push(el.tagName + "." + el.className + " «" + el.textContent.trim().slice(0, 30) + "» " + ratio.toFixed(2) + " " + style.fontSize);
+  }
+  return {count, weak};
+});
+
+test("Нормы анализов show all 86 registry rows in six kinds with the agreed source, unit and value, and never write data", {timeout: 60000}, async t => {
   const page = await openApp(t);
   // The shipped data come from the page itself, so the scenario also checks an installed copy without research files.
-  const {norms, catalog} = await page.evaluate(() => ({norms: window.MedAssistLabNorms, catalog: window.MedAssistInvestigationCatalog}));
-  assert.equal(norms.panels.reduce((sum, panel) => sum + panel.rows.length, 0), catalog.panels.filter(panel => panel.kind === "lab").reduce((sum, panel) => sum + panel.fields.length, 0));
+  const {registry, catalog} = await page.evaluate(() => ({registry: window.MedAssistLabRegistry, catalog: window.MedAssistInvestigationCatalog}));
+  assert.equal(registry.approvedForImport, false);
+  assert.deepEqual(registry.rows.map(row => row.key).sort(), catalog.panels.filter(panel => panel.kind === "lab").flatMap(panel => panel.fields.map(field => panel.id + "/" + field.id)).sort());
   const before = await storageSnapshot(page);
   await page.locator(".module-card").filter({hasText: "Анализы и исследования"}).locator('[data-action="norms"]').click();
   await page.locator("#norms-list table").waitFor();
@@ -605,58 +642,150 @@ test("Нормы анализов show every form indicator as a sheet with labo
   assert.match(await page.title(), / — модули$/);
   assert.equal(await page.locator('#main-navigation [data-action="norms"]').getAttribute("aria-current"), "page");
   assert.match(await page.locator(".norms-notice").innerText(), /Сверяйте результат с интервалом на бланке своей лаборатории/);
-  assert.deepEqual(await page.locator("#norms-tabs [role=tab]").allInnerTexts(), ["ОАК", "Биохимия", "ОАМ", "HbA1c", "Коагулограмма", "Щитовидная железа"]);
-  const rows = page.locator("#norms-list tr.norms-row");
-  const flat = text => text.replace(/[\s.;]+/g, "");
-  for (const panel of norms.panels) {
-    const tab = page.locator("#norms-tab-" + panel.panelId);
-    await tab.click();
-    await page.waitForFunction(id => document.getElementById("norms-tab-" + id)?.getAttribute("aria-selected") === "true" && document.querySelector("#norms-list h2")?.id === "norms-panel-" + id, panel.panelId);
-    const fields = catalog.panels.find(item => item.id === panel.panelId).fields;
-    assert.deepEqual((await rows.evaluateAll(nodes => nodes.map(node => node.dataset.norm))).sort(), fields.map(field => field.id).sort(), panel.panelId + " lists every form indicator once");
-    if (fields.length > 3) assert.ok(await page.locator("#norms-list tr.norms-section").count() > 1, panel.panelId + " is split into sections");
-    const helixColumn = panel.rows.every(row => !row.lode) && panel.rows.some(row => row.helix);
-    assert.equal((await page.locator("#norms-list thead th").nth(3).innerText()).startsWith(helixColumn ? "Хеликс (Россия)" : "ЛОДЭ"), true, panel.panelId + " second laboratory column");
-    assert.equal(await page.locator("#norms-list tr.differs").count(), panel.rows.filter(row => row.differs).length);
-    assert.equal(await page.locator("#norms-list .norms-differs").count(), panel.rows.filter(row => row.differs).length, "each difference is marked in words");
-    for (const row of panel.rows) {
-      // Each age or sex group is its own line on the sheet, so compare the text without line breaks and sentence punctuation.
-      const [unit, invitro, second] = await page.locator('#norms-list tr[data-norm="' + row.fieldId + '"] td').allInnerTexts();
-      assert.equal(unit, fields.find(field => field.id === row.fieldId).unit || "—", panel.panelId + "/" + row.fieldId + " unit");
-      if (row.invitro) assert.ok(flat(invitro).includes(flat(row.invitro.value)), panel.panelId + "/" + row.fieldId + " INVITRO"); else assert.match(invitro, /Нет на сайте лаборатории/);
-      if (row.lode) assert.ok(flat(second).includes(flat(row.lode.value)), panel.panelId + "/" + row.fieldId + " LODE");
-      else if (row.helix) { if (!helixColumn) assert.match(second, /Не публикует\.\s+Для сравнения, Хеликс \(Россия\)/); assert.ok(flat(second).includes(flat(row.helix.value)), panel.panelId + "/" + row.fieldId + " Helix"); }
-      else assert.match(second, /Нет на сайте лаборатории/);
-      const guidance = page.locator('#norms-list tr[data-norm="' + row.fieldId + '"] + tr.norms-guidance');
-      assert.equal(await guidance.count(), (row.international || []).length ? 1 : 0, panel.panelId + "/" + row.fieldId + " guidance row");
-      for (const item of row.international || []) {
-        const text = await guidance.innerText();
-        assert.ok(text.includes(item.org + " " + item.year) && text.includes(item.text), panel.panelId + "/" + row.fieldId + " " + item.org);
-        assert.equal(await guidance.locator('a[href="' + item.url + '"][target="_blank"][rel="noopener noreferrer"]').count() > 0, true);
-      }
-    }
-    const links = page.locator("#norms-list .norms-sources a");
-    assert.ok(await links.count() > 0);
-    assert.deepEqual([...new Set(await links.evaluateAll(nodes => nodes.map(node => node.target + " " + node.rel)))], ["_blank noopener noreferrer"]);
+  assert.deepEqual(await page.locator("#norms-kind option").evaluateAll(nodes => nodes.map(node => [node.value, node.textContent])), normsKinds);
+  assert.deepEqual((await page.locator("#norms-list thead th").allInnerTexts()).map(text => text.replace(/\u00ad/g, "")), ["Показатель", "Обозначение", "Ед. источника", "Интервал / опубликованный ориентир"]);
+  const seen = [];
+  for (const [id] of normsKinds) {
+    const rows = registry.rows.filter(row => row.panelId === id);
+    await chooseKind(page, id, rows[0].panelName);
+    assert.equal(await page.locator("#norms-kind").inputValue(), id);
+    assert.equal(await page.locator(".norms-count").innerText(), "Показателей: " + rows.length);
+    const shown = await page.locator("#norms-list tr.norms-row").evaluateAll(nodes => nodes.map(node => ({
+      key: node.dataset.norm, kind: node.dataset.kind, cells: [...node.children].map(cell => cell.innerText.replace(/\s+/g, " ").trim()),
+      value: node.querySelector(".norms-value").textContent, origin: node.querySelector(".norms-origin").textContent, zebra: node.classList.contains("norms-zebra")
+    })));
+    assert.deepEqual(shown.map(row => row.key), rows.map(row => row.key), id + " lists every registry row in registry order");
+    shown.forEach((row, index) => {
+      const source = rows[index], expected = normsExpected(source);
+      seen.push(row.key);
+      assert.deepEqual(row.cells.slice(0, 3), [source.shortName, source.abbreviation, expected.unit], row.key);
+      assert.equal(row.value, expected.item.value, row.key + " value comes from one source record");
+      assert.equal(row.kind, expected.research ? "research" : "reference", row.key);
+      if (expected.research) assert.match(row.origin, /^Исследовательский пример · /, row.key + " research examples are labelled in the row");
+      else if (!expected.item.source.startsWith("BY-")) assert.doesNotMatch(row.origin, /Беларусь/, row.key + " foreign references are not called Belarusian");
+      assert.equal(row.zebra, index % 2 === 0);
+    });
+    const foot = await page.locator(".norms-sheet-foot").innerText();
+    assert.equal(foot.includes("† Формат единицы в отдельном бланке Беларуси не подтверждён."), rows.some(row => !row.unitAudit.belarusPublicationConfirmed));
   }
+  assert.equal(new Set(seen).size, 86, "all 86 keys are shown");
+  assert.equal(registry.rows.filter(row => !row.unitAudit.belarusPublicationConfirmed).length, 12);
+  assert.equal(await storageSnapshot(page), before, "the reference never writes local or session data");
+});
+
+test("Нормы анализов open details under the value with every candidate, separate clinical limits and links, by mouse and keyboard", {timeout: 90000}, async t => {
+  const page = await openNorms(t);
+  const registry = await page.evaluate(() => window.MedAssistLabRegistry);
+  const sources = new Map(registry.sources.map(source => [source.id, source]));
+  for (const [id] of normsKinds) {
+    const rows = registry.rows.filter(row => row.panelId === id);
+    await chooseKind(page, id, rows[0].panelName);
+    for (const row of rows) {
+      const button = page.locator('#norms-list tr[data-norm="' + row.key + '"] .norms-ref');
+      const detail = page.locator("#" + await button.getAttribute("aria-controls"));
+      assert.equal(await button.getAttribute("aria-expanded"), "false");
+      assert.equal(await detail.isVisible(), false);
+      await button.click();
+      assert.equal(await button.getAttribute("aria-expanded"), "true", row.key);
+      const text = (await detail.innerText()).replace(/\s+/g, " ");
+      for (const entry of [...row.referenceIntervals, ...row.researchExamples, ...row.clinicalLimits]) {
+        assert.ok(text.includes((entry.value + (entry.unit ? " " + entry.unit : "")).replace(/\s+/g, " ")), row.key + " shows " + entry.value);
+        assert.ok(text.includes(entry.kind), row.key + " kind");
+        if (entry.scope) assert.ok(text.includes(entry.scope.replace(/\s+/g, " ")), row.key + " keeps the full scope text");
+      }
+      assert.equal(text.includes("Клинические пороги и цели — не референсный интервал"), row.clinicalLimits.length > 0, row.key + " clinical block");
+      assert.equal(text.includes("Исследовательские примеры — не локальные нормы"), row.researchExamples.length > 0, row.key + " research block");
+      for (const note of row.notes) assert.ok(text.includes(note.replace(/\s+/g, " ")), row.key + " note");
+      const links = await detail.locator("a").evaluateAll(nodes => nodes.map(node => [node.getAttribute("href"), node.target, node.rel]));
+      for (const sid of row.sources) assert.ok(links.some(([href]) => href === sources.get(sid).url), row.key + " links " + sid);
+      assert.ok(links.every(([, target, rel]) => target === "_blank" && rel === "noopener noreferrer"));
+      await button.click();
+      assert.equal(await button.getAttribute("aria-expanded"), "false");
+      assert.equal(await detail.isVisible(), false);
+    }
+  }
+  await chooseKind(page, "coagulation", "Коагулограмма");
+  const inr = page.locator('#norms-list tr[data-norm="coagulation/inr"]');
+  assert.match(await inr.locator(".norms-value").innerText(), /^0,8–1,2$/, "INR reference, not the treatment target, in the row");
+  await chooseKind(page, "cbc", "Общий анализ крови");
+  await page.locator("#norms-kind").focus();
+  await page.keyboard.press("Tab");
+  assert.equal(await page.evaluate(() => document.activeElement.id), "norms-search");
+  await page.keyboard.press("Tab");
+  assert.equal(await page.evaluate(() => document.activeElement.className), "norms-table-wrap");
+  await page.keyboard.press("Tab");
+  assert.equal(await page.evaluate(() => document.activeElement.closest("tr")?.dataset.norm), registry.rows.find(row => row.panelId === "cbc").key);
+  assert.notEqual(await page.evaluate(() => getComputedStyle(document.activeElement).outlineStyle), "none", "visible keyboard focus");
+  await page.keyboard.press("Enter");
+  assert.equal(await page.evaluate(() => document.activeElement.getAttribute("aria-expanded")), "true");
+  await page.keyboard.press("Space");
+  assert.equal(await page.evaluate(() => document.activeElement.getAttribute("aria-expanded")), "false");
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Shift+Tab");
+  assert.equal(await page.evaluate(() => document.activeElement.id), "norms-kind");
+  await page.keyboard.press("ArrowDown");
+  await page.waitForFunction(() => document.getElementById("norms-title")?.textContent === "Биохимический анализ крови");
+  assert.equal(await page.evaluate(() => document.activeElement.id), "norms-kind", "arrows keep focus on the analysis choice");
+});
+
+test("Нормы анализов search all kinds, keep Back and the shell, stay readable against forced white text and fit 1366–320 px", {timeout: 90000}, async t => {
+  const page = await openNorms(t);
+  const before = await storageSnapshot(page);
   await page.locator("#norms-search").fill("креатинин");
   await page.waitForFunction(() => document.querySelectorAll("#norms-list tr.norms-row").length === 1);
-  assert.equal(await rows.first().getAttribute("data-norm"), "creatinine");
-  assert.match(await page.locator(".norms-found").innerText(), /Найдено во всех бланках: 1/);
-  assert.equal(await page.locator('#norms-tabs [aria-selected="true"]').count(), 0, "search spans every form");
+  assert.equal(await page.locator("#norms-list tr.norms-row").getAttribute("data-norm"), "biochemistry/creatinine");
+  assert.equal(await page.locator("#norms-list tr.norms-group").innerText(), "Биохимический анализ крови");
+  assert.equal(await page.locator(".norms-count").innerText(), "Найдено: 1");
   await page.locator("#norms-search").fill("ттг");
-  await page.waitForFunction(() => document.querySelector("#norms-list tr.norms-row")?.dataset.norm === "tsh");
+  await page.waitForFunction(() => document.querySelector("#norms-list tr.norms-row")?.dataset.norm === "thyroid/tsh");
   await page.locator("#norms-search").fill("несуществующий показатель");
+  await page.locator(".norms-empty").waitFor();
   await page.locator('[data-action="norms-clear"]').click();
   assert.equal(await page.locator("#norms-search").inputValue(), "");
   assert.equal(await page.evaluate(() => document.activeElement.id), "norms-search");
-  await page.waitForFunction(() => document.querySelector("#norms-list h2")?.id === "norms-panel-thyroid");
+  await chooseKind(page, "thyroid", "Гормоны щитовидной железы");
   await page.locator('#main-navigation [data-action="calculators"]').click();
   await page.locator("#calculator-list").waitFor();
   assert.equal(await page.locator('[data-action="go-back"]').getAttribute("aria-label"), "Назад: Нормы анализов");
   await page.locator('[data-action="go-back"]').click();
-  await page.locator("#norms-tab-thyroid[aria-selected=true]").waitFor();
-  await page.setViewportSize({width: 390, height: 844});
-  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, "no horizontal page scroll on a narrow window");
+  await page.waitForFunction(() => document.getElementById("norms-title")?.textContent === "Гормоны щитовидной железы");
+  assert.equal(await page.locator("#norms-kind").inputValue(), "thyroid");
+  // Alt+← still goes back while the analysis choice has focus.
+  await page.locator("#norms-kind").focus();
+  await page.keyboard.press("Alt+ArrowLeft");
+  await page.waitForFunction(() => document.getElementById("app").dataset.view !== "norms");
+  await page.locator('#main-navigation [data-action="norms"]').click();
+  await page.locator("#norms-list table").waitFor();
+  assert.equal(await page.locator("#norms-kind").inputValue(), "thyroid", "the chosen kind is kept in this window");
+  for (const scheme of ["light", "dark"]) {
+    await page.emulateMedia({colorScheme: scheme});
+    await chooseKind(page, "cbc", "Общий анализ крови");
+    await page.locator('#norms-list tr[data-norm="cbc/hemoglobin"] .norms-ref').click();
+    await page.locator('#norms-list tr[data-norm="cbc/hemoglobin"] .norms-ref').hover();
+    const plain = await contrastReport(page);
+    assert.ok(plain.count > 150, scheme + " checks the visible sheet: " + plain.count);
+    assert.deepEqual(plain.weak, [], scheme + " contrast and size");
+    // A conflicting outer text colour (white, important) must not reach the sheet.
+    await page.evaluate(() => { for (const el of [document.documentElement, document.body, document.getElementById("app")]) { el.style.setProperty("color", "#fff", "important"); el.style.setProperty("-webkit-text-fill-color", "#fff", "important"); } });
+    const forced = await contrastReport(page);
+    assert.deepEqual(forced.weak, [], scheme + " with forced white text outside");
+    await page.evaluate(() => { for (const el of [document.documentElement, document.body, document.getElementById("app")]) { el.style.removeProperty("color"); el.style.removeProperty("-webkit-text-fill-color"); } });
+  }
+  await page.emulateMedia({colorScheme: "light"});
+  for (const [width, height] of [[1366, 768], [1024, 768], [736, 900], [390, 844], [320, 700]]) {
+    await page.setViewportSize({width, height});
+    for (const [id, title] of [["cbc", "Общий анализ крови"], ["biochemistry", "Биохимический анализ крови"]]) {
+      await chooseKind(page, id, title);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, width + " no horizontal page scroll");
+      const last = page.locator("#norms-list tr.norms-row").last();
+      await last.locator(".norms-ref").scrollIntoViewIfNeeded();
+      await last.locator(".norms-ref").click();
+      assert.equal(await last.locator(".norms-ref").getAttribute("aria-expanded"), "true", width + " last indicator is reachable");
+      const detailBox = await page.locator("#" + await last.locator(".norms-ref").getAttribute("aria-controls") + " .norms-detail-body").boundingBox();
+      assert.ok(detailBox.x >= 0 && detailBox.x + detailBox.width <= width + 1, width + " details stay within the window");
+      assert.deepEqual(await page.locator("#norms-list tr.norms-row").evaluateAll(nodes => nodes.flatMap(node => [...node.children]).filter(cell => cell.scrollWidth > cell.clientWidth + 1).map(cell => cell.textContent)), [], width + " no clipped cells");
+    }
+  }
   assert.equal(await storageSnapshot(page), before, "the reference never writes local or session data");
 });

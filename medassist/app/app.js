@@ -271,7 +271,7 @@
         (modulesArea ? navButton('modules', 'Модули', 'grid') + navButton('calculators', 'Калькуляторы', 'calculator') + navButton('norms', 'Нормы анализов', 'flask') : navButton('home', 'Рабочий стол', 'home') + navButton('patients', 'Пациенты', 'user') +
         (current ? navButton('visit', 'Текущий приём', 'document') : navButton('new', 'Новый пациент', 'plus')) + navButton('followups', 'Повторные приёмы', 'calendar') + navButton('help', 'Помощь и данные', 'help') + navButton('check-updates', 'Проверить обновления', 'download')) +
         navButton('choose-area', 'Выбор раздела', 'back') +
-        '</nav></header><aside class="context-sidebar" aria-label="' + (modulesArea ? 'Сведения о модулях' : 'Пациенты и сведения о разделе') + '">' + (modulesArea ? contextModules() : contextPatients(current)) + '<div class="side-bottom"><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><div class="rail-note">' + (modulesArea ? 'Модули МедАссистента' : 'Поликлинический приём') + '<br><span>Беларусь · деморежим</span><span>Версия 0.33.0</span></div><div class="version">Прототип 0.33.0</div></div></aside><div class="workspace"><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
+        '</nav></header><aside class="context-sidebar" aria-label="' + (modulesArea ? 'Сведения о модулях' : 'Пациенты и сведения о разделе') + '">' + (modulesArea ? contextModules() : contextPatients(current)) + '<div class="side-bottom"><span class="pill"><span class="dot"></span>Офлайн · деморежим</span><div class="rail-note">' + (modulesArea ? 'Модули МедАссистента' : 'Поликлинический приём') + '<br><span>Беларусь · деморежим</span><span>Версия 0.34.0</span></div><div class="version">Прототип 0.34.0</div></div></aside><div class="workspace"><main id="main" tabindex="-1"><div id="storage-banner"></div>' +
         (state.migrated && !modulesArea ? '<div class="migration-notice">Прежние записи доступны со статусом «Черновик». Карточки, данные и ручные тексты сохранены. Исходное сохранение предыдущей версии не изменяется.</div>' : '') +
         ({home: renderHome, patients: renderPatients, followups: renderFollowups, patient: renderPatient, visit: renderVisit, modules: renderModules, calculators: renderCalculators, norms: renderNorms, help: renderHelp}[state.view])() +
         '<footer class="footer-note"><span>Только вымышленные данные. Черновики требуют проверки врачом.</span>' + (modulesArea ? '' : '<span class="keyboard-hint"><kbd>Ctrl + K</kbd> поиск · <kbd>Ctrl + S</kbd> сохранить · <kbd>Alt + 1–5</kbd> разделы приёма · <kbd>Alt + ←</kbd> назад</span>') + '</footer></main></div></div>';
@@ -2154,112 +2154,108 @@
     return '<div class="page-heading"><div><h1>Модули</h1><p>Возможности и развитие МедАссистента.</p></div></div>' + demoNotice() +
       '<p class="section-intro">Во вкладке «Исследования» приёма и в карточке пациента доступны бланки и ручной ввод результатов. В карточке также доступны история и динамика. ИМТ рассчитывается в разделе «Осмотр». В разделе «Калькуляторы» — расчёты по опубликованным формулам, сгруппированные по системам органов. Диспансерное наблюдение и официальные формы остаются в плане развития.</p><div class="module-grid">' + window.MedAssistModules.map((module) => '<section class="card module-card"><div class="module-head"><div class="icon-tile">' + icon(module.icon) + '</div><span class="pill neutral">' + (module.status === 'available' ? 'Доступно' : module.status === 'verification' ? 'После проверки источников' : 'Запланировано') + '</span></div><h2>' + escape(module.title) + '</h2><p>' + escape(module.description) + '</p>' + (module.id === 'calculators' ? button('calculators', 'Открыть калькуляторы', 'calculator', 'primary compact module-open') : module.id === 'labs' ? button('norms', 'Открыть нормы анализов', 'flask', 'secondary compact module-open') : '') + '<details><summary>' + (module.status === 'available' ? 'Как пользоваться' : 'Что потребуется для добавления') + '</summary><p>' + escape(module.requirements) + '</p></details></section>').join('') + '</div>';
   }
-  // Reference ranges of two Belarusian laboratories for the indicators of the existing lab forms. Read-only: nothing is saved and no result is judged.
-  const normsShort = {cbc: 'ОАК', biochemistry: 'Биохимия', urinalysis: 'ОАМ', hba1c: 'HbA1c', coagulation: 'Коагулограмма', thyroid: 'Щитовидная железа'};
+  // «Нормы анализов»: the research registry of published intervals and orientation values for the lab form fields (window.MedAssistLabRegistry).
+  // Read-only: nothing is saved and no patient result is judged; the registry approval flags stay false.
+  const normsKinds = [['cbc', 'ОАК'], ['biochemistry', 'Биохимия крови'], ['urinalysis', 'Общий анализ мочи'], ['coagulation', 'Коагулограмма'], ['thyroid', 'Щитовидная железа'], ['hba1c', 'HbA1c']];
   const normsText = value => value.toLocaleLowerCase('ru').replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
-  function normsPanels() {
-    const norms = window.MedAssistLabNorms, catalog = window.MedAssistInvestigationCatalog;
-    if (!norms || !catalog) return [];
-    return norms.panels.map(panel => {
-      const source = catalog.panels.find(item => item.id === panel.panelId);
-      return {id: panel.panelId, title: source.title, rows: panel.rows.map(row => ({...row, field: source.fields.find(field => field.id === row.fieldId)}))};
-    });
+  const normsQualitative = ['качественно', 'качественно / безразмерно', 'безразмерно'];
+  const normsDetailId = row => 'norms-detail-' + row.key.replace('/', '-');
+  function normsRegistry() {
+    const registry = window.MedAssistLabRegistry;
+    return registry && Array.isArray(registry.rows) && registry.rows.length ? registry : null;
   }
-  function normsTabs() {
-    const searching = Boolean(state.normsQuery.trim());
-    return normsPanels().map(panel => {
-      const selected = !searching && panel.id === state.normsPanel;
-      return button('norms-panel', normsShort[panel.id] || panel.title, null, (selected ? 'primary active' : 'secondary') + ' compact pager-tab', 'id="norms-tab-' + panel.id + '" role="tab" data-filter="' + panel.id + '" title="' + escape(panel.title) + '" aria-controls="norms-list" aria-selected="' + selected + '" tabindex="' + (panel.id === state.normsPanel ? '0' : '-1') + '"');
-    }).join('');
+  const normsSource = id => normsRegistry().sources.find(source => source.id === id);
+  // The compact row shows a Belarusian published example first, then the first other reference, then a labelled research example. Display order, not clinical ranking.
+  function normsPrimary(row) {
+    return row.referenceIntervals.find(item => item.source.startsWith('BY-')) || row.referenceIntervals[0] || row.researchExamples[0];
   }
-  // Presentation groups of each form; indicators missing here are shown at the end, so a new form field never disappears.
-  const normsSections = {
-    cbc: [['Эритроциты и гемоглобин', ['hemoglobin', 'erythrocytes', 'hematocrit', 'mcv', 'mch', 'mchc', 'rdw-sd', 'rdw-cv']], ['Лейкоциты и лейкоцитарная формула', ['leukocytes', 'neutrophils-percent', 'neutrophils-absolute', 'bands', 'segmented', 'metamyelocytes', 'myelocytes', 'lymphocytes-percent', 'lymphocytes-absolute', 'monocytes-percent', 'monocytes-absolute', 'eosinophils-percent', 'eosinophils-absolute', 'basophils-percent', 'basophils-absolute']], ['Тромбоциты', ['platelets', 'mpv', 'pdw', 'p-lcr']], ['СОЭ и ретикулоциты', ['esr', 'reticulocytes-percent', 'reticulocytes-absolute']]],
-    biochemistry: [['Углеводный обмен', ['glucose']], ['Белки', ['total-protein', 'albumin']], ['Азотистый обмен', ['creatinine', 'urea', 'uric-acid']], ['Пигментный обмен', ['bilirubin-total', 'bilirubin-direct', 'bilirubin-indirect']], ['Ферменты', ['alt', 'ast', 'alp', 'ggt', 'amylase-pancreatic']], ['Липиды', ['cholesterol-total', 'hdl', 'ldl', 'triglycerides']], ['Электролиты', ['potassium', 'sodium', 'chloride', 'calcium-total']], ['Обмен железа', ['iron', 'ferritin']], ['Воспаление и витамины', ['crp', 'vitamin-d-25oh']]],
-    urinalysis: [['Физические свойства', ['color', 'transparency', 'specific-gravity', 'ph']], ['Химическое исследование', ['protein', 'glucose', 'ketones', 'bilirubin', 'urobilinogen', 'nitrites', 'blood-reaction', 'leukocyte-esterase']], ['Микроскопия осадка', ['leukocytes', 'erythrocytes', 'squamous-epithelium', 'casts', 'bacteria', 'mucus', 'crystals']]],
-    coagulation: [['Протромбиновый тест', ['prothrombin-quick', 'inr', 'prothrombin-time']], ['Другие показатели', ['aptt', 'thrombin-time', 'fibrinogen', 'antithrombin']]]
-  };
-  function normsGroups(panel) {
-    const groups = (normsSections[panel.id] || []).map(([title, ids]) => [title, ids.map(id => panel.rows.find(row => row.fieldId === id)).filter(Boolean)]);
-    const placed = new Set(groups.flatMap(([, rows]) => rows.map(row => row.fieldId)));
-    const rest = panel.rows.filter(row => !placed.has(row.fieldId));
-    if (rest.length) groups.push([groups.length ? 'Другие показатели' : '', rest]);
-    return groups.filter(([, rows]) => rows.length);
+  function normsOrigin(item, research) {
+    if (research) return 'Исследовательский пример · ' + item.source;
+    if (item.kind.includes('Желательный')) return 'Желательный уровень · ЛОДЭ';
+    if (item.kind.includes('Лабораторная интерпретация')) return 'Лабораторные категории · ЛОДЭ';
+    if (item.source.startsWith('BY-INV-')) return 'ИНВИТРО Беларусь';
+    if (item.source.startsWith('BY-BIO-')) return 'Биомедика · Беларусь';
+    if (/^BY-\d+$/.test(item.source)) return 'ЛОДЭ · Беларусь';
+    return {'US-NYU-RDW': 'NYU · США', 'US-MAINE-DIFF': 'MaineGeneral · США', 'RU-HELIX-INR': 'Хеликс · Россия', 'ICSH-MORPH': 'ICSH · качественный ориентир', 'EOS': 'Консенсус · физиологический диапазон'}[item.source] || item.kind + ' · ' + item.source;
   }
-  // One line per age group (sentences) and per labelled group after «; » (for example «мужчины …: …; женщины …: …»).
-  function normsLines(value) {
-    return value.split(/(?<=[^.\s]{2})\.\s+(?=\S)/).flatMap(sentence => sentence.split(/;\s+(?=[^;]*:)/)).map(part => '<span class="norms-line">' + escape(part.replace(/\.$/, '')) + '</span>').join('');
+  function normsLink(id) {
+    const source = normsSource(id);
+    return source ? '<a href="' + escape(source.url) + '" target="_blank" rel="noopener noreferrer">' + escape(source.title + (source.year ? ', ' + source.year : '')) + '</a>' : escape(id);
   }
-  // The laboratory unit is repeated under the value only when it differs from the form unit in the unit column.
-  const normsUnitKey = unit => String(unit || '').toLowerCase().replace(/[\s×x]/g, '');
-  function normsValue(value, unit) {
-    return value ? normsLines(value.value) + (value.unit && !value.value.includes(value.unit) && normsUnitKey(value.unit) !== normsUnitKey(unit) ? '<span class="norms-value-unit">' + escape(value.unit) + '</span>' : '') : '<span class="norms-missing">Нет на сайте лаборатории</span>';
+  function normsEntry(item) {
+    const source = normsSource(item.source);
+    return '<div class="norms-entry"><strong>' + escape(item.value + (item.unit ? ' ' + item.unit : '')) + '</strong><p>' + escape(item.kind) + '</p><p>' + normsLink(item.source) + '</p>' +
+      (item.scope ? '<p>' + escape(item.scope) + '</p>' : '') + (item.method ? '<p>Метод: ' + escape(item.method) + '</p>' : '') + (item.specimen ? '<p>Материал: ' + escape(item.specimen) + '</p>' : '') +
+      (item.verification && item.verification !== source?.verification ? '<p>Проверка записи: ' + escape(item.verification) + '</p>' : '') + (source ? '<p>Проверка' + (item.verification && item.verification !== source.verification ? ' источника' : '') + ': ' + escape(source.verification + (source.checkedAt ? ' · ' + dateText(source.checkedAt) : '')) + '</p>' : '') + '</div>';
   }
+  // Guidance verified for Medasist 0.33.0 (research/lab-reference-ranges.json, field international) stays available as its own labelled block.
   function normsGuidance(row) {
-    const items = row.international || [];
-    return items.length ? '<tr class="norms-guidance"><td colspan="4"><span class="norms-guidance-label">Международные рекомендации</span><ul>' + items.map(item => '<li><a href="' + escape(item.url) + '" target="_blank" rel="noopener noreferrer">' + escape(item.org + ' ' + item.year) + '</a> · <span class="norms-guidance-kind">' + escape(item.kind) + '</span>: ' + escape(item.text) + '</li>').join('') + '</ul></td></tr>' : '';
+    const norms = window.MedAssistLabNorms;
+    const items = norms?.panels.find(panel => panel.panelId === row.panelId)?.rows.find(item => item.fieldId === row.fieldId)?.international || [];
+    return items.length ? '<div class="norms-block norms-clinical"><h4>Международные рекомендации, сверенные для Medasist 0.33.0 (' + escape(dateText(norms.checkedAt)) + ') — пороги и цели, не референсный интервал</h4><ul class="norms-guidance">' +
+      items.map(item => '<li><a href="' + escape(item.url) + '" target="_blank" rel="noopener noreferrer">' + escape(item.org + ' ' + item.year) + '</a> · ' + escape(item.kind) + ': ' + escape(item.text) + '</li>').join('') + '</ul></div>' : '';
   }
-  function normsRow(row, notes, helixColumn) {
-    const unit = row.field.unit, second = helixColumn ? normsValue(row.helix, unit) : row.lode ? normsValue(row.lode, unit) : row.helix ? '<span class="norms-missing">Не публикует.</span> <span class="norms-compare">Для сравнения, Хеликс (Россия):</span>' + normsValue(row.helix, unit) : '<span class="norms-missing">Нет на сайте лаборатории</span>';
-    let mark = '';
-    if (row.note) { notes.push(row.note); mark = '<sup class="norms-ref" title="Примечание ' + notes.length + '">' + notes.length + '</sup>'; }
-    return '<tr class="norms-row' + (row.differs ? ' differs' : '') + '" data-norm="' + escape(row.fieldId) + '"><th scope="row"><span class="norms-name">' + escape(row.field.name) + mark + '</span>' + (row.differs ? '<span class="norms-differs">' + icon('info') + 'Различаются</span>' : '') + '</th>' +
-      '<td class="norms-unit" data-label="Ед. изм.">' + escape(row.field.unit || '—') + '</td><td data-lab="ИНВИТРО Беларусь">' + normsValue(row.invitro, unit) + '</td><td data-lab="' + (helixColumn ? 'Хеликс (Россия)' : 'ЛОДЭ') + '">' + second + '</td></tr>' + normsGuidance(row);
+  function normsDetails(row) {
+    const blocks = [['Референсы и опубликованные ориентиры', row.referenceIntervals, ''], ['Исследовательские примеры — не локальные нормы', row.researchExamples, ' norms-research'], ['Клинические пороги и цели — не референсный интервал', row.clinicalLimits, ' norms-clinical']];
+    return '<tr class="norms-details" id="' + normsDetailId(row) + '" hidden><td colspan="4"><div class="norms-detail-body"><h3>' + escape(row.name) + '</h3>' +
+      blocks.filter(([, items]) => items.length).map(([title, items, kind]) => '<div class="norms-block' + kind + '"><h4>' + title + '</h4>' + items.map(normsEntry).join('') + '</div>').join('') + normsGuidance(row) +
+      '<h4>Единицы и применимость</h4><p>Единица справочника: ' + escape(row.displayUnit) + '. В основной строке сохранена единица выбранного источника.</p><p>' + escape(row.unitStatus) + '</p>' +
+      (row.unitAudit.belarusPublicationConfirmed ? '' : '<p>† Формат единицы в отдельном бланке Беларуси не подтверждён.' + (row.unitAudit.note ? ' ' + escape(row.unitAudit.note) : '') + '</p>') +
+      '<p>' + escape(row.readiness) + '</p>' + (row.notes.length ? '<ul>' + row.notes.map(note => '<li>' + escape(note) + '</li>').join('') + '</ul>' : '') +
+      '<h4>Проверенные и проверявшиеся источники этой строки</h4><ul>' + row.sources.map(id => {
+        const source = normsSource(id);
+        return '<li>' + normsLink(id) + (source ? '<p>' + escape(source.verification + (source.location ? ' · ' + source.location : '')) + '</p>' + (source.note ? '<p>' + escape(source.note) + '</p>' : '') : '') + '</li>';
+      }).join('') + '</ul></div></td></tr>';
   }
-  function normsPanelHtml(panel) {
-    const norms = window.MedAssistLabNorms, notes = [];
-    const helixColumn = panel.rows.every(row => !row.lode) && panel.rows.some(row => row.helix);
-    const body = normsGroups(panel).map(([title, rows]) => (title ? '<tr class="norms-section"><th colspan="4" scope="colgroup">' + escape(title) + '</th></tr>' : '') + rows.map(row => normsRow(row, notes, helixColumn)).join('')).join('');
-    const links = norms.labs.map(lab => [lab, [...new Map(panel.rows.filter(row => row[lab.id]).map(row => [row[lab.id].url, row.field.name])).entries()]]).filter(([, items]) => items.length);
-    return '<section class="norms-panel norms-sheet" aria-labelledby="norms-panel-' + panel.id + '"><header class="norms-sheet-head"><div><span class="norms-sheet-kind">Бланк · референсные значения</span><h2 id="norms-panel-' + panel.id + '">' + escape(panel.title) + '</h2></div><p>Взрослые · сверено ' + escape(dateText(norms.checkedAt)) + '</p></header>' +
-      '<table class="norms-table"><colgroup><col class="norms-col-name"><col class="norms-col-unit"><col><col></colgroup><thead><tr><th scope="col">Показатель</th><th scope="col">Ед. изм.</th><th scope="col">ИНВИТРО Беларусь</th><th scope="col">' + (helixColumn ? 'Хеликс (Россия)<span class="norms-col-note">ЛОДЭ не публикует норм для этого бланка; показано для сравнения</span>' : 'ЛОДЭ') + '</th></tr></thead><tbody>' + body + '</tbody></table>' +
-      (notes.length ? '<div class="norms-notes"><h3>Примечания</h3><ol>' + notes.map(note => '<li>' + escape(note) + '</li>').join('') + '</ol></div>' : '') +
-      '<details class="norms-sources"><summary>Источники: страницы лабораторий</summary>' + links.map(([lab, items]) => '<h3>' + escape(lab.title) + ' (' + escape(lab.country) + ')</h3><ul>' + items.map(([url, name]) => '<li><a href="' + escape(url) + '" target="_blank" rel="noopener noreferrer">' + escape(name) + '</a></li>').join('') + '</ul>').join('') + '<p class="hint">Ссылки открываются в браузере и требуют интернета. Сам справочник работает офлайн.</p></details></section>';
+  function normsRow(row, index) {
+    const item = normsPrimary(row), research = !row.referenceIntervals.length;
+    const unit = normsQualitative.includes(item.unit || row.displayUnit) ? '—' : item.unit || row.displayUnit;
+    return '<tr class="norms-row' + (index % 2 === 0 ? ' norms-zebra' : '') + '" data-norm="' + escape(row.key) + '" data-kind="' + (research ? 'research' : 'reference') + '" data-source="' + escape(item.source) + '"><th scope="row">' + escape(row.shortName) + '</th><td class="norms-abbr">' + escape(row.abbreviation) + '</td>' +
+      '<td class="norms-unit" data-original-unit="' + escape(item.unit || '') + '">' + escape(unit) + (row.unitAudit.belarusPublicationConfirmed ? '' : '<span class="norms-dagger" title="Формат единицы в отдельном бланке Беларуси не подтверждён"> †</span>') + '</td>' +
+      '<td class="norms-range"><button type="button" class="norms-ref" data-action="norms-toggle" aria-expanded="false" aria-controls="' + normsDetailId(row) + '" aria-label="' + escape(row.name + ': ' + item.value + '. Источник и условия применения') + '"><span class="norms-value">' + escape(item.value) + '</span><span class="norms-origin">' + escape(normsOrigin(item, research)) + '</span></button></td></tr>' + normsDetails(row);
   }
-  function normsListHtml() {
-    const query = normsText(state.normsQuery);
-    const panels = normsPanels();
-    if (!query) return panels.filter(panel => panel.id === state.normsPanel).map(normsPanelHtml).join('');
-    const found = panels.map(panel => ({...panel, rows: panel.rows.filter(row => normsText(row.field.name + ' ' + (normsShort[panel.id] || '')).includes(query))})).filter(panel => panel.rows.length);
-    const count = found.reduce((sum, panel) => sum + panel.rows.length, 0);
-    if (!count) return '<div class="empty norms-empty"><h3>Ничего не найдено</h3><p>Проверьте написание или очистите поиск.</p>' + button('norms-clear', 'Очистить поиск', null, 'secondary compact') + '</div>';
-    return '<p class="norms-found">Найдено во всех бланках: ' + count + '.</p>' + found.map(normsPanelHtml).join('');
+  function normsRows() {
+    const registry = normsRegistry(), query = normsText(state.normsQuery);
+    if (!query) return registry.rows.filter(row => row.panelId === state.normsPanel);
+    const kinds = new Map(normsKinds);
+    return registry.rows.filter(row => normsText([row.name, row.shortName, row.abbreviation, row.panelName, kinds.get(row.panelId) || ''].join(' ')).includes(query));
+  }
+  function normsSheetHtml() {
+    const query = state.normsQuery.trim(), rows = normsRows();
+    if (!rows.length) return '<div class="empty norms-empty"><h3>Ничего не найдено</h3><p>Проверьте написание или очистите поиск.</p>' + button('norms-clear', 'Очистить поиск', null, 'secondary compact') + '</div>';
+    const body = query ? normsKinds.map(([id]) => rows.filter(row => row.panelId === id)).filter(list => list.length).map(list => '<tr class="norms-group"><th colspan="4" scope="colgroup">' + escape(list[0].panelName) + '</th></tr>' + list.map(normsRow).join('')).join('') : rows.map(normsRow).join('');
+    return '<header class="norms-sheet-head"><div><h2 id="norms-title">' + escape(query ? 'Поиск во всех видах анализа' : rows[0].panelName) + '</h2><p>Реестр источников · применимость не утверждена</p></div><span class="norms-count">' + (query ? 'Найдено: ' : 'Показателей: ') + rows.length + '</span></header>' +
+      '<div class="norms-table-wrap" role="region" aria-labelledby="norms-title" tabindex="0"><table class="norms-table"><colgroup><col class="norms-col-name"><col class="norms-col-abbr"><col class="norms-col-unit"><col class="norms-col-range"></colgroup>' +
+      '<thead><tr><th scope="col">Показатель</th><th scope="col">Обозна&shy;чение</th><th scope="col">Ед. источ&shy;ника</th><th scope="col">Интервал / опубликованный ориентир</th></tr></thead><tbody>' + body + '</tbody></table></div>' +
+      '<footer class="norms-sheet-foot"><span>М — мужчины; Ж — женщины. — Без физической единицы.' + (rows.some(row => !row.unitAudit.belarusPublicationConfirmed) ? ' † Формат единицы в отдельном бланке Беларуси не подтверждён.' : '') + '</span><span>Нажмите на значение: источник, возраст, метод и ограничения. Пороги и цели лечения — отдельно внутри подробностей.</span><span>Кандидаты из исследовательского реестра. Клиническая переносимость не подтверждена.</span></footer>';
   }
   function renderNorms() {
-    const norms = window.MedAssistLabNorms, panels = normsPanels();
-    const heading = '<div class="page-heading"><div><h1>Нормы анализов</h1><p>Референсные интервалы для взрослых из опубликованных данных лабораторий ИНВИТРО Беларусь и ЛОДЭ' + (norms ? ', сверено ' + escape(dateText(norms.checkedAt)) : '') + '. Показатели — те же, что в бланках программы. Под показателями — пороги диагноза и цели лечения из международных рекомендаций со ссылкой на документ.</p></div></div>';
-    if (!panels.length) return heading + '<div class="empty"><h3>Справочник норм не загружен</h3><p>Обновите программу штатным способом.</p></div>';
-    if (!panels.some(panel => panel.id === state.normsPanel)) state.normsPanel = panels[0].id;
-    return heading + '<div class="demo-notice norms-notice" role="note">' + icon('info') + '<span><strong>Сверяйте результат с интервалом на бланке своей лаборатории.</strong> Нормы зависят от анализатора и метода. Отметка «Различаются» показывает, где лаборатории дают разные интервалы. Международные рекомендации — это пороги и цели для конкретных ситуаций, а не норма лаборатории. Справочник не оценивает результаты пациента.</span></div>' +
-      '<section class="card norms-card"><div class="field norms-search"><label for="norms-search">Найти показатель во всех бланках</label><input id="norms-search" type="search" autocomplete="off" maxlength="80" placeholder="Например, креатинин или ТТГ" value="' + escape(state.normsQuery) + '"></div>' +
-      '<div id="norms-tabs" class="workflow-filters pager-tabs" role="tablist" aria-label="Бланки анализов">' + normsTabs() + '</div>' +
-      '<div id="norms-list" class="norms-list pager-viewport" role="tabpanel" aria-labelledby="norms-tab-' + state.normsPanel + '" tabindex="0">' + normsListHtml() + '</div></section>';
+    const registry = normsRegistry();
+    const heading = '<div class="page-heading"><div><h1>Нормы анализов</h1><p>Опубликованные интервалы и ориентиры для показателей бланков программы' + (registry ? ', источники сверены ' + escape(dateText(registry.checkedAt)) : '') + '. Нажмите на значение, чтобы увидеть источник и условия.</p></div></div>';
+    if (!registry) return heading + '<div class="empty"><h3>Справочник норм не загружен</h3><p>Обновите программу штатным способом.</p></div>';
+    if (!normsKinds.some(([id]) => id === state.normsPanel)) state.normsPanel = normsKinds[0][0];
+    return heading + '<div class="demo-notice norms-notice" role="note">' + icon('info') + '<span><strong>Сверяйте результат с интервалом на бланке своей лаборатории.</strong> Это реестр опубликованных источников: клиническая применимость интервалов не утверждена. Референсы, исследовательские примеры и клинические пороги разделены. Справочник не оценивает результаты пациента и ничего не сохраняет.</span></div>' +
+      '<section class="card norms-card norms-compact"><div class="norms-workspace"><aside class="norms-sidebar" aria-label="Выбор анализа"><label for="norms-kind">Вид анализа</label><select id="norms-kind">' +
+      normsKinds.map(([id, title]) => '<option value="' + id + '"' + (id === state.normsPanel ? ' selected' : '') + '>' + escape(title) + '</option>').join('') + '</select>' +
+      '<label for="norms-search">Найти во всех видах</label><input id="norms-search" type="search" autocomplete="off" maxlength="80" placeholder="Например, креатинин или ТТГ" value="' + escape(state.normsQuery) + '">' +
+      '<div class="norms-sidebar-note"><span>Наш справочник</span><span>Проверка источников: ' + escape(dateText(registry.checkedAt)) + '</span><span>' + registry.rows.length + ' показателей</span></div></aside>' +
+      '<section id="norms-list" class="norms-sheet" aria-labelledby="norms-title">' + normsSheetHtml() + '</section></div><p id="norms-status" class="norms-status" aria-live="polite"></p></section>';
   }
   function refreshNorms(syncInput = true) {
-    pager.invalidate();
-    document.getElementById('norms-tabs').innerHTML = normsTabs();
     const list = document.getElementById('norms-list');
-    list.innerHTML = normsListHtml();
-    list.setAttribute('aria-labelledby', 'norms-tab-' + state.normsPanel);
-    const input = document.getElementById('norms-search');
+    if (!list) return;
+    list.innerHTML = normsSheetHtml();
+    const select = document.getElementById('norms-kind'), input = document.getElementById('norms-search'), status = document.getElementById('norms-status');
+    if (select) select.value = state.normsPanel;
     if (syncInput && input) input.value = state.normsQuery;
-    bindPageNavigation();
+    if (status) status.textContent = (document.getElementById('norms-title')?.textContent || 'Ничего не найдено') + '. ' + (list.querySelector('.norms-count')?.textContent || '');
   }
-  function switchNormsPanel(key) {
-    const order = normsPanels().map(panel => panel.id);
-    const to = order.indexOf(key);
-    if (state.view !== 'norms' || to < 0) return;
-    if (state.normsQuery.trim()) { state.normsQuery = ''; state.normsPanel = key; refreshNorms(); document.getElementById('norms-tab-' + key)?.focus({preventScroll: true}); return; }
-    return pager.transition({
-      from: order.indexOf(state.normsPanel), to,
-      viewport: document.getElementById('norms-list'), tabList: document.getElementById('norms-tabs'),
-      getViewport: () => document.getElementById('norms-list'), getTabList: () => document.getElementById('norms-tabs'),
-      update: () => {
-        if (state.view !== 'norms') return;
-        state.normsPanel = key; refreshNorms();
-      },
-      focus: () => document.getElementById('norms-tab-' + key)?.focus({preventScroll: true})
-    });
+  function toggleNorm(control) {
+    const detail = document.getElementById(control.getAttribute('aria-controls'));
+    if (!detail) return;
+    const open = control.getAttribute('aria-expanded') !== 'true';
+    control.setAttribute('aria-expanded', String(open));
+    detail.hidden = !open;
   }
   // Calculators live in the Modules area. Their inputs stay in this window only and are never saved.
   const calculatorRubrics = [['all', 'Все'], ['kidney', 'Почки'], ['heart', 'Сердце и сосуды'], ['infection', 'Инфекции и лёгкие'], ['metabolic', 'Обмен веществ'], ['liver', 'Печень'], ['mind', 'Психика']];
@@ -3411,12 +3407,6 @@
         const next = followupBuckets[followupBuckets.findIndex(([id]) => id === state.followupFilter) + direction];
         if (next) switchFollowupFilter(next[0]);
       });
-    } else if (state.view === 'norms' && !state.normsQuery.trim()) {
-      pager.bindSwipe(document.getElementById('norms-list'), direction => {
-        const order = normsPanels().map(panel => panel.id);
-        const next = order[order.indexOf(state.normsPanel) + direction];
-        if (next) switchNormsPanel(next);
-      });
     } else if (state.view === 'calculators' && !state.calculatorId) {
       pager.bindSwipe(document.getElementById('calculator-list'), direction => {
         const next = calculatorRubrics[calculatorRubrics.findIndex(([id]) => id === state.calculatorRubric) + direction];
@@ -3537,7 +3527,7 @@
       return;
     }
     if (['home', 'patients', 'followups', 'help', 'modules', 'calculators', 'norms', 'visit'].includes(action)) { navigate(action); return; }
-    if (action === 'norms-panel') return switchNormsPanel(target.dataset.filter);
+    if (action === 'norms-toggle') return toggleNorm(target);
     if (action === 'norms-clear') { state.normsQuery = ''; refreshNorms(); document.getElementById('norms-search')?.focus({preventScroll: true}); return; }
     if (action === 'calc-rubric') return switchCalculatorRubric(target.dataset.filter);
     if (action === 'calc-open') { state.calculatorId = target.dataset.calculator; render(); document.getElementById('main').focus({preventScroll: true}); window.scrollTo({top: 0}); return; }
@@ -3713,6 +3703,7 @@
     const control = event.target;
     if (control.dataset.calcField) { updateCalculatorField(control, false); return; }
     if (control.id === 'norms-search') { state.normsQuery = control.value.slice(0, 80); refreshNorms(false); return; }
+    if (control.id === 'norms-kind') { if (control.value !== state.normsPanel || state.normsQuery) { state.normsPanel = control.value; state.normsQuery = ''; refreshNorms(); } return; }
     if (control.id === 'patient-birth-date') {
       const patient = state.view === 'visit' ? patientFor(active()) : selectedPatient();
       if (!requireFreshState()) return;

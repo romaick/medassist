@@ -1,0 +1,351 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-10-23",
+  "source": "Согласованный прототип «Нормы анализов» (design/compact-lab-sheet.fragment.html, 23.10.2026): краткое название и обозначение строки. Медицинских значений нет.",
+  "rows": {
+    "cbc/hemoglobin": {
+      "shortName": "Гемоглобин крови",
+      "abbreviation": "HGB/Hb"
+    },
+    "cbc/erythrocytes": {
+      "shortName": "Эритроциты крови",
+      "abbreviation": "RBC"
+    },
+    "cbc/leukocytes": {
+      "shortName": "Лейкоциты крови",
+      "abbreviation": "WBC"
+    },
+    "cbc/hematocrit": {
+      "shortName": "Гематокрит",
+      "abbreviation": "HCT"
+    },
+    "cbc/platelets": {
+      "shortName": "Тромбоциты крови",
+      "abbreviation": "PLT"
+    },
+    "cbc/esr": {
+      "shortName": "Скорость оседания эритроцитов",
+      "abbreviation": "СОЭ"
+    },
+    "cbc/mcv": {
+      "shortName": "Средний объём эритроцита",
+      "abbreviation": "MCV"
+    },
+    "cbc/mch": {
+      "shortName": "Среднее содержание Hb в эритроците",
+      "abbreviation": "MCH"
+    },
+    "cbc/mchc": {
+      "shortName": "Средняя концентрация Hb в эритроцитах",
+      "abbreviation": "MCHC"
+    },
+    "cbc/rdw-sd": {
+      "shortName": "Ширина распределения эритроцитов",
+      "abbreviation": "RDW-SD"
+    },
+    "cbc/rdw-cv": {
+      "shortName": "Ширина распределения эритроцитов",
+      "abbreviation": "RDW-CV"
+    },
+    "cbc/mpv": {
+      "shortName": "Средний объём тромбоцита",
+      "abbreviation": "MPV"
+    },
+    "cbc/pdw": {
+      "shortName": "Ширина распределения тромбоцитов",
+      "abbreviation": "PDW"
+    },
+    "cbc/p-lcr": {
+      "shortName": "Доля крупных тромбоцитов",
+      "abbreviation": "P-LCR"
+    },
+    "cbc/neutrophils-percent": {
+      "shortName": "Нейтрофилы крови, доля",
+      "abbreviation": "NEUT%"
+    },
+    "cbc/neutrophils-absolute": {
+      "shortName": "Нейтрофилы крови, абсолютное число",
+      "abbreviation": "NEUT#"
+    },
+    "cbc/lymphocytes-percent": {
+      "shortName": "Лимфоциты крови, доля",
+      "abbreviation": "LYM%"
+    },
+    "cbc/lymphocytes-absolute": {
+      "shortName": "Лимфоциты крови, абсолютное число",
+      "abbreviation": "LYM#"
+    },
+    "cbc/monocytes-percent": {
+      "shortName": "Моноциты крови, доля",
+      "abbreviation": "MON%"
+    },
+    "cbc/monocytes-absolute": {
+      "shortName": "Моноциты крови, абсолютное число",
+      "abbreviation": "MON#"
+    },
+    "cbc/eosinophils-percent": {
+      "shortName": "Эозинофилы крови, доля",
+      "abbreviation": "EOS%"
+    },
+    "cbc/eosinophils-absolute": {
+      "shortName": "Эозинофилы крови, абсолютное число",
+      "abbreviation": "EOS#"
+    },
+    "cbc/basophils-percent": {
+      "shortName": "Базофилы крови, доля",
+      "abbreviation": "BAS%"
+    },
+    "cbc/basophils-absolute": {
+      "shortName": "Базофилы крови, абсолютное число",
+      "abbreviation": "BAS#"
+    },
+    "cbc/bands": {
+      "shortName": "Палочкоядерные нейтрофилы крови",
+      "abbreviation": "П/я"
+    },
+    "cbc/segmented": {
+      "shortName": "Сегментоядерные нейтрофилы крови",
+      "abbreviation": "С/я"
+    },
+    "cbc/metamyelocytes": {
+      "shortName": "Метамиелоциты крови",
+      "abbreviation": "Мета"
+    },
+    "cbc/myelocytes": {
+      "shortName": "Миелоциты крови",
+      "abbreviation": "Миело"
+    },
+    "cbc/reticulocytes-percent": {
+      "shortName": "Ретикулоциты крови, доля",
+      "abbreviation": "RET%"
+    },
+    "cbc/reticulocytes-absolute": {
+      "shortName": "Ретикулоциты крови, абсолютное число",
+      "abbreviation": "RET#"
+    },
+    "urinalysis/color": {
+      "shortName": "Цвет мочи",
+      "abbreviation": "—"
+    },
+    "urinalysis/transparency": {
+      "shortName": "Прозрачность мочи",
+      "abbreviation": "—"
+    },
+    "urinalysis/specific-gravity": {
+      "shortName": "Относительная плотность мочи",
+      "abbreviation": "SG"
+    },
+    "urinalysis/ph": {
+      "shortName": "pH мочи",
+      "abbreviation": "pH"
+    },
+    "urinalysis/protein": {
+      "shortName": "Белок мочи",
+      "abbreviation": "PRO"
+    },
+    "urinalysis/glucose": {
+      "shortName": "Глюкоза мочи, качественно",
+      "abbreviation": "GLU"
+    },
+    "urinalysis/ketones": {
+      "shortName": "Кетоновые тела мочи, качественно",
+      "abbreviation": "KET"
+    },
+    "urinalysis/bilirubin": {
+      "shortName": "Билирубин мочи, качественно",
+      "abbreviation": "BIL"
+    },
+    "urinalysis/urobilinogen": {
+      "shortName": "Уробилиноген мочи, качественно",
+      "abbreviation": "UBG"
+    },
+    "urinalysis/nitrites": {
+      "shortName": "Нитриты мочи, качественно",
+      "abbreviation": "NIT"
+    },
+    "urinalysis/blood-reaction": {
+      "shortName": "Реакция мочи на кровь / гемоглобин",
+      "abbreviation": "BLD"
+    },
+    "urinalysis/leukocyte-esterase": {
+      "shortName": "Лейкоцитарная эстераза мочи",
+      "abbreviation": "LEU"
+    },
+    "urinalysis/leukocytes": {
+      "shortName": "Лейкоциты мочи",
+      "abbreviation": "WBC"
+    },
+    "urinalysis/erythrocytes": {
+      "shortName": "Эритроциты мочи",
+      "abbreviation": "RBC"
+    },
+    "urinalysis/squamous-epithelium": {
+      "shortName": "Плоский эпителий мочи",
+      "abbreviation": "—"
+    },
+    "urinalysis/casts": {
+      "shortName": "Цилиндры мочи",
+      "abbreviation": "—"
+    },
+    "urinalysis/bacteria": {
+      "shortName": "Бактерии мочи",
+      "abbreviation": "—"
+    },
+    "urinalysis/mucus": {
+      "shortName": "Слизь мочи",
+      "abbreviation": "—"
+    },
+    "urinalysis/crystals": {
+      "shortName": "Кристаллы мочи",
+      "abbreviation": "—"
+    },
+    "biochemistry/glucose": {
+      "shortName": "Глюкоза крови",
+      "abbreviation": "GLU"
+    },
+    "biochemistry/total-protein": {
+      "shortName": "Общий белок крови",
+      "abbreviation": "TP"
+    },
+    "biochemistry/albumin": {
+      "shortName": "Альбумин крови",
+      "abbreviation": "ALB"
+    },
+    "biochemistry/creatinine": {
+      "shortName": "Креатинин крови",
+      "abbreviation": "CREA"
+    },
+    "biochemistry/urea": {
+      "shortName": "Мочевина крови",
+      "abbreviation": "UREA"
+    },
+    "biochemistry/uric-acid": {
+      "shortName": "Мочевая кислота крови",
+      "abbreviation": "UA"
+    },
+    "biochemistry/bilirubin-total": {
+      "shortName": "Билирубин общий крови",
+      "abbreviation": "TBIL"
+    },
+    "biochemistry/bilirubin-direct": {
+      "shortName": "Билирубин прямой крови",
+      "abbreviation": "DBIL"
+    },
+    "biochemistry/bilirubin-indirect": {
+      "shortName": "Билирубин непрямой крови",
+      "abbreviation": "IBIL"
+    },
+    "biochemistry/alt": {
+      "shortName": "Аланинаминотрансфераза крови",
+      "abbreviation": "АЛТ"
+    },
+    "biochemistry/ast": {
+      "shortName": "Аспартатаминотрансфераза крови",
+      "abbreviation": "АСТ"
+    },
+    "biochemistry/alp": {
+      "shortName": "Щелочная фосфатаза крови",
+      "abbreviation": "ЩФ"
+    },
+    "biochemistry/ggt": {
+      "shortName": "Гамма-глутамилтрансфераза крови",
+      "abbreviation": "ГГТ"
+    },
+    "biochemistry/amylase-pancreatic": {
+      "shortName": "Амилаза панкреатическая крови",
+      "abbreviation": "P-AMY"
+    },
+    "biochemistry/cholesterol-total": {
+      "shortName": "Холестерин общий крови",
+      "abbreviation": "TC"
+    },
+    "biochemistry/hdl": {
+      "shortName": "Холестерин ЛПВП крови",
+      "abbreviation": "HDL-C"
+    },
+    "biochemistry/ldl": {
+      "shortName": "Холестерин ЛПНП крови",
+      "abbreviation": "LDL-C"
+    },
+    "biochemistry/triglycerides": {
+      "shortName": "Триглицериды крови",
+      "abbreviation": "TG"
+    },
+    "biochemistry/potassium": {
+      "shortName": "Калий крови",
+      "abbreviation": "K"
+    },
+    "biochemistry/sodium": {
+      "shortName": "Натрий крови",
+      "abbreviation": "Na"
+    },
+    "biochemistry/chloride": {
+      "shortName": "Хлор крови",
+      "abbreviation": "Cl"
+    },
+    "biochemistry/calcium-total": {
+      "shortName": "Кальций общий крови",
+      "abbreviation": "Ca"
+    },
+    "biochemistry/iron": {
+      "shortName": "Железо сыворотки",
+      "abbreviation": "Fe"
+    },
+    "biochemistry/ferritin": {
+      "shortName": "Ферритин крови",
+      "abbreviation": "FERR"
+    },
+    "biochemistry/crp": {
+      "shortName": "С-реактивный белок крови, обычная чувствительность",
+      "abbreviation": "СРБ"
+    },
+    "biochemistry/vitamin-d-25oh": {
+      "shortName": "Витамин D крови, 25(OH)D",
+      "abbreviation": "25(OH)D"
+    },
+    "hba1c/hba1c": {
+      "shortName": "Гликированный гемоглобин крови",
+      "abbreviation": "HbA1c"
+    },
+    "coagulation/prothrombin-quick": {
+      "shortName": "Протромбин по Квику",
+      "abbreviation": "Квик"
+    },
+    "coagulation/inr": {
+      "shortName": "Международное нормализованное отношение",
+      "abbreviation": "INR / МНО"
+    },
+    "coagulation/prothrombin-time": {
+      "shortName": "Протромбиновое время",
+      "abbreviation": "PT"
+    },
+    "coagulation/aptt": {
+      "shortName": "Активированное частичное тромбопластиновое время",
+      "abbreviation": "APTT / АЧТВ"
+    },
+    "coagulation/thrombin-time": {
+      "shortName": "Тромбиновое время",
+      "abbreviation": "TT"
+    },
+    "coagulation/fibrinogen": {
+      "shortName": "Фибриноген крови",
+      "abbreviation": "FIB"
+    },
+    "coagulation/antithrombin": {
+      "shortName": "Антитромбин III, активность",
+      "abbreviation": "AT III"
+    },
+    "thyroid/tsh": {
+      "shortName": "Тиреотропный гормон крови",
+      "abbreviation": "TSH / ТТГ"
+    },
+    "thyroid/ft4": {
+      "shortName": "Тироксин свободный крови",
+      "abbreviation": "FT4"
+    },
+    "thyroid/ft3": {
+      "shortName": "Трийодтиронин свободный крови",
+      "abbreviation": "FT3"
+    }
+  }
+}
